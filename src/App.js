@@ -285,7 +285,7 @@ export default function App() {
   return (
     <div className="app">
       <div className="toolbar no-print">
-        <h1>Etiquetas Promo</h1>
+        <h1>Etiquetas Promocionais</h1>
 
         <div className="toolbar-grid">
           <label className="input-group">

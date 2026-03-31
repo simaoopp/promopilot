@@ -25,6 +25,8 @@ body {
 .toolbar h1 {
   margin: 0 0 16px 0;
   font-size: 26px;
+  justify-content: center;
+  display: flex;
 }
 
 .toolbar-grid {
@@ -216,18 +218,18 @@ th input {
 }
 
 .topbar {
-  background: #f58220;
-  width: 100%;
   height: 90px;
-  padding: 0;
-  overflow: hidden;
+  padding: 6px 1px; /* 👈 espaço lateral também */
+  background: #f58220;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .topbar img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
-  display: block;
+  object-fit: contain;
 }
 
 .content {
