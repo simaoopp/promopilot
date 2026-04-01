@@ -1,33 +1,10 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import "./styles.css";
 import logo from "./logo.png";
 import JsBarcode from "jsbarcode";
-import { useEffect, useRef } from "react";
-
-const CABECALHOS = [
-  "CODIGO",
-  "DESCRICAO",
-  "PN",
-  "EAN",
-  "PVP2 ANTES",
-  "PVP2 ATUAL",
-  "PV3",
-  "ESTADO",
-  "AE",
-  "AEA",
-  "AEV",
-  "A10",
-  "A1E",
-  "DATA",
-  "DATA INICIO",
-  "DATA FIM",
-  "ALTERADO PRIMAVERA",
-  "INFORMAÇÃO",
-];
 
 function formatarEuro(valor) {
   const numero = Number(valor || 0);
-
   const temCentimos = numero % 1 !== 0;
 
   return new Intl.NumberFormat("pt-PT", {
@@ -66,7 +43,6 @@ function parseTabelaColada(texto) {
     primeiraLinha.includes("CODIGO") || primeiraLinha.includes("DESCRICAO");
 
   const linhasDados = temCabecalho ? linhas.slice(1) : linhas;
-
   const resultado = [];
 
   for (let i = 0; i < linhasDados.length; i += 1) {
@@ -80,7 +56,7 @@ function parseTabelaColada(texto) {
 
     if (partes.length < 4) continue;
 
-    const row = {
+    resultado.push({
       id: `row-${i}`,
       codigo: partes[0] || "",
       descricao: partes[1] || "",
@@ -101,9 +77,7 @@ function parseTabelaColada(texto) {
       alterado: partes[16] || "",
       info: partes[17] || "",
       selecionado: false,
-    };
-
-    resultado.push(row);
+    });
   }
 
   return resultado;
@@ -133,6 +107,25 @@ function compararNumero(valorItem, operador, valorFiltro) {
   }
 }
 
+function aplicarFiltroTexto(valor, filtro) {
+  const texto = String(valor || "").toLowerCase();
+  const contains = String(filtro?.contains || "").toLowerCase();
+  const equals = String(filtro?.equals || "").toLowerCase();
+
+  if (contains && !texto.includes(contains)) return false;
+  if (equals && texto !== equals) return false;
+
+  return true;
+}
+
+function dividirEmPaginas(lista, porPagina = 4) {
+  const paginas = [];
+  for (let i = 0; i < lista.length; i += porPagina) {
+    paginas.push(lista.slice(i, i + porPagina));
+  }
+  return paginas;
+}
+
 function Barcode({ value }) {
   const ref = useRef();
 
@@ -151,17 +144,124 @@ function Barcode({ value }) {
   return <svg ref={ref}></svg>;
 }
 
+function FilterMenu({
+  coluna,
+  tipo = "text",
+  aberto,
+  filtro,
+  onClose,
+  onUpdate,
+  onSort,
+  onClear,
+}) {
+  if (!aberto) return null;
+
+  return (
+    <div className="filter-popup">
+      <div className="filter-popup-header">
+        <strong>{coluna}</strong>
+        <button type="button" className="filter-close" onClick={onClose}>
+          ×
+        </button>
+      </div>
+
+      {tipo === "text" && (
+        <>
+          <div className="filter-section">
+            <button type="button" onClick={() => onSort("asc")}>
+              Ordenar A → Z
+            </button>
+            <button type="button" onClick={() => onSort("desc")}>
+              Ordenar Z → A
+            </button>
+          </div>
+
+          <div className="filter-section">
+            <label>Contém</label>
+            <input
+              type="text"
+              value={filtro?.contains || ""}
+              onChange={(e) => onUpdate("contains", e.target.value)}
+            />
+          </div>
+
+          <div className="filter-section">
+            <label>Igual a</label>
+            <input
+              type="text"
+              value={filtro?.equals || ""}
+              onChange={(e) => onUpdate("equals", e.target.value)}
+            />
+          </div>
+        </>
+      )}
+
+      {tipo === "number" && (
+        <>
+          <div className="filter-section">
+            <button type="button" onClick={() => onSort("asc")}>
+              Ordem crescente
+            </button>
+            <button type="button" onClick={() => onSort("desc")}>
+              Ordem decrescente
+            </button>
+          </div>
+
+          <div className="filter-section">
+            <label>Operador</label>
+            <select
+              value={filtro?.op || ""}
+              onChange={(e) => onUpdate("op", e.target.value)}
+            >
+              <option value="">-</option>
+              <option value="=">=</option>
+              <option value=">">&gt;</option>
+              <option value=">=">&gt;=</option>
+              <option value="<">&lt;</option>
+              <option value="<=">&lt;=</option>
+            </select>
+          </div>
+
+          <div className="filter-section">
+            <label>Valor</label>
+            <input
+              type="number"
+              value={filtro?.valor || ""}
+              onChange={(e) => onUpdate("valor", e.target.value)}
+            />
+          </div>
+        </>
+      )}
+
+      <div className="filter-section">
+        <button type="button" onClick={onClear}>
+          Limpar filtro
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [titulo, setTitulo] = useState("PROMO");
   const [textoColado, setTextoColado] = useState("");
   const [anoValidade, setAnoValidade] = useState(new Date().getFullYear());
   const [dados, setDados] = useState([]);
+  const [menuAberto, setMenuAberto] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  const [filtroAberto, setFiltroAberto] = useState(null);
+  const [ordenacao, setOrdenacao] = useState({
+    coluna: "",
+    direcao: "",
+  });
+
   const [filtros, setFiltros] = useState({
-    codigo: "",
-    descricao: "",
-    pn: "",
-    estado: "",
-    info: "",
+    codigo: { contains: "", equals: "" },
+    descricao: { contains: "", equals: "" },
+    pn: { contains: "", equals: "" },
+    estado: { contains: "", equals: "" },
+    info: { contains: "", equals: "" },
     ae: { op: "", valor: "" },
     aea: { op: "", valor: "" },
     aev: { op: "", valor: "" },
@@ -169,15 +269,12 @@ export default function App() {
     a1e: { op: "", valor: "" },
   });
 
-  function dividirEmPaginas(lista, porPagina = 4) {
-    const paginas = [];
-    for (let i = 0; i < lista.length; i += porPagina) {
-      paginas.push(lista.slice(i, i + porPagina));
-    }
-    return paginas;
-  }
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 1800);
+    return () => clearTimeout(timer);
+  }, []);
 
-  function atualizarFiltroNumerico(campo, chave, valor) {
+  function atualizarFiltroPopup(campo, chave, valor) {
     setFiltros((prev) => ({
       ...prev,
       [campo]: {
@@ -187,16 +284,85 @@ export default function App() {
     }));
   }
 
-  function carregarTextoColado() {
-    const linhas = parseTabelaColada(textoColado);
-    setDados(linhas);
-  }
-
-  function atualizarFiltro(campo, valor) {
+  function limparFiltro(campo, tipo = "text") {
     setFiltros((prev) => ({
       ...prev,
-      [campo]: valor,
+      [campo]:
+        tipo === "text" ? { contains: "", equals: "" } : { op: "", valor: "" },
     }));
+  }
+
+  function ordenarLista(lista) {
+    if (!ordenacao.coluna || !ordenacao.direcao) return lista;
+
+    const copia = [...lista];
+
+    copia.sort((a, b) => {
+      const va = a[ordenacao.coluna];
+      const vb = b[ordenacao.coluna];
+
+      const aNum = Number(va);
+      const bNum = Number(vb);
+      const ambosNumeros = !Number.isNaN(aNum) && !Number.isNaN(bNum);
+
+      if (ambosNumeros) {
+        return ordenacao.direcao === "asc" ? aNum - bNum : bNum - aNum;
+      }
+
+      const aText = String(va || "").toLowerCase();
+      const bText = String(vb || "").toLowerCase();
+
+      return ordenacao.direcao === "asc"
+        ? aText.localeCompare(bText, "pt")
+        : bText.localeCompare(aText, "pt");
+    });
+
+    return copia;
+  }
+
+  function carregarTextoColado() {
+    try {
+      const linhas = parseTabelaColada(textoColado);
+
+      if (!textoColado.trim()) throw new Error("Sem conteúdo");
+      if (!linhas.length) throw new Error("Sem linhas válidas");
+
+      const erro = linhas.some((item) => {
+        const nomeInvalido = !item.descricao || item.descricao.length < 3;
+        const precoAntesInvalido = !item.antes || Number(item.antes) <= 0;
+        const precoAtualInvalido = !item.atual || Number(item.atual) <= 0;
+        const eanInvalido =
+          !item.ean || String(item.ean).replace(/\D/g, "").length < 8;
+
+        const dataInvalida = (data) => {
+          if (!data || data === "-") return false;
+
+          const texto = data.trim();
+
+          const formatoMesTexto = /^\d{1,2}\/[a-z]{3}\.?$/i; // ex: 27/mar.
+          const formatoMesNumero = /^\d{1,2}\/\d{2}$/; // ex: 27/03
+
+          return !formatoMesTexto.test(texto) && !formatoMesNumero.test(texto);
+        };
+
+        const datasInvalidas =
+          dataInvalida(item.dataInicio) || dataInvalida(item.dataFim);
+
+        return (
+          nomeInvalido ||
+          precoAntesInvalido ||
+          precoAtualInvalido ||
+          eanInvalido ||
+          datasInvalidas
+        );
+      });
+
+      if (erro) throw new Error("Dados inválidos");
+
+      setDados(linhas);
+    } catch (error) {
+      alert("Verifique se os dados inseridos estão corretos.");
+    }
   }
 
   function alternarSelecionado(id) {
@@ -206,6 +372,40 @@ export default function App() {
       )
     );
   }
+
+  const dadosFiltrados = useMemo(() => {
+    const filtrados = dados.filter((item) => {
+      const codigoOk = aplicarFiltroTexto(item.codigo, filtros.codigo);
+      const descricaoOk = aplicarFiltroTexto(item.descricao, filtros.descricao);
+      const pnOk = aplicarFiltroTexto(item.pn, filtros.pn);
+      const estadoOk = aplicarFiltroTexto(item.estado, filtros.estado);
+      const infoOk = aplicarFiltroTexto(item.info, filtros.info);
+
+      const aeOk = compararNumero(item.ae, filtros.ae.op, filtros.ae.valor);
+      const aeaOk = compararNumero(item.aea, filtros.aea.op, filtros.aea.valor);
+      const aevOk = compararNumero(item.aev, filtros.aev.op, filtros.aev.valor);
+      const a10Ok = compararNumero(item.a10, filtros.a10.op, filtros.a10.valor);
+      const a1eOk = compararNumero(item.a1e, filtros.a1e.op, filtros.a1e.valor);
+
+      return (
+        codigoOk &&
+        descricaoOk &&
+        pnOk &&
+        estadoOk &&
+        infoOk &&
+        aeOk &&
+        aeaOk &&
+        aevOk &&
+        a10Ok &&
+        a1eOk
+      );
+    });
+
+    return ordenarLista(filtrados);
+  }, [dados, filtros, ordenacao]);
+
+  const selecionados = dados.filter((item) => item.selecionado);
+  const paginas = dividirEmPaginas(selecionados, 4);
 
   function selecionarTodosFiltrados() {
     const ids = new Set(dadosFiltrados.map((item) => item.id));
@@ -231,50 +431,6 @@ export default function App() {
     setDados((prev) => prev.map((item) => ({ ...item, selecionado: false })));
   }
 
-  const dadosFiltrados = useMemo(() => {
-    return dados.filter((item) => {
-      const codigoOk = item.codigo
-        .toLowerCase()
-        .includes(filtros.codigo.toLowerCase());
-
-      const descricaoOk = item.descricao
-        .toLowerCase()
-        .includes(filtros.descricao.toLowerCase());
-
-      const pnOk = item.pn.toLowerCase().includes(filtros.pn.toLowerCase());
-
-      const estadoOk = item.estado
-        .toLowerCase()
-        .includes(filtros.estado.toLowerCase());
-
-      const infoOk = item.info
-        .toLowerCase()
-        .includes(filtros.info.toLowerCase());
-
-      const aeOk = compararNumero(item.ae, filtros.ae.op, filtros.ae.valor);
-      const aeaOk = compararNumero(item.aea, filtros.aea.op, filtros.aea.valor);
-      const aevOk = compararNumero(item.aev, filtros.aev.op, filtros.aev.valor);
-      const a10Ok = compararNumero(item.a10, filtros.a10.op, filtros.a10.valor);
-      const a1eOk = compararNumero(item.a1e, filtros.a1e.op, filtros.a1e.valor);
-
-      return (
-        codigoOk &&
-        descricaoOk &&
-        pnOk &&
-        estadoOk &&
-        infoOk &&
-        aeOk &&
-        aeaOk &&
-        aevOk &&
-        a10Ok &&
-        a1eOk
-      );
-    });
-  }, [dados, filtros]);
-
-  const selecionados = dados.filter((item) => item.selecionado);
-  const paginas = dividirEmPaginas(selecionados, 4);
-
   function imprimirSelecionados() {
     if (selecionados.length === 0) {
       alert("Seleciona pelo menos um artigo.");
@@ -282,11 +438,64 @@ export default function App() {
     }
     window.print();
   }
+
+  if (loading) {
+    return (
+      <div className="splash-screen">
+        <img src={logo} alt="Expert" className="splash-logo" />
+        <div className="splash-loader"></div>
+      </div>
+    );
+  }
+
   return (
     <div className="app">
-      <div className="toolbar no-print">
-        <h1>Etiquetas Promocionais</h1>
+      <div className="topbar-site no-print">
+        <button
+          className="menu-button"
+          onClick={() => setMenuAberto(true)}
+          aria-label="Abrir menu"
+        >
+          ☰
+        </button>
 
+        <img src={logo} alt="Expert" className="logo-topbar" />
+        <div className="topbar-title">Etiquetas de Campanha</div>
+      </div>
+
+      <div
+        className={`sidebar-overlay ${menuAberto ? "show" : ""}`}
+        onClick={() => setMenuAberto(false)}
+      ></div>
+
+      <aside className={`sidebar no-print ${menuAberto ? "open" : ""}`}>
+        <div className="sidebar-header">
+          <img src={logo} alt="Expert" className="logo-sidebar" />
+          <button
+            className="close-sidebar"
+            onClick={() => setMenuAberto(false)}
+            aria-label="Fechar menu"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="sidebar-body">
+          <button
+            className="sidebar-link"
+            onClick={() => {
+              setMenuAberto(false);
+              document
+                .querySelector(".print-area")
+                ?.scrollIntoView({ behavior: "smooth" });
+            }}
+          >
+            Etiquetas de Campanha
+          </button>
+        </div>
+      </aside>
+
+      <div className="toolbar no-print">
         <div className="toolbar-grid">
           <label className="input-group">
             <span>Título da campanha</span>
@@ -297,6 +506,7 @@ export default function App() {
               placeholder="Ex: ASUS PROMO"
             />
           </label>
+
           <label className="input-group">
             <span>Ano de validade</span>
             <input
@@ -339,194 +549,265 @@ export default function App() {
         <table>
           <thead>
             <tr>
-              <th className="col-select">
-                <th>Selecionar</th>
-              </th>
-              <th>
-                CODIGO
-                <input
-                  type="text"
-                  placeholder="Filtrar"
-                  value={filtros.codigo}
-                  onChange={(e) => atualizarFiltro("codigo", e.target.value)}
+              <th>Selecionar</th>
+
+              <th className="filter-th">
+                <button
+                  type="button"
+                  className="filter-button"
+                  onClick={() =>
+                    setFiltroAberto(filtroAberto === "codigo" ? null : "codigo")
+                  }
+                >
+                  CODIGO
+                </button>
+                <FilterMenu
+                  coluna="CODIGO"
+                  tipo="text"
+                  aberto={filtroAberto === "codigo"}
+                  filtro={filtros.codigo}
+                  onClose={() => setFiltroAberto(null)}
+                  onUpdate={(chave, valor) =>
+                    atualizarFiltroPopup("codigo", chave, valor)
+                  }
+                  onSort={(direcao) =>
+                    setOrdenacao({ coluna: "codigo", direcao })
+                  }
+                  onClear={() => limparFiltro("codigo", "text")}
                 />
               </th>
-              <th>
-                DESCRICAO
-                <input
-                  type="text"
-                  placeholder="Filtrar"
-                  value={filtros.descricao}
-                  onChange={(e) => atualizarFiltro("descricao", e.target.value)}
+
+              <th className="filter-th">
+                <button
+                  type="button"
+                  className="filter-button"
+                  onClick={() =>
+                    setFiltroAberto(
+                      filtroAberto === "descricao" ? null : "descricao"
+                    )
+                  }
+                >
+                  DESCRICAO
+                </button>
+                <FilterMenu
+                  coluna="DESCRICAO"
+                  tipo="text"
+                  aberto={filtroAberto === "descricao"}
+                  filtro={filtros.descricao}
+                  onClose={() => setFiltroAberto(null)}
+                  onUpdate={(chave, valor) =>
+                    atualizarFiltroPopup("descricao", chave, valor)
+                  }
+                  onSort={(direcao) =>
+                    setOrdenacao({ coluna: "descricao", direcao })
+                  }
+                  onClear={() => limparFiltro("descricao", "text")}
                 />
               </th>
-              <th>
-                PN
-                <input
-                  type="text"
-                  placeholder="Filtrar"
-                  value={filtros.pn}
-                  onChange={(e) => atualizarFiltro("pn", e.target.value)}
+
+              <th className="filter-th">
+                <button
+                  type="button"
+                  className="filter-button"
+                  onClick={() =>
+                    setFiltroAberto(filtroAberto === "pn" ? null : "pn")
+                  }
+                >
+                  PN
+                </button>
+                <FilterMenu
+                  coluna="PN"
+                  tipo="text"
+                  aberto={filtroAberto === "pn"}
+                  filtro={filtros.pn}
+                  onClose={() => setFiltroAberto(null)}
+                  onUpdate={(chave, valor) =>
+                    atualizarFiltroPopup("pn", chave, valor)
+                  }
+                  onSort={(direcao) => setOrdenacao({ coluna: "pn", direcao })}
+                  onClear={() => limparFiltro("pn", "text")}
                 />
               </th>
+
               <th>EAN</th>
               <th>PVP2 ANTES</th>
               <th>PVP2 ATUAL</th>
               <th>PV3</th>
-              <th>
-                ESTADO
-                <input
-                  type="text"
-                  placeholder="Filtrar"
-                  value={filtros.estado}
-                  onChange={(e) => atualizarFiltro("estado", e.target.value)}
+
+              <th className="filter-th">
+                <button
+                  type="button"
+                  className="filter-button"
+                  onClick={() =>
+                    setFiltroAberto(filtroAberto === "estado" ? null : "estado")
+                  }
+                >
+                  ESTADO
+                </button>
+                <FilterMenu
+                  coluna="ESTADO"
+                  tipo="text"
+                  aberto={filtroAberto === "estado"}
+                  filtro={filtros.estado}
+                  onClose={() => setFiltroAberto(null)}
+                  onUpdate={(chave, valor) =>
+                    atualizarFiltroPopup("estado", chave, valor)
+                  }
+                  onSort={(direcao) =>
+                    setOrdenacao({ coluna: "estado", direcao })
+                  }
+                  onClear={() => limparFiltro("estado", "text")}
                 />
               </th>
-              <th>
-                AE
-                <div className="filter-number">
-                  <select
-                    value={filtros.ae.op}
-                    onChange={(e) =>
-                      atualizarFiltroNumerico("ae", "op", e.target.value)
-                    }
-                  >
-                    <option value="">-</option>
-                    <option value="=">=</option>
-                    <option value=">">&gt;</option>
-                    <option value="<">&lt;</option>
-                    <option value=">=">&gt;=</option>
-                    <option value="<=">&lt;=</option>
-                  </select>
-                  <input
-                    type="number"
-                    value={filtros.ae.valor}
-                    onChange={(e) =>
-                      atualizarFiltroNumerico("ae", "valor", e.target.value)
-                    }
-                    placeholder="valor"
-                  />
-                </div>
+
+              <th className="filter-th">
+                <button
+                  type="button"
+                  className="filter-button"
+                  onClick={() =>
+                    setFiltroAberto(filtroAberto === "ae" ? null : "ae")
+                  }
+                >
+                  AE
+                </button>
+                <FilterMenu
+                  coluna="AE"
+                  tipo="number"
+                  aberto={filtroAberto === "ae"}
+                  filtro={filtros.ae}
+                  onClose={() => setFiltroAberto(null)}
+                  onUpdate={(chave, valor) =>
+                    atualizarFiltroPopup("ae", chave, valor)
+                  }
+                  onSort={(direcao) => setOrdenacao({ coluna: "ae", direcao })}
+                  onClear={() => limparFiltro("ae", "number")}
+                />
               </th>
 
-              <th>
-                AEA
-                <div className="filter-number">
-                  <select
-                    value={filtros.aea.op}
-                    onChange={(e) =>
-                      atualizarFiltroNumerico("aea", "op", e.target.value)
-                    }
-                  >
-                    <option value="">-</option>
-                    <option value="=">=</option>
-                    <option value=">">&gt;</option>
-                    <option value="<">&lt;</option>
-                    <option value=">=">&gt;=</option>
-                    <option value="<=">&lt;=</option>
-                  </select>
-                  <input
-                    type="number"
-                    value={filtros.aea.valor}
-                    onChange={(e) =>
-                      atualizarFiltroNumerico("aea", "valor", e.target.value)
-                    }
-                    placeholder="valor"
-                  />
-                </div>
+              <th className="filter-th">
+                <button
+                  type="button"
+                  className="filter-button"
+                  onClick={() =>
+                    setFiltroAberto(filtroAberto === "aea" ? null : "aea")
+                  }
+                >
+                  AEA
+                </button>
+                <FilterMenu
+                  coluna="AEA"
+                  tipo="number"
+                  aberto={filtroAberto === "aea"}
+                  filtro={filtros.aea}
+                  onClose={() => setFiltroAberto(null)}
+                  onUpdate={(chave, valor) =>
+                    atualizarFiltroPopup("aea", chave, valor)
+                  }
+                  onSort={(direcao) => setOrdenacao({ coluna: "aea", direcao })}
+                  onClear={() => limparFiltro("aea", "number")}
+                />
               </th>
 
-              <th>
-                AEV
-                <div className="filter-number">
-                  <select
-                    value={filtros.aev.op}
-                    onChange={(e) =>
-                      atualizarFiltroNumerico("aev", "op", e.target.value)
-                    }
-                  >
-                    <option value="">-</option>
-                    <option value="=">=</option>
-                    <option value=">">&gt;</option>
-                    <option value="<">&lt;</option>
-                    <option value=">=">&gt;=</option>
-                    <option value="<=">&lt;=</option>
-                  </select>
-                  <input
-                    type="number"
-                    value={filtros.aev.valor}
-                    onChange={(e) =>
-                      atualizarFiltroNumerico("aev", "valor", e.target.value)
-                    }
-                    placeholder="valor"
-                  />
-                </div>
+              <th className="filter-th">
+                <button
+                  type="button"
+                  className="filter-button"
+                  onClick={() =>
+                    setFiltroAberto(filtroAberto === "aev" ? null : "aev")
+                  }
+                >
+                  AEV
+                </button>
+                <FilterMenu
+                  coluna="AEV"
+                  tipo="number"
+                  aberto={filtroAberto === "aev"}
+                  filtro={filtros.aev}
+                  onClose={() => setFiltroAberto(null)}
+                  onUpdate={(chave, valor) =>
+                    atualizarFiltroPopup("aev", chave, valor)
+                  }
+                  onSort={(direcao) => setOrdenacao({ coluna: "aev", direcao })}
+                  onClear={() => limparFiltro("aev", "number")}
+                />
               </th>
 
-              <th>
-                A10
-                <div className="filter-number">
-                  <select
-                    value={filtros.a10.op}
-                    onChange={(e) =>
-                      atualizarFiltroNumerico("a10", "op", e.target.value)
-                    }
-                  >
-                    <option value="">-</option>
-                    <option value="=">=</option>
-                    <option value=">">&gt;</option>
-                    <option value="<">&lt;</option>
-                    <option value=">=">&gt;=</option>
-                    <option value="<=">&lt;=</option>
-                  </select>
-                  <input
-                    type="number"
-                    value={filtros.a10.valor}
-                    onChange={(e) =>
-                      atualizarFiltroNumerico("a10", "valor", e.target.value)
-                    }
-                    placeholder="valor"
-                  />
-                </div>
+              <th className="filter-th">
+                <button
+                  type="button"
+                  className="filter-button"
+                  onClick={() =>
+                    setFiltroAberto(filtroAberto === "a10" ? null : "a10")
+                  }
+                >
+                  A10
+                </button>
+                <FilterMenu
+                  coluna="A10"
+                  tipo="number"
+                  aberto={filtroAberto === "a10"}
+                  filtro={filtros.a10}
+                  onClose={() => setFiltroAberto(null)}
+                  onUpdate={(chave, valor) =>
+                    atualizarFiltroPopup("a10", chave, valor)
+                  }
+                  onSort={(direcao) => setOrdenacao({ coluna: "a10", direcao })}
+                  onClear={() => limparFiltro("a10", "number")}
+                />
               </th>
 
-              <th>
-                A1E
-                <div className="filter-number">
-                  <select
-                    value={filtros.a1e.op}
-                    onChange={(e) =>
-                      atualizarFiltroNumerico("a1e", "op", e.target.value)
-                    }
-                  >
-                    <option value="">-</option>
-                    <option value="=">=</option>
-                    <option value=">">&gt;</option>
-                    <option value="<">&lt;</option>
-                    <option value=">=">&gt;=</option>
-                    <option value="<=">&lt;=</option>
-                  </select>
-                  <input
-                    type="number"
-                    value={filtros.a1e.valor}
-                    onChange={(e) =>
-                      atualizarFiltroNumerico("a1e", "valor", e.target.value)
-                    }
-                    placeholder="valor"
-                  />
-                </div>
+              <th className="filter-th">
+                <button
+                  type="button"
+                  className="filter-button"
+                  onClick={() =>
+                    setFiltroAberto(filtroAberto === "a1e" ? null : "a1e")
+                  }
+                >
+                  A1E
+                </button>
+                <FilterMenu
+                  coluna="A1E"
+                  tipo="number"
+                  aberto={filtroAberto === "a1e"}
+                  filtro={filtros.a1e}
+                  onClose={() => setFiltroAberto(null)}
+                  onUpdate={(chave, valor) =>
+                    atualizarFiltroPopup("a1e", chave, valor)
+                  }
+                  onSort={(direcao) => setOrdenacao({ coluna: "a1e", direcao })}
+                  onClear={() => limparFiltro("a1e", "number")}
+                />
               </th>
+
               <th>DATA</th>
               <th>DATA INICIO</th>
               <th>DATA FIM</th>
               <th>ALTERADO PRIMAVERA</th>
-              <th>
-                INFORMAÇÃO
-                <input
-                  type="text"
-                  placeholder="Filtrar"
-                  value={filtros.info}
-                  onChange={(e) => atualizarFiltro("info", e.target.value)}
+
+              <th className="filter-th">
+                <button
+                  type="button"
+                  className="filter-button"
+                  onClick={() =>
+                    setFiltroAberto(filtroAberto === "info" ? null : "info")
+                  }
+                >
+                  INFORMAÇÃO
+                </button>
+                <FilterMenu
+                  coluna="INFORMAÇÃO"
+                  tipo="text"
+                  aberto={filtroAberto === "info"}
+                  filtro={filtros.info}
+                  onClose={() => setFiltroAberto(null)}
+                  onUpdate={(chave, valor) =>
+                    atualizarFiltroPopup("info", chave, valor)
+                  }
+                  onSort={(direcao) =>
+                    setOrdenacao({ coluna: "info", direcao })
+                  }
+                  onClear={() => limparFiltro("info", "text")}
                 />
               </th>
             </tr>
@@ -573,6 +854,7 @@ export default function App() {
           </tbody>
         </table>
       </div>
+
       <div className="print-area">
         {paginas.map((pagina, pageIndex) => (
           <div key={pageIndex} className="sheet">
@@ -626,6 +908,7 @@ export default function App() {
                             }`
                           : "VÁLIDO ENQUANTO DURAR O STOCK"}
                       </div>
+
                       <div className="nota">
                         Limitado ao stock existente e não acumulável com outras
                         promoções.
