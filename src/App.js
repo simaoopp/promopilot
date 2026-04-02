@@ -270,6 +270,22 @@ export default function App() {
   });
 
   useEffect(() => {
+    function handleClickOutside(event) {
+      const clicouDentroDeFiltro = event.target.closest(".filter-th");
+
+      if (!clicouDentroDeFiltro) {
+        setFiltroAberto(null);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  useEffect(() => {
     const timer = setTimeout(() => setLoading(false), 1800);
     return () => clearTimeout(timer);
   }, []);
@@ -822,12 +838,19 @@ export default function App() {
               </tr>
             ) : (
               dadosFiltrados.map((item) => (
-                <tr key={item.id}>
-                  <td className="col-select">
+                <tr
+                  key={item.id}
+                  className={item.selecionado ? "linha-selecionada" : ""}
+                  onClick={() => alternarSelecionado(item.id)}
+                >
+                  <td
+                    className="col-select"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <input
                       type="checkbox"
                       checked={item.selecionado}
-                      onChange={() => alternarSelecionado(item.id)}
+                      readOnly
                     />
                   </td>
                   <td>{item.codigo}</td>
@@ -864,7 +887,7 @@ export default function App() {
               return (
                 <div key={item.id} className="label">
                   <div className="topbar">
-                    <img src={logo} alt="Expert" />
+                    <img src={logo} alt="Expert" className="print-logo" />
                   </div>
 
                   <div className="content">
@@ -876,7 +899,6 @@ export default function App() {
 
                     <div className="precos">
                       <div className="linha-preco">
-                        <span className="texto-lado">ANTES</span>
                         <span className="antes">
                           {formatarEuro(item.antes)}€
                         </span>
@@ -889,7 +911,6 @@ export default function App() {
                       </div>
 
                       <div className="linha-preco">
-                        <span className="texto-lado">ATUAL</span>
                         <span className="atual">
                           {formatarEuro(item.atual)}€
                         </span>
