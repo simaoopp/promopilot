@@ -5,6 +5,8 @@
   "keywords": [],
   "main": "src/index.tsx",
   "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "react-router-dom": "^6.22.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-scripts": "^5.0.0",
