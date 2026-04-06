@@ -19,7 +19,11 @@ export default function EtiquetasPage() {
   const [anoValidade, setAnoValidade] = useState(new Date().getFullYear());
   const [dados, setDados] = useState([]);
   const [formatoEtiqueta, setFormatoEtiqueta] = useState("a6");
-
+  const [popupArtigosInvalidosAberto, setPopupArtigosInvalidosAberto] =
+    useState(false);
+  const [artigosInvalidosPopup, setArtigosInvalidosPopup] = useState([]);
+  const [artigosInvalidosSelecionados, setArtigosInvalidosSelecionados] =
+    useState({});
   const [filtroAberto, setFiltroAberto] = useState(null);
   const [ordenacao, setOrdenacao] = useState({
     coluna: "",
@@ -52,6 +56,16 @@ export default function EtiquetasPage() {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
+
+  function removerInvalidosDaSelecao() {
+    const idsInvalidos = new Set(artigosInvalidosPopup.map((item) => item.id));
+
+    setDados((prev) =>
+      prev.map((item) =>
+        idsInvalidos.has(item.id) ? { ...item, selecionado: false } : item
+      )
+    );
+  }
 
   function atualizarFiltroPopup(campo, chave, valor) {
     setFiltros((prev) => ({
@@ -143,6 +157,131 @@ export default function EtiquetasPage() {
     }
   }
 
+  function alternarArtigoInvalidoSelecionado(id) {
+    setArtigosInvalidosSelecionados((prev) => ({
+      ...prev,
+      [id]: !prev[id],
+    }));
+  }
+
+  function selecionarTodosInvalidos() {
+    const todos = {};
+    artigosInvalidos.forEach((item) => {
+      todos[item.id] = true;
+    });
+    setArtigosInvalidosSelecionados(todos);
+  }
+
+  function desmarcarTodosInvalidos() {
+    const todos = {};
+    artigosInvalidos.forEach((item) => {
+      todos[item.id] = false;
+    });
+    setArtigosInvalidosSelecionados(todos);
+  }
+
+  async function copiarCodigosInvalidosEProsseguir() {
+    const texto = artigosInvalidosPopup
+      .map((item) => String(item.codigo || "").trim())
+      .filter(Boolean)
+      .join("|");
+
+    try {
+      if (texto) {
+        await navigator.clipboard.writeText(texto);
+      }
+    } catch (error) {
+      console.error("Não foi possível copiar os códigos.", error);
+    }
+
+    removerInvalidosDaSelecao();
+    setPopupArtigosInvalidosAberto(false);
+
+    setTimeout(() => {
+      window.print();
+    }, 150);
+  }
+
+  function fecharPopupEProsseguir() {
+    removerInvalidosDaSelecao();
+    setPopupArtigosInvalidosAberto(false);
+
+    setTimeout(() => {
+      window.print();
+    }, 150);
+  }
+
+  function fecharPopupEProsseguir() {
+    setPopupArtigosInvalidosAberto(false);
+
+    setTimeout(() => {
+      window.print();
+    }, 150);
+  }
+
+  function fecharPopupEProsseguir() {
+    setPopupArtigosInvalidosAberto(false);
+    window.print();
+  }
+
+  function fecharPopupEProsseguir() {
+    setPopupArtigosInvalidosAberto(false);
+    window.print();
+  }
+
+  async function copiarCodigosInvalidosEProsseguir() {
+    const texto = artigosInvalidosPopup
+      .map((item) => String(item.codigo || "").trim())
+      .filter(Boolean)
+      .join("|");
+
+    try {
+      if (texto) {
+        await navigator.clipboard.writeText(texto);
+      }
+    } catch (error) {
+      console.error("Não foi possível copiar os códigos.", error);
+    }
+
+    const idsInvalidos = new Set(artigosInvalidosPopup.map((item) => item.id));
+
+    const restantesValidos = selecionados.filter(
+      (item) => !idsInvalidos.has(item.id)
+    );
+
+    removerInvalidosDaSelecao();
+    setPopupArtigosInvalidosAberto(false);
+
+    if (restantesValidos.length === 0) {
+      alert("Não existem etiquetas válidas para imprimir.");
+      return;
+    }
+
+    setTimeout(() => {
+      window.print();
+    }, 150);
+  }
+
+  function fecharPopupEProsseguir() {
+    const idsInvalidos = new Set(artigosInvalidosPopup.map((item) => item.id));
+
+    const restantesValidos = selecionados.filter(
+      (item) => !idsInvalidos.has(item.id)
+    );
+
+    removerInvalidosDaSelecao();
+    setPopupArtigosInvalidosAberto(false);
+
+    if (restantesValidos.length === 0) {
+      alert("Não existem etiquetas válidas para imprimir.");
+      return;
+    }
+
+    setTimeout(() => {
+      window.print();
+    }, 150);
+  }
+
   const dadosFiltrados = useMemo(() => {
     const filtrados = dados.filter((item) => {
       const codigoOk = aplicarFiltroTexto(item.codigo, filtros.codigo);
@@ -175,6 +314,9 @@ export default function EtiquetasPage() {
   }, [dados, filtros, ordenacao]);
 
   const selecionados = dados.filter((item) => item.selecionado);
+  const selecionadosInvalidos = selecionados.filter(
+    (item) => Number(item.antes) <= Number(item.atual)
+  );
   const etiquetasPorPagina = formatoEtiqueta === "a5" ? 2 : 4;
   const paginas = dividirEmPaginas(selecionados, etiquetasPorPagina);
 
@@ -213,6 +355,16 @@ export default function EtiquetasPage() {
   function imprimirSelecionados() {
     if (selecionados.length === 0) {
       alert("Seleciona pelo menos um artigo.");
+      return;
+    }
+
+    const invalidos = selecionados.filter(
+      (item) => Number(item.antes) <= Number(item.atual)
+    );
+
+    if (invalidos.length > 0) {
+      setArtigosInvalidosPopup(invalidos);
+      setPopupArtigosInvalidosAberto(true);
       return;
     }
 
@@ -425,6 +577,60 @@ export default function EtiquetasPage() {
           </div>
         </div>
       </div>
+      {popupArtigosInvalidosAberto && (
+        <div className="popup-overlay">
+          <div className="popup-card">
+            <div className="popup-header">
+              <h2>Artigos com preço Superior</h2>
+            </div>
+
+            <p className="popup-text">
+              Os artigos abaixo foram selecionados para impressão, mas têm o
+              PVP2 anterior maior ou igual ao PVP2 atual.
+            </p>
+
+            <div className="popup-actions">
+              <button
+                className="btn btn-primary"
+                onClick={copiarCodigosInvalidosEProsseguir}
+              >
+                Copiar Código
+              </button>
+
+              <button
+                className="btn btn-secondary"
+                onClick={fecharPopupEProsseguir}
+              >
+                Fechar e prosseguir
+              </button>
+            </div>
+
+            <div className="popup-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Código</th>
+                    <th>Designação</th>
+                    <th>PVP2 Antes</th>
+                    <th>PVP2 Atual</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {artigosInvalidosPopup.map((item) => (
+                    <tr key={item.id}>
+                      <td>{item.codigo}</td>
+                      <td>{item.descricao}</td>
+                      <td>{formatarEuro(item.antes)}€</td>
+                      <td>{formatarEuro(item.atual)}€</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className={`print-area formato-${formatoEtiqueta}`}>
         {paginas.map((pagina, pageIndex) => (
