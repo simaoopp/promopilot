@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import logo from "../logo.png";
+import logo from "../favicon.png";
 
 export default function Login() {
   const { user, loadingAuth, signIn } = useAuth();
@@ -71,7 +71,7 @@ export default function Login() {
             <input
               id="email"
               type="email"
-              placeholder="seuemail@empresa.com"
+              placeholder="seu.email@susiarte.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
