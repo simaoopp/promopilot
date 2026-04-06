@@ -89,8 +89,74 @@ textarea {
     left: 100%;
   }
 }
+/* ========================= popup etiquetas ========================= */
 
-/* ========================= popup change-password ========================= */
+.popup-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(17, 24, 39, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 4000;
+}
+
+.popup-card {
+  width: min(1000px, 100%);
+  max-height: 85vh;
+  background: #ffffff;
+  border-radius: 18px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px;
+  border-bottom: 1px solid #edf0f5;
+  background: #fafbfd;
+}
+
+.popup-header h2 {
+  margin: 0;
+  font-size: 20px;
+  color: #111827;
+}
+
+.popup-close {
+  border: none;
+  background: transparent;
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+  color: #374151;
+}
+
+.popup-text {
+  margin: 0;
+  padding: 16px 22px 0;
+  color: #4b5563;
+  font-size: 14px;
+}
+
+.popup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 16px 22px;
+}
+
+.popup-table-wrap {
+  padding: 0 22px 22px;
+  overflow: auto;
+}
+
+/* ========================= popup change password ========================= */
 
 .force-password-overlay {
   position: fixed;
@@ -1555,7 +1621,13 @@ tbody tr:hover {
   .table-panel,
   .topbar-site,
   .sidebar,
-  .sidebar-overlay {
+  .sidebar-overlay,
+  .popup-overlay,
+  .popup-card,
+  .popup-header,
+  .popup-actions,
+  .popup-table-wrap,
+  .popup-text {
     display: none !important;
   }
 
