@@ -51,17 +51,20 @@ textarea {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 18px;
+  gap: 3vh; /* relativo ao ecrã */
+  padding: 20px;
   z-index: 9999;
 }
 
 .splash-logo {
   width: auto;
-  height: 50%;
+  height: 30vh; /* adapta ao tamanho do ecrã */
+  max-height: 300px;
 }
 
 .splash-loader {
-  width: 220px;
+  width: 60%;
+  max-width: 300px;
   height: 8px;
   background: rgba(255, 255, 255, 0.16);
   border-radius: 999px;
@@ -87,6 +90,31 @@ textarea {
   }
   100% {
     left: 100%;
+  }
+}
+
+/* 📱 Telemóveis */
+@media (max-width: 600px) {
+  .splash-logo {
+    height: 20vh;
+    max-height: 150px;
+  }
+
+  .splash-loader {
+    width: 80%;
+    height: 6px;
+  }
+}
+
+@media (min-width: 1200px) {
+  .splash-logo {
+    height: 35vh;
+    max-height: 400px;
+  }
+
+  .splash-loader {
+    width: 40%;
+    height: 10px;
   }
 }
 /* ========================= popup etiquetas ========================= */
