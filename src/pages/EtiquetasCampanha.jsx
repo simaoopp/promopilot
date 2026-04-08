@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import Barcode from "../components/Barcode";
 import FilterMenu from "../components/FilterMenu";
 import logo from "../logo.png";
+import "../styles/styles.css";
 
 import { formatarEuro } from "../utils/formatters";
 import { parseTabelaColada } from "../utils/parsers";
@@ -10,7 +11,6 @@ import {
   compararNumero,
   dividirEmPaginas,
 } from "../utils/filters";
-
 import { TABLE_COLUMNS } from "../data/tableColumns";
 
 export default function EtiquetasPage() {
@@ -22,8 +22,6 @@ export default function EtiquetasPage() {
   const [popupArtigosInvalidosAberto, setPopupArtigosInvalidosAberto] =
     useState(false);
   const [artigosInvalidosPopup, setArtigosInvalidosPopup] = useState([]);
-  const [artigosInvalidosSelecionados, setArtigosInvalidosSelecionados] =
-    useState({});
   const [filtroAberto, setFiltroAberto] = useState(null);
   const [ordenacao, setOrdenacao] = useState({
     coluna: "",
@@ -115,10 +113,15 @@ export default function EtiquetasPage() {
 
   function carregarTextoColado() {
     try {
+      if (!textoColado.trim()) {
+        throw new Error("Sem conteúdo");
+      }
+
       const linhas = parseTabelaColada(textoColado);
 
-      if (!textoColado.trim()) throw new Error("Sem conteúdo");
-      if (!linhas.length) throw new Error("Sem linhas válidas");
+      if (!linhas.length) {
+        throw new Error("Sem linhas válidas");
+      }
 
       const erro = linhas.some((item) => {
         const nomeInvalido = !item.descricao || item.descricao.length < 3;
@@ -130,7 +133,7 @@ export default function EtiquetasPage() {
         const dataInvalida = (data) => {
           if (!data || data === "-") return false;
 
-          const texto = data.trim();
+          const texto = String(data).trim();
           const formatoMesTexto = /^\d{1,2}\/[a-z]{3}\.?$/i;
           const formatoMesNumero = /^\d{1,2}\/\d{2}$/;
 
@@ -149,137 +152,14 @@ export default function EtiquetasPage() {
         );
       });
 
-      if (erro) throw new Error("Dados inválidos");
+      if (erro) {
+        throw new Error("Dados inválidos");
+      }
 
       setDados(linhas);
     } catch (error) {
       alert("Verifique se os dados inseridos estão corretos.");
     }
-  }
-
-  function alternarArtigoInvalidoSelecionado(id) {
-    setArtigosInvalidosSelecionados((prev) => ({
-      ...prev,
-      [id]: !prev[id],
-    }));
-  }
-
-  function selecionarTodosInvalidos() {
-    const todos = {};
-    artigosInvalidos.forEach((item) => {
-      todos[item.id] = true;
-    });
-    setArtigosInvalidosSelecionados(todos);
-  }
-
-  function desmarcarTodosInvalidos() {
-    const todos = {};
-    artigosInvalidos.forEach((item) => {
-      todos[item.id] = false;
-    });
-    setArtigosInvalidosSelecionados(todos);
-  }
-
-  async function copiarCodigosInvalidosEProsseguir() {
-    const texto = artigosInvalidosPopup
-      .map((item) => String(item.codigo || "").trim())
-      .filter(Boolean)
-      .join("|");
-
-    try {
-      if (texto) {
-        await navigator.clipboard.writeText(texto);
-      }
-    } catch (error) {
-      console.error("Não foi possível copiar os códigos.", error);
-    }
-
-    removerInvalidosDaSelecao();
-    setPopupArtigosInvalidosAberto(false);
-
-    setTimeout(() => {
-      window.print();
-    }, 150);
-  }
-
-  function fecharPopupEProsseguir() {
-    removerInvalidosDaSelecao();
-    setPopupArtigosInvalidosAberto(false);
-
-    setTimeout(() => {
-      window.print();
-    }, 150);
-  }
-
-  function fecharPopupEProsseguir() {
-    setPopupArtigosInvalidosAberto(false);
-
-    setTimeout(() => {
-      window.print();
-    }, 150);
-  }
-
-  function fecharPopupEProsseguir() {
-    setPopupArtigosInvalidosAberto(false);
-    window.print();
-  }
-
-  function fecharPopupEProsseguir() {
-    setPopupArtigosInvalidosAberto(false);
-    window.print();
-  }
-
-  async function copiarCodigosInvalidosEProsseguir() {
-    const texto = artigosInvalidosPopup
-      .map((item) => String(item.codigo || "").trim())
-      .filter(Boolean)
-      .join("|");
-
-    try {
-      if (texto) {
-        await navigator.clipboard.writeText(texto);
-      }
-    } catch (error) {
-      console.error("Não foi possível copiar os códigos.", error);
-    }
-
-    const idsInvalidos = new Set(artigosInvalidosPopup.map((item) => item.id));
-
-    const restantesValidos = selecionados.filter(
-      (item) => !idsInvalidos.has(item.id)
-    );
-
-    removerInvalidosDaSelecao();
-    setPopupArtigosInvalidosAberto(false);
-
-    if (restantesValidos.length === 0) {
-      alert("Não existem etiquetas válidas para imprimir.");
-      return;
-    }
-
-    setTimeout(() => {
-      window.print();
-    }, 150);
-  }
-
-  function fecharPopupEProsseguir() {
-    const idsInvalidos = new Set(artigosInvalidosPopup.map((item) => item.id));
-
-    const restantesValidos = selecionados.filter(
-      (item) => !idsInvalidos.has(item.id)
-    );
-
-    removerInvalidosDaSelecao();
-    setPopupArtigosInvalidosAberto(false);
-
-    if (restantesValidos.length === 0) {
-      alert("Não existem etiquetas válidas para imprimir.");
-      return;
-    }
-
-    setTimeout(() => {
-      window.print();
-    }, 150);
   }
 
   const dadosFiltrados = useMemo(() => {
@@ -314,9 +194,6 @@ export default function EtiquetasPage() {
   }, [dados, filtros, ordenacao]);
 
   const selecionados = dados.filter((item) => item.selecionado);
-  const selecionadosInvalidos = selecionados.filter(
-    (item) => Number(item.antes) <= Number(item.atual)
-  );
   const etiquetasPorPagina = formatoEtiqueta === "a5" ? 2 : 4;
   const paginas = dividirEmPaginas(selecionados, etiquetasPorPagina);
 
@@ -350,6 +227,57 @@ export default function EtiquetasPage() {
 
   function limparSelecao() {
     setDados((prev) => prev.map((item) => ({ ...item, selecionado: false })));
+  }
+
+  async function copiarCodigosInvalidosEProsseguir() {
+    const texto = artigosInvalidosPopup
+      .map((item) => String(item.codigo || "").trim())
+      .filter(Boolean)
+      .join("|");
+
+    try {
+      if (texto) {
+        await navigator.clipboard.writeText(texto);
+      }
+    } catch (error) {
+      console.error("Não foi possível copiar os códigos.", error);
+    }
+
+    const idsInvalidos = new Set(artigosInvalidosPopup.map((item) => item.id));
+    const restantesValidos = selecionados.filter(
+      (item) => !idsInvalidos.has(item.id)
+    );
+
+    removerInvalidosDaSelecao();
+    setPopupArtigosInvalidosAberto(false);
+
+    if (restantesValidos.length === 0) {
+      alert("Não existem etiquetas válidas para imprimir.");
+      return;
+    }
+
+    setTimeout(() => {
+      window.print();
+    }, 150);
+  }
+
+  function fecharPopupEProsseguir() {
+    const idsInvalidos = new Set(artigosInvalidosPopup.map((item) => item.id));
+    const restantesValidos = selecionados.filter(
+      (item) => !idsInvalidos.has(item.id)
+    );
+
+    removerInvalidosDaSelecao();
+    setPopupArtigosInvalidosAberto(false);
+
+    if (restantesValidos.length === 0) {
+      alert("Não existem etiquetas válidas para imprimir.");
+      return;
+    }
+
+    setTimeout(() => {
+      window.print();
+    }, 150);
   }
 
   function imprimirSelecionados() {
@@ -428,11 +356,16 @@ export default function EtiquetasPage() {
           </div>
 
           <div className="toolbar-actions">
-            <button className="btn btn-primary" onClick={carregarTextoColado}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={carregarTextoColado}
+            >
               Carregar tabela
             </button>
 
             <button
+              type="button"
               className="btn btn-secondary"
               onClick={selecionarTodosFiltrados}
             >
@@ -440,17 +373,26 @@ export default function EtiquetasPage() {
             </button>
 
             <button
+              type="button"
               className="btn btn-secondary"
               onClick={desmarcarTodosFiltrados}
             >
               Desmarcar filtrados
             </button>
 
-            <button className="btn btn-secondary" onClick={limparSelecao}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={limparSelecao}
+            >
               Limpar seleção
             </button>
 
-            <button className="btn btn-success" onClick={imprimirSelecionados}>
+            <button
+              type="button"
+              className="btn btn-success"
+              onClick={imprimirSelecionados}
+            >
               Imprimir selecionados
             </button>
           </div>
@@ -546,7 +488,7 @@ export default function EtiquetasPage() {
                       >
                         <input
                           type="checkbox"
-                          checked={item.selecionado}
+                          checked={!!item.selecionado}
                           readOnly
                         />
                       </td>
@@ -577,11 +519,12 @@ export default function EtiquetasPage() {
           </div>
         </div>
       </div>
+
       {popupArtigosInvalidosAberto && (
         <div className="popup-overlay">
           <div className="popup-card">
             <div className="popup-header">
-              <h2>Artigos com preço Superior</h2>
+              <h2>Artigos com preço superior</h2>
             </div>
 
             <p className="popup-text">
@@ -591,13 +534,15 @@ export default function EtiquetasPage() {
 
             <div className="popup-actions">
               <button
+                type="button"
                 className="btn btn-primary"
                 onClick={copiarCodigosInvalidosEProsseguir}
               >
-                Copiar Código
+                Copiar código
               </button>
 
               <button
+                type="button"
                 className="btn btn-secondary"
                 onClick={fecharPopupEProsseguir}
               >

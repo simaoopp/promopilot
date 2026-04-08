@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import logo from "../favicon.png";
+import "../styles/styles.css";
 
 export default function Login() {
   const { user, loadingAuth, signIn } = useAuth();
@@ -12,7 +13,22 @@ export default function Login() {
   const [carregando, setCarregando] = useState(false);
   const [mostrarSenha, setMostrarSenha] = useState(false);
 
-  if (!loadingAuth && user) {
+  if (loadingAuth) {
+    return (
+      <div className="login-page">
+        <div className="login-stage">
+          <div className="login-card glass">
+            <div className="login-brand-text">
+              <h1>A carregar...</h1>
+              <p className="login-subtitle">A verificar sessão atual.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (user) {
     return <Navigate to="/EtiquetasCampanha" replace />;
   }
 
@@ -22,7 +38,8 @@ export default function Login() {
     setCarregando(true);
 
     try {
-      await signIn(email, senha);
+      const emailLimpo = String(email || "").trim();
+      await signIn(emailLimpo, senha);
 
       if (senha === "123") {
         sessionStorage.setItem("force_password_change", "true");
@@ -30,7 +47,7 @@ export default function Login() {
         sessionStorage.removeItem("force_password_change");
       }
     } catch (err) {
-      setErro("Email ou senha inválidos.");
+      setErro("Email ou palavra-passe inválidos.");
     } finally {
       setCarregando(false);
     }
@@ -74,6 +91,8 @@ export default function Login() {
               placeholder="seu.email@susiarte.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+              disabled={carregando}
               required
             />
 
@@ -85,12 +104,17 @@ export default function Login() {
                 placeholder="A sua palavra-passe"
                 value={senha}
                 onChange={(e) => setSenha(e.target.value)}
+                autoComplete="current-password"
+                disabled={carregando}
                 required
               />
               <button
                 type="button"
                 className="login-password-toggle"
                 onClick={() => setMostrarSenha((prev) => !prev)}
+                aria-label={mostrarSenha ? "Ocultar palavra-passe" : "Mostrar palavra-passe"}
+                aria-pressed={mostrarSenha}
+                disabled={carregando}
               >
                 {mostrarSenha ? "Ocultar" : "Mostrar"}
               </button>

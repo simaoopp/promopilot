@@ -6,18 +6,18 @@
   "main": "src/index.tsx",
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
-    "react-router-dom": "^6.22.3",
+    "jsbarcode": "3.12.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-router-dom": "^6.22.3",
     "react-scripts": "^5.0.0",
-    "xlsx": "0.18.5",
-    "jsbarcode": "3.12.3"
+    "xlsx": "0.18.5"
   },
   "devDependencies": {
     "@types/react": "19.0.0",
     "@types/react-dom": "19.0.0",
     "loader-utils": "3.2.1",
-    "typescript": "5.7.2"
+    "typescript": "^4.9.5"
   },
   "scripts": {
     "start": "react-scripts start",
