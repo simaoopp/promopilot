@@ -5,6 +5,7 @@ import logo from "../logo.png";
 import "../styles/styles.css";
 
 import { formatarEuro } from "../utils/formatters";
+import { useAutoFontSize } from "../utils/useAutoFontSize";
 import { parseTabelaColada } from "../utils/parsers";
 import {
   aplicarFiltroTexto,
@@ -12,6 +13,68 @@ import {
   dividirEmPaginas,
 } from "../utils/filters";
 import { TABLE_COLUMNS } from "../data/tableColumns";
+
+function AutoText({ texto, className, min, max, style = {} }) {
+  const autoFont = useAutoFontSize(texto, min, max);
+
+  return (
+    <div
+      ref={autoFont.ref}
+      className={className}
+      style={{
+        width: "100%",
+        ...style,
+        fontSize: `${autoFont.fontSize}px`,
+      }}
+    >
+      {texto}
+    </div>
+  );
+}
+
+function DescricaoAuto({ texto, formatoEtiqueta }) {
+  return (
+    <AutoText
+      texto={texto}
+      className="descricao"
+      min={formatoEtiqueta === "a5" ? 36 : 12}
+      max={formatoEtiqueta === "a5" ? 46 : 18}
+    />
+  );
+}
+
+function PrecoAntesAuto({ valor, formatoEtiqueta }) {
+  return (
+    <AutoText
+      texto={`${formatarEuro(valor)}€`}
+      className="antes"
+      min={formatoEtiqueta === "a5" ? 44 : 38}
+      max={formatoEtiqueta === "a5" ? 54 : 46}
+    />
+  );
+}
+
+function DescontoAuto({ valor, formatoEtiqueta }) {
+  return (
+    <AutoText
+      texto={`-${formatarEuro(valor)}€`}
+      className="desconto"
+      min={formatoEtiqueta === "a5" ? 48 : 40}
+      max={formatoEtiqueta === "a5" ? 60 : 50}
+    />
+  );
+}
+
+function PrecoAtualAuto({ valor, formatoEtiqueta }) {
+  return (
+    <AutoText
+      texto={`${formatarEuro(valor)}€`}
+      className="atual"
+      min={formatoEtiqueta === "a5" ? 62 : 48}
+      max={formatoEtiqueta === "a5" ? 88 : 68}
+    />
+  );
+}
 
 export default function EtiquetasPage() {
   const [titulo, setTitulo] = useState("PROMO");
@@ -60,8 +123,8 @@ export default function EtiquetasPage() {
 
     setDados((prev) =>
       prev.map((item) =>
-        idsInvalidos.has(item.id) ? { ...item, selecionado: false } : item
-      )
+        idsInvalidos.has(item.id) ? { ...item, selecionado: false } : item,
+      ),
     );
   }
 
@@ -131,9 +194,10 @@ export default function EtiquetasPage() {
           !item.ean || String(item.ean).replace(/\D/g, "").length < 8;
 
         const dataInvalida = (data) => {
-          if (!data || data === "-") return false;
+          const texto = String(data || "").trim();
 
-          const texto = String(data).trim();
+          if (!texto || texto === "-") return false;
+
           const formatoMesTexto = /^\d{1,2}\/[a-z]{3}\.?$/i;
           const formatoMesNumero = /^\d{1,2}\/\d{2}$/;
 
@@ -200,8 +264,8 @@ export default function EtiquetasPage() {
   function alternarSelecionado(id) {
     setDados((prev) =>
       prev.map((item) =>
-        item.id === id ? { ...item, selecionado: !item.selecionado } : item
-      )
+        item.id === id ? { ...item, selecionado: !item.selecionado } : item,
+      ),
     );
   }
 
@@ -210,8 +274,8 @@ export default function EtiquetasPage() {
 
     setDados((prev) =>
       prev.map((item) =>
-        ids.has(item.id) ? { ...item, selecionado: true } : item
-      )
+        ids.has(item.id) ? { ...item, selecionado: true } : item,
+      ),
     );
   }
 
@@ -220,8 +284,8 @@ export default function EtiquetasPage() {
 
     setDados((prev) =>
       prev.map((item) =>
-        ids.has(item.id) ? { ...item, selecionado: false } : item
-      )
+        ids.has(item.id) ? { ...item, selecionado: false } : item,
+      ),
     );
   }
 
@@ -245,7 +309,7 @@ export default function EtiquetasPage() {
 
     const idsInvalidos = new Set(artigosInvalidosPopup.map((item) => item.id));
     const restantesValidos = selecionados.filter(
-      (item) => !idsInvalidos.has(item.id)
+      (item) => !idsInvalidos.has(item.id),
     );
 
     removerInvalidosDaSelecao();
@@ -264,7 +328,7 @@ export default function EtiquetasPage() {
   function fecharPopupEProsseguir() {
     const idsInvalidos = new Set(artigosInvalidosPopup.map((item) => item.id));
     const restantesValidos = selecionados.filter(
-      (item) => !idsInvalidos.has(item.id)
+      (item) => !idsInvalidos.has(item.id),
     );
 
     removerInvalidosDaSelecao();
@@ -287,7 +351,7 @@ export default function EtiquetasPage() {
     }
 
     const invalidos = selecionados.filter(
-      (item) => Number(item.antes) <= Number(item.atual)
+      (item) => Number(item.antes) <= Number(item.atual),
     );
 
     if (invalidos.length > 0) {
@@ -297,6 +361,34 @@ export default function EtiquetasPage() {
     }
 
     window.print();
+  }
+
+  function formatarDataDiaMes(data) {
+    const dia = String(data.getDate()).padStart(2, "0");
+    const mes = String(data.getMonth() + 1).padStart(2, "0");
+    return `${dia}/${mes}`;
+  }
+
+  function obterTextoValidade(item, anoValidade) {
+    const normalizarData = (valor) => {
+      const texto = String(valor || "").trim();
+      return texto && texto !== "-" ? texto : "";
+    };
+
+    const dataInicio = normalizarData(item.dataInicio);
+    const dataFim = normalizarData(item.dataFim);
+
+    if (!dataInicio && !dataFim) {
+      const hoje = new Date();
+      const fim = new Date();
+      fim.setDate(hoje.getDate() + 30);
+
+      return `VÁLIDO DE ${formatarDataDiaMes(hoje)}/${hoje.getFullYear()} A ${formatarDataDiaMes(fim)}/${fim.getFullYear()}`;
+    }
+
+    return `VÁLIDO DE ${dataInicio || "-"}${
+      dataInicio ? `/${anoValidade}` : ""
+    } A ${dataFim || "-"}${dataFim ? `/${anoValidade}` : ""}`;
   }
 
   return (
@@ -438,7 +530,7 @@ export default function EtiquetasPage() {
                             className="filter-button"
                             onClick={() =>
                               setFiltroAberto(
-                                filtroAberto === col.key ? null : col.key
+                                filtroAberto === col.key ? null : col.key,
                               )
                             }
                           >
@@ -529,7 +621,7 @@ export default function EtiquetasPage() {
 
             <p className="popup-text">
               Os artigos abaixo foram selecionados para impressão, mas têm o
-              PVP2 anterior maior ou igual ao PVP2 atual.
+              PVP2 anterior menor ou igual ao PVP2 atual.
             </p>
 
             <div className="popup-actions">
@@ -587,6 +679,7 @@ export default function EtiquetasPage() {
           >
             {pagina.map((item) => {
               const desconto = Math.max(0, item.antes - item.atual);
+              const textoValidade = obterTextoValidade(item, anoValidade);
 
               return (
                 <div
@@ -606,45 +699,43 @@ export default function EtiquetasPage() {
                           <div className="topo">
                             <div className="codigo">{item.codigo}</div>
                             <div className="titulo">{titulo}</div>
-                            <div className="descricao">{item.descricao}</div>
+                            <DescricaoAuto
+                              texto={item.descricao}
+                              formatoEtiqueta={formatoEtiqueta}
+                            />
                           </div>
 
                           <div className="precos">
                             <div className="linha-preco">
-                              <span className="antes">
-                                {formatarEuro(item.antes)}€
-                              </span>
+                              <PrecoAntesAuto
+                                valor={item.antes}
+                                formatoEtiqueta={formatoEtiqueta}
+                              />
                             </div>
 
                             <div className="linha-preco desconto-linha">
-                              <span className="desconto">
-                                -{formatarEuro(desconto)}€
-                              </span>
+                              <DescontoAuto
+                                valor={desconto}
+                                formatoEtiqueta={formatoEtiqueta}
+                              />
                             </div>
 
                             <div className="linha-preco">
-                              <span className="atual">
-                                {formatarEuro(item.atual)}€
-                              </span>
+                              <PrecoAtualAuto
+                                valor={item.atual}
+                                formatoEtiqueta={formatoEtiqueta}
+                              />
                             </div>
                           </div>
 
                           <div className="rodape">
                             <Barcode value={item.ean} />
 
-                            <div className="validade">
-                              {item.dataInicio || item.dataFim
-                                ? `VÁLIDO DE ${item.dataInicio || "-"}${
-                                    item.dataInicio ? `/${anoValidade}` : ""
-                                  } A ${item.dataFim || "-"}${
-                                    item.dataFim ? `/${anoValidade}` : ""
-                                  }`
-                                : "VÁLIDO ENQUANTO DURAR O STOCK"}
-                            </div>
+                            <div className="validade">{textoValidade}</div>
 
                             <div className="nota">
-                              Limitado ao stock existente e não acumulável com
-                              outras promoções.
+                              VÁLIDO ENQUANTO DURAR O STOCK. Limitado ao stock
+                              existente e não acumulável com outras promoções.
                             </div>
                           </div>
                         </div>
@@ -660,45 +751,43 @@ export default function EtiquetasPage() {
                         <div className="topo">
                           <div className="codigo">{item.codigo}</div>
                           <div className="titulo">{titulo}</div>
-                          <div className="descricao">{item.descricao}</div>
+                          <DescricaoAuto
+                            texto={item.descricao}
+                            formatoEtiqueta={formatoEtiqueta}
+                          />
                         </div>
 
                         <div className="precos">
                           <div className="linha-preco">
-                            <span className="antes">
-                              {formatarEuro(item.antes)}€
-                            </span>
+                            <PrecoAntesAuto
+                              valor={item.antes}
+                              formatoEtiqueta={formatoEtiqueta}
+                            />
                           </div>
 
                           <div className="linha-preco desconto-linha">
-                            <span className="desconto">
-                              -{formatarEuro(desconto)}€
-                            </span>
+                            <DescontoAuto
+                              valor={desconto}
+                              formatoEtiqueta={formatoEtiqueta}
+                            />
                           </div>
 
                           <div className="linha-preco">
-                            <span className="atual">
-                              {formatarEuro(item.atual)}€
-                            </span>
+                            <PrecoAtualAuto
+                              valor={item.atual}
+                              formatoEtiqueta={formatoEtiqueta}
+                            />
                           </div>
                         </div>
 
                         <div className="rodape">
                           <Barcode value={item.ean} />
 
-                          <div className="validade">
-                            {item.dataInicio || item.dataFim
-                              ? `VÁLIDO DE ${item.dataInicio || "-"}${
-                                  item.dataInicio ? `/${anoValidade}` : ""
-                                } A ${item.dataFim || "-"}${
-                                  item.dataFim ? `/${anoValidade}` : ""
-                                }`
-                              : "VÁLIDO ENQUANTO DURAR O STOCK"}
-                          </div>
+                          <div className="validade">{textoValidade}</div>
 
                           <div className="nota">
-                            Limitado ao stock existente e não acumulável com
-                            outras promoções.
+                            VÁLIDO ENQUANTO DURAR O STOCK. Limitado ao stock
+                            existente e não acumulável com outras promoções.
                           </div>
                         </div>
                       </div>

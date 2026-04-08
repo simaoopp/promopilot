@@ -3,8 +3,8 @@ import JsBarcode from "jsbarcode";
 
 export default function Barcode({
   value,
-  height = 40,
-  width = 2,
+  height = 20,
+  width = 1,
   showValue = false,
 }) {
   const ref = useRef(null);
