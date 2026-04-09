@@ -1778,12 +1778,18 @@ tbody tr:hover {
 
 .label.label-a5 .content {
   padding: 20px 24px 18px;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  height: 100%;
+  box-sizing: border-box;
 }
 
-.label.label-a5 .topo {
-  top: 20px;
-  left: 24px;
-  right: 24px;
+.label.label-a5 .content {
+  padding: 20px 24px 18px;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  height: 100%;
+  box-sizing: border-box;
 }
 
 .label.label-a5 .codigo {
@@ -1801,9 +1807,11 @@ tbody tr:hover {
   padding: 0 12px;
 }
 
-.label.label-a5 .precos {
-  left: 24px;
-  right: 24px;
+.label.label-a5 .topo {
+  position: static;
+  left: auto;
+  right: auto;
+  top: auto;
 }
 
 .label.label-a5 .antes {
