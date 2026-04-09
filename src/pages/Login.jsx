@@ -119,7 +119,6 @@ export default function Login() {
                 {mostrarSenha ? "Ocultar" : "Mostrar"}
               </button>
             </div>
-
             <button
               type="submit"
               className="login-submit"
