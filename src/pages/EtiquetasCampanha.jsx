@@ -37,8 +37,8 @@ function DescricaoAuto({ texto, formatoEtiqueta }) {
     <AutoText
       texto={texto}
       className="descricao"
-      min={formatoEtiqueta === "a5" ? 36 : 12}
-      max={formatoEtiqueta === "a5" ? 46 : 18}
+      min={formatoEtiqueta === "a5" ? 24 : 12}
+      max={formatoEtiqueta === "a5" ? 38 : 18}
     />
   );
 }
