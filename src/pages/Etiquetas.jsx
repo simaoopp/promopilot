@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import artigosData from "../data/artigos.json";
+import "../styles/styles.css";
 
 const LIMITE_RESULTADOS = 100;
 
@@ -16,9 +17,11 @@ function normalizarPesquisaLivre(texto) {
 }
 
 export default function EtiquetasCampanhaExcelPage() {
+  const [modoPesquisa, setModoPesquisa] = useState("manual");
   const [pesquisa, setPesquisa] = useState("");
   const [pesquisaDebounced, setPesquisaDebounced] = useState("");
   const [selecionados, setSelecionados] = useState({});
+  const [mensagem, setMensagem] = useState("");
 
   const artigos = artigosData?.artigos || [];
 
@@ -29,6 +32,16 @@ export default function EtiquetasCampanhaExcelPage() {
 
     return () => clearTimeout(timer);
   }, [pesquisa]);
+
+  useEffect(() => {
+    if (!mensagem) return;
+
+    const timer = setTimeout(() => {
+      setMensagem("");
+    }, 2500);
+
+    return () => clearTimeout(timer);
+  }, [mensagem]);
 
   const artigosPreparados = useMemo(() => {
     return artigos.map((item, index) => ({
@@ -54,6 +67,26 @@ export default function EtiquetasCampanhaExcelPage() {
     const palavras = termoNormalizado.split(/\s+/).filter(Boolean);
 
     return artigosPreparados.filter((item) => {
+      if (modoPesquisa === "scan") {
+        const matchDireto =
+          item.descricaoLower.includes(termoLower) ||
+          item.descricaoNormalizada.includes(termoNormalizado) ||
+          item.descricaoPesquisaLivre.includes(termoLivre) ||
+          item.codigoBarrasTexto.includes(termoLivre);
+
+        if (matchDireto) return true;
+
+        if (palavras.length > 1) {
+          return palavras.every(
+            (palavra) =>
+              item.descricaoNormalizada.includes(palavra) ||
+              item.codigoBarrasTexto.includes(normalizarPesquisaLivre(palavra)),
+          );
+        }
+
+        return false;
+      }
+
       const matchDireto =
         item.artigoLower.includes(termoLower) ||
         item.artigoNormalizado.includes(termoLivre) ||
@@ -69,13 +102,13 @@ export default function EtiquetasCampanhaExcelPage() {
           (palavra) =>
             item.descricaoNormalizada.includes(palavra) ||
             item.artigoLower.includes(palavra) ||
-            item.codigoBarrasTexto.includes(normalizarPesquisaLivre(palavra))
+            item.codigoBarrasTexto.includes(normalizarPesquisaLivre(palavra)),
         );
       }
 
       return false;
     });
-  }, [pesquisaDebounced, artigosPreparados]);
+  }, [pesquisaDebounced, artigosPreparados, modoPesquisa]);
 
   const resultadosVisiveis = useMemo(() => {
     return resultados.slice(0, LIMITE_RESULTADOS);
@@ -93,6 +126,11 @@ export default function EtiquetasCampanhaExcelPage() {
   }
 
   function selecionarTodosVisiveis() {
+    if (resultadosVisiveis.length === 0) {
+      setMensagem("Não há resultados visíveis para selecionar.");
+      return;
+    }
+
     setSelecionados((prev) => {
       const next = { ...prev };
 
@@ -102,15 +140,18 @@ export default function EtiquetasCampanhaExcelPage() {
 
       return next;
     });
+
+    setMensagem("Resultados visíveis selecionados.");
   }
 
   function limparSelecao() {
     setSelecionados({});
+    setMensagem("Seleção limpa.");
   }
 
   async function copiarSelecionados() {
     if (artigosSelecionados.length === 0) {
-      alert("Seleciona pelo menos um artigo.");
+      setMensagem("Seleciona pelo menos um artigo.");
       return;
     }
 
@@ -118,16 +159,34 @@ export default function EtiquetasCampanhaExcelPage() {
       ...new Set(
         artigosSelecionados
           .map((item) => String(item.artigo || "").trim())
-          .filter(Boolean)
+          .filter(Boolean),
       ),
     ].join("|");
 
     try {
+      if (!navigator.clipboard?.writeText) {
+        throw new Error("Clipboard API não suportada.");
+      }
+
       await navigator.clipboard.writeText(texto);
-      alert("Códigos copiados com sucesso.");
+      setMensagem("Códigos copiados com sucesso.");
     } catch {
-      alert("Não foi possível copiar os códigos.");
+      setMensagem("Não foi possível copiar os códigos.");
     }
+  }
+
+  function alternarModoScan() {
+    setModoPesquisa((prev) => {
+      const proximo = prev === "scan" ? "manual" : "scan";
+
+      setMensagem(
+        proximo === "scan"
+          ? "Modo scan ativado."
+          : "Modo pesquisa manual ativado.",
+      );
+
+      return proximo;
+    });
   }
 
   return (
@@ -141,33 +200,71 @@ export default function EtiquetasCampanhaExcelPage() {
 
       <div className="control-card">
         <div className="toolbar-grid">
-          <label className="input-group" style={{ gridColumn: "1 / -1" }}>
+          <label
+            className="input-group"
+            htmlFor="pesquisa-artigo"
+            style={{ gridColumn: "1 / -1" }}
+          >
             <span>Pesquisar artigo</span>
-            <input
-              type="text"
-              value={pesquisa}
-              onChange={(e) => setPesquisa(e.target.value)}
-              placeholder="Ex: SA 3052, SA-3052, samsung cabo 5m"
-            />
+
+            <div className="input-com-icon">
+              <input
+                id="pesquisa-artigo"
+                type="text"
+                value={pesquisa}
+                onChange={(e) => {
+                  setModoPesquisa("manual");
+                  setPesquisa(e.target.value);
+                }}
+                placeholder={
+                  modoPesquisa === "scan"
+                    ? "Modo scan ativo. Em breve: leitura por câmara..."
+                    : "Ex: samsung microondas, máquina lavar, 5601234567890"
+                }
+              />
+
+              <button
+                type="button"
+                className={`btn-camera ${modoPesquisa === "scan" ? "ativo" : ""}`}
+                onClick={alternarModoScan}
+                aria-label="Ativar pesquisa por câmara"
+                title="Ativar pesquisa por câmara"
+              >
+                <span role="img" aria-hidden="true">
+                  📷
+                </span>
+              </button>
+            </div>
           </label>
         </div>
 
         <div className="toolbar-actions">
           <button
+            type="button"
             className="btn btn-secondary"
             onClick={selecionarTodosVisiveis}
           >
             Selecionar visíveis
           </button>
 
-          <button className="btn btn-secondary" onClick={limparSelecao}>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={limparSelecao}
+          >
             Limpar seleção
           </button>
 
-          <button className="btn btn-success" onClick={copiarSelecionados}>
+          <button
+            type="button"
+            className="btn btn-success"
+            onClick={copiarSelecionados}
+          >
             Copiar selecionados
           </button>
         </div>
+
+        {mensagem && <p className="feedback-message">{mensagem}</p>}
 
         <div className="resumo-cards">
           <div className="resumo-card">
@@ -201,13 +298,13 @@ export default function EtiquetasCampanhaExcelPage() {
           <table>
             <thead>
               <tr>
-                <th>Selecionar</th>
-                <th>Artigo</th>
-                <th>Descrição</th>
-                <th>PVP2</th>
-                <th>Cód. Barras</th>
-                <th>Armazém</th>
-                <th>Stock</th>
+                <th scope="col">Selecionar</th>
+                <th scope="col">Artigo</th>
+                <th scope="col">Descrição</th>
+                <th scope="col">PVP2</th>
+                <th scope="col">Cód. Barras</th>
+                <th scope="col">Armazém</th>
+                <th scope="col">Stock</th>
               </tr>
             </thead>
 
@@ -240,6 +337,7 @@ export default function EtiquetasCampanhaExcelPage() {
                         checked={!!selecionados[item._id]}
                         onChange={() => alternarSelecionado(item._id)}
                         onClick={(e) => e.stopPropagation()}
+                        aria-label={`Selecionar artigo ${item.artigo}`}
                       />
                     </td>
                     <td>{item.artigo}</td>
@@ -256,7 +354,7 @@ export default function EtiquetasCampanhaExcelPage() {
         </div>
 
         {resultados.length > LIMITE_RESULTADOS && (
-          <div style={{ padding: "12px 16px" }}>
+          <div className="table-limit-warning">
             A mostrar apenas os primeiros {LIMITE_RESULTADOS} resultados. Refina
             a pesquisa para ver menos artigos.
           </div>

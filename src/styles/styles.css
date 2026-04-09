@@ -1,4 +1,47 @@
-/* ========================= Reset / Base ========================= */
+/* =========================================================
+   01. TOKENS / VARIÁVEIS
+   ========================================================= */
+:root {
+  --color-primary: #ec6707;
+  --color-primary-dark: #c75405;
+  --color-primary-darker: #9d4000;
+
+  --color-bg: #f4f7fb;
+  --color-surface: #ffffff;
+  --color-surface-soft: #f8fafc;
+  --color-surface-soft-2: #fafbfd;
+
+  --color-text: #111827;
+  --color-text-strong: #162033;
+  --color-text-muted: #6b7280;
+  --color-text-soft: #374151;
+
+  --color-border: #e5e7eb;
+  --color-border-soft: #edf0f5;
+  --color-input-border: #d7deea;
+
+  --color-primary-action: #2563eb;
+  --color-primary-action-dark: #1d4ed8;
+  --color-success: #059669;
+  --color-success-dark: #047857;
+  --color-danger-soft: #fff1f1;
+  --color-danger-text: #b42318;
+
+  --radius-sm: 10px;
+  --radius-md: 12px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-2xl: 20px;
+  --radius-3xl: 30px;
+
+  --shadow-card: 0 10px 30px rgba(15, 23, 42, 0.08);
+  --shadow-popup: 0 20px 50px rgba(0, 0, 0, 0.2);
+  --shadow-modal: 0 24px 60px rgba(0, 0, 0, 0.2);
+}
+
+/* =========================================================
+   02. RESET / BASE
+   ========================================================= */
 *,
 *::before,
 *::after {
@@ -16,8 +59,8 @@ body,
 
 body {
   font-family: Arial, Helvetica, sans-serif;
-  background: #f4f7fb;
-  color: #111827;
+  background: var(--color-bg);
+  color: var(--color-text);
 }
 
 button,
@@ -25,6 +68,14 @@ input,
 select,
 textarea {
   font: inherit;
+}
+
+img {
+  max-width: 100%;
+}
+
+button {
+  cursor: pointer;
 }
 
 .app {
@@ -40,25 +91,27 @@ textarea {
   padding: 0;
 }
 
-/* ========================= Splash / Load ========================= */
+/* =========================================================
+   03. SPLASH / LOADING
+   ========================================================= */
 .splash-screen {
   position: fixed;
   inset: 0;
   width: 100vw;
   height: 100vh;
-  background: #ec6707;
+  background: var(--color-primary);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3vh; /* relativo ao ecrã */
+  gap: 3vh;
   padding: 20px;
   z-index: 9999;
 }
 
 .splash-logo {
   width: auto;
-  height: 30vh; /* adapta ao tamanho do ecrã */
+  height: 30vh;
   max-height: 300px;
 }
 
@@ -93,196 +146,21 @@ textarea {
   }
 }
 
-/* 📱 Telemóveis */
-@media (max-width: 600px) {
-  .splash-logo {
-    height: 20vh;
-    max-height: 150px;
-  }
-
-  .splash-loader {
-    width: 80%;
-    height: 6px;
-  }
-}
-
-@media (min-width: 1200px) {
-  .splash-logo {
-    height: 35vh;
-    max-height: 400px;
-  }
-
-  .splash-loader {
-    width: 40%;
-    height: 10px;
-  }
-}
-/* ========================= popup etiquetas ========================= */
-
-.popup-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(17, 24, 39, 0.45);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  z-index: 4000;
-}
-
-.popup-card {
-  width: min(1000px, 100%);
-  max-height: 85vh;
-  background: #ffffff;
-  border-radius: 18px;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.popup-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 18px 22px;
-  border-bottom: 1px solid #edf0f5;
-  background: #fafbfd;
-}
-
-.popup-header h2 {
-  margin: 0;
-  font-size: 20px;
-  color: #111827;
-}
-
-.popup-close {
-  border: none;
-  background: transparent;
-  font-size: 28px;
-  line-height: 1;
-  cursor: pointer;
-  color: #374151;
-}
-
-.popup-text {
-  margin: 0;
-  padding: 16px 22px 0;
-  color: #4b5563;
-  font-size: 14px;
-}
-
-.popup-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  padding: 16px 22px;
-}
-
-.popup-table-wrap {
-  padding: 0 22px 22px;
-  overflow: auto;
-}
-
-/* ========================= popup change password ========================= */
-
-.force-password-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(17, 24, 39, 0.55);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 3000;
-  padding: 20px;
-}
-
-.force-password-modal {
-  width: 100%;
-  max-width: 460px;
-  background: #ffffff;
-  border-radius: 20px;
-  padding: 24px;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.2);
-}
-
-.force-password-modal h2 {
-  margin: 0 0 10px;
-  font-size: 24px;
-  color: #111827;
-}
-
-.force-password-modal p {
-  margin: 0 0 18px;
-  color: #4b5563;
-  line-height: 1.5;
-}
-
-.force-password-form {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.force-password-form label {
-  font-size: 14px;
-  font-weight: 700;
-  color: #374151;
-}
-
-.force-password-form input {
-  width: 100%;
-  height: 46px;
-  border: 1px solid #d7deea;
-  border-radius: 12px;
-  padding: 0 14px;
-  outline: none;
-}
-
-.force-password-form input:focus {
-  border-color: #ec6707;
-  box-shadow: 0 0 0 4px rgba(236, 103, 7, 0.12);
-}
-
-.force-password-rules {
-  font-size: 13px;
-  color: #6b7280;
-  margin-top: 2px;
-}
-
-.force-password-error {
-  margin: 0;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: #fff1f1;
-  color: #b42318;
-  font-size: 14px;
-}
-
-.force-password-form button {
-  margin-top: 8px;
-  height: 48px;
-  border: none;
-  border-radius: 12px;
-  background: #ec6707;
-  color: #ffffff;
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.force-password-form button:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-
-/* ========================= Login ========================= */
+/* =========================================================
+   04. LOGIN
+   ========================================================= */
 .login-page {
   position: fixed;
   inset: 0;
   width: 100vw;
   height: 100vh;
   overflow: hidden;
-  background: linear-gradient(180deg, #ff9f4d 0%, #ec6707 55%, #cf5400 100%);
+  background: linear-gradient(
+    180deg,
+    #ff9f4d 0%,
+    var(--color-primary) 55%,
+    #cf5400 100%
+  );
   display: flex;
   align-items: center;
   justify-content: center;
@@ -297,9 +175,9 @@ textarea {
   overflow: hidden;
   background: linear-gradient(
     135deg,
-    #9d4000 0%,
+    var(--color-primary-darker) 0%,
     #c85302 28%,
-    #ec6707 58%,
+    var(--color-primary) 58%,
     #ff922f 100%
   );
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
@@ -322,10 +200,14 @@ textarea {
   max-width: 430px;
   max-height: calc(100vh - 32px);
   overflow: hidden;
-  border-radius: 30px;
+  border-radius: var(--radius-3xl);
   padding: 34px 28px 26px;
-  box-shadow: 0 20px 60px rgba(107, 39, 0, 0.3), 0 8px 20px rgba(0, 0, 0, 0.12);
-  animation: loginEnter 0.8s ease, cardFloat 5s ease-in-out infinite 0.8s;
+  box-shadow:
+    0 20px 60px rgba(107, 39, 0, 0.3),
+    0 8px 20px rgba(0, 0, 0, 0.12);
+  animation:
+    loginEnter 0.8s ease,
+    cardFloat 5s ease-in-out infinite 0.8s;
 }
 
 .login-card-glow {
@@ -353,7 +235,7 @@ textarea {
   width: 72px;
   height: 72px;
   object-fit: contain;
-  border-radius: 18px;
+  border-radius: var(--radius-xl);
   background: rgba(255, 255, 255, 0.12);
   padding: 8px;
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.1);
@@ -403,19 +285,23 @@ textarea {
   width: 100%;
   height: 50px;
   border: none;
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   padding: 0 14px;
   font-size: 15px;
   background: rgba(255, 255, 255, 0.94);
   color: #422100;
   outline: none;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease;
 }
 
 .login-form input:focus {
   transform: translateY(-1px);
   background: #ffffff;
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.18),
+  box-shadow:
+    0 0 0 3px rgba(255, 255, 255, 0.18),
     0 10px 24px rgba(0, 0, 0, 0.08);
 }
 
@@ -440,7 +326,6 @@ textarea {
   background: transparent;
   color: #a34805;
   font-weight: 700;
-  cursor: pointer;
   font-size: 13px;
 }
 
@@ -456,7 +341,6 @@ textarea {
   border: none;
   color: rgba(255, 247, 240, 0.92);
   padding: 0;
-  cursor: pointer;
   font-size: 14px;
 }
 
@@ -469,15 +353,22 @@ textarea {
   overflow: hidden;
   height: 52px;
   border: none;
-  border-radius: 14px;
-  background: linear-gradient(180deg, #ec6707 0%, #c75405 100%);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(
+    180deg,
+    var(--color-primary) 0%,
+    var(--color-primary-dark) 100%
+  );
   color: white;
   font-size: 18px;
   font-weight: 800;
-  cursor: pointer;
-  box-shadow: 0 12px 30px rgba(236, 103, 7, 0.4),
+  box-shadow:
+    0 12px 30px rgba(236, 103, 7, 0.4),
     inset 0 1px 0 rgba(255, 255, 255, 0.18);
-  transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    opacity 0.18s ease;
 }
 
 .login-submit span {
@@ -504,7 +395,8 @@ textarea {
 
 .login-submit:hover {
   transform: translateY(-2px) scale(1.01);
-  box-shadow: 0 16px 38px rgba(236, 103, 7, 0.48),
+  box-shadow:
+    0 16px 38px rgba(236, 103, 7, 0.48),
     inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
@@ -518,12 +410,11 @@ textarea {
   color: #fff1f1;
   background: rgba(149, 26, 0, 0.26);
   border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   padding: 10px 12px;
   font-size: 14px;
 }
 
-/* fundo decorativo */
 .login-bg-orb {
   position: absolute;
   border-radius: 999px;
@@ -555,7 +446,6 @@ textarea {
   background: rgba(140, 51, 0, 0.14);
 }
 
-/* shapes */
 .login-shape {
   position: absolute;
   pointer-events: none;
@@ -572,7 +462,8 @@ textarea {
     rgba(255, 208, 158, 0.95),
     rgba(236, 103, 7, 0.74)
   );
-  box-shadow: inset 0 10px 24px rgba(255, 255, 255, 0.24),
+  box-shadow:
+    inset 0 10px 24px rgba(255, 255, 255, 0.24),
     0 16px 28px rgba(0, 0, 0, 0.12);
 }
 
@@ -706,7 +597,6 @@ textarea {
   animation: spinSlow 22s linear infinite reverse;
 }
 
-/* animações login */
 @keyframes loginEnter {
   from {
     opacity: 0;
@@ -776,13 +666,15 @@ textarea {
   }
 }
 
-/* ========================= Topbar ========================= */
+/* =========================================================
+   05. TOPBAR / SIDEBAR
+   ========================================================= */
 .topbar-site {
   position: sticky;
   top: 0;
   z-index: 1200;
   height: 68px;
-  background: #ec6707;
+  background: var(--color-primary);
   display: flex;
   align-items: center;
   gap: 14px;
@@ -796,7 +688,6 @@ textarea {
   color: white;
   font-size: 30px;
   line-height: 1;
-  cursor: pointer;
   padding: 0;
   width: 34px;
   height: 34px;
@@ -818,7 +709,6 @@ textarea {
   display: flex;
 }
 
-/* ========================= Sidebar ========================= */
 .sidebar-overlay {
   position: fixed;
   inset: 0;
@@ -841,7 +731,7 @@ textarea {
   width: 290px;
   max-width: 85vw;
   height: 100vh;
-  background: #ffffff;
+  background: var(--color-surface);
   box-shadow: 4px 0 18px rgba(0, 0, 0, 0.18);
   transform: translateX(-100%);
   transition: transform 0.25s ease;
@@ -856,7 +746,7 @@ textarea {
 
 .sidebar-header {
   height: 68px;
-  background: #ec6707;
+  background: var(--color-primary);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -876,7 +766,6 @@ textarea {
   color: white;
   font-size: 34px;
   line-height: 1;
-  cursor: pointer;
   padding: 0;
 }
 
@@ -891,20 +780,19 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border: 1px solid #e5e7eb;
-  background: #ffffff;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
   color: #1f2937;
   padding: 12px 14px;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   text-align: left;
   font-size: 15px;
   font-weight: 700;
-  cursor: pointer;
   transition: 0.2s ease;
 }
 
 .sidebar-link:hover {
-  background: #f8fafc;
+  background: var(--color-surface-soft);
 }
 
 .sidebar-submenu {
@@ -918,11 +806,11 @@ textarea {
 .sidebar-sublink {
   display: block;
   text-decoration: none;
-  color: #374151;
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
+  color: var(--color-text-soft);
+  background: var(--color-surface-soft);
+  border: 1px solid var(--color-border);
   padding: 10px 12px;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   font-size: 14px;
   font-weight: 600;
   transition: 0.2s ease;
@@ -934,8 +822,8 @@ textarea {
 
 .sidebar-sublink.active {
   background: #fff3e8;
-  border-color: #ec6707;
-  color: #111827;
+  border-color: var(--color-primary);
+  color: var(--color-text);
 }
 
 .arrow {
@@ -947,7 +835,9 @@ textarea {
   transform: rotate(90deg);
 }
 
-/* ========================= Layout da página ========================= */
+/* =========================================================
+   06. PÁGINAS / CARDS / FORMULÁRIOS
+   ========================================================= */
 .page-content {
   max-width: 1450px;
   margin: 18px auto 0;
@@ -962,25 +852,24 @@ textarea {
   margin: 0;
   font-size: 30px;
   font-weight: 800;
-  color: #162033;
+  color: var(--color-text-strong);
 }
 
 .page-subtitle {
   margin: 6px 0 0;
   font-size: 14px;
-  color: #6b7280;
+  color: var(--color-text-muted);
   line-height: 1.5;
 }
 
-/* ========================= Cards / Painéis ========================= */
 .control-card,
 .table-card,
 .toolbar,
 .table-panel {
-  background: #ffffff;
-  border-radius: 18px;
-  border: 1px solid #e5e7eb;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  background: var(--color-surface);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-card);
 }
 
 .control-card,
@@ -999,8 +888,8 @@ textarea {
 
 .table-card-header {
   padding: 18px 22px;
-  border-bottom: 1px solid #edf0f5;
-  background: #fafbfd;
+  border-bottom: 1px solid var(--color-border-soft);
+  background: var(--color-surface-soft-2);
 }
 
 .table-card-header h2 {
@@ -1009,12 +898,52 @@ textarea {
   color: #1f2937;
 }
 
-/* ========================= Formulários ========================= */
 .toolbar-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 16px;
   margin-bottom: 18px;
+}
+
+.input-com-icon {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.input-com-icon input {
+  width: 100%;
+  padding-right: 56px;
+}
+
+.btn-camera {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--color-input-border);
+  border-radius: 12px;
+  background: #eef2f7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  line-height: 1;
+  transition: 0.2s ease;
+  padding: 0;
+}
+
+.btn-camera:hover {
+  background: #e5ebf3;
+}
+
+.btn-camera.ativo {
+  background: var(--color-primary-action);
+  border-color: var(--color-primary-action);
+  color: #ffffff;
 }
 
 .input-group {
@@ -1026,7 +955,7 @@ textarea {
 .input-group span {
   font-size: 13px;
   font-weight: 700;
-  color: #374151;
+  color: var(--color-text-soft);
 }
 
 .input-group input[type="text"],
@@ -1036,11 +965,11 @@ textarea {
 .paste-box {
   width: 100%;
   padding: 12px 14px;
-  border: 1px solid #d7deea;
-  border-radius: 12px;
-  background: #ffffff;
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
   font-size: 14px;
-  color: #111827;
+  color: var(--color-text);
   outline: none;
   transition: all 0.2s ease;
 }
@@ -1050,7 +979,7 @@ textarea {
 .input-group input[type="file"]:focus,
 .input-group select:focus,
 .paste-box:focus {
-  border-color: #2563eb;
+  border-color: var(--color-primary-action);
   box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
 }
 
@@ -1074,7 +1003,9 @@ textarea {
   min-width: 120px;
 }
 
-/* ========================= Botões ========================= */
+/* =========================================================
+   07. BOTÕES / RESUMOS
+   ========================================================= */
 .toolbar-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1085,11 +1016,10 @@ textarea {
 .toolbar-actions button,
 .btn {
   border: none;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   padding: 11px 16px;
   font-size: 14px;
   font-weight: 700;
-  cursor: pointer;
   transition: 0.2s ease;
 }
 
@@ -1101,7 +1031,7 @@ textarea {
 .toolbar-actions button {
   background: #eef2f7;
   color: #1f2937;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--color-border);
 }
 
 .toolbar-actions button:hover {
@@ -1109,12 +1039,12 @@ textarea {
 }
 
 .btn-primary {
-  background: #2563eb;
+  background: var(--color-primary-action);
   color: #ffffff;
 }
 
 .btn-primary:hover {
-  background: #1d4ed8;
+  background: var(--color-primary-action-dark);
 }
 
 .btn-secondary {
@@ -1127,15 +1057,14 @@ textarea {
 }
 
 .btn-success {
-  background: #059669;
+  background: var(--color-success);
   color: #ffffff;
 }
 
 .btn-success:hover {
-  background: #047857;
+  background: var(--color-success-dark);
 }
 
-/* ========================= Resumo ========================= */
 .resumo {
   display: flex;
   flex-wrap: wrap;
@@ -1147,9 +1076,9 @@ textarea {
 }
 
 .resumo span {
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
+  background: var(--color-surface-soft);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
   padding: 10px 14px;
 }
 
@@ -1163,23 +1092,25 @@ textarea {
 .resumo-card {
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   border: 1px solid #e5edf7;
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   padding: 16px;
 }
 
 .resumo-label {
   display: block;
   font-size: 12px;
-  color: #6b7280;
+  color: var(--color-text-muted);
   margin-bottom: 8px;
 }
 
 .resumo-card strong {
   font-size: 28px;
-  color: #111827;
+  color: var(--color-text);
 }
 
-/* ========================= Filtros da tabela ========================= */
+/* =========================================================
+   08. FILTROS / TABELAS
+   ========================================================= */
 .filter-th {
   position: relative;
   min-width: 120px;
@@ -1187,19 +1118,18 @@ textarea {
 
 .filter-button {
   width: 100%;
-  background: #ffffff;
-  border: 1px solid #d7deea;
-  border-radius: 10px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--radius-sm);
   padding: 9px 10px;
   font-weight: 700;
   color: #334155;
-  cursor: pointer;
   text-align: left;
   transition: 0.2s ease;
 }
 
 .filter-button:hover {
-  background: #f8fafc;
+  background: var(--color-surface-soft);
 }
 
 .filter-popup {
@@ -1207,9 +1137,9 @@ textarea {
   top: calc(100% + 6px);
   left: 0;
   width: 240px;
-  background: #ffffff;
+  background: var(--color-surface);
   border: 1px solid #dcdfe6;
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   box-shadow: 0 12px 30px rgba(15, 23, 42, 0.16);
   padding: 12px;
   z-index: 50;
@@ -1226,7 +1156,6 @@ textarea {
   border: none;
   background: transparent;
   font-size: 20px;
-  cursor: pointer;
 }
 
 .filter-section {
@@ -1237,28 +1166,26 @@ textarea {
 }
 
 .filter-section button {
-  border: 1px solid #e5e7eb;
-  background: #ffffff;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
   padding: 8px 10px;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   text-align: left;
-  cursor: pointer;
   transition: 0.2s ease;
 }
 
 .filter-section button:hover {
-  background: #f8fafc;
+  background: var(--color-surface-soft);
 }
 
 .filter-section input,
 .filter-section select {
   padding: 9px 10px;
-  border: 1px solid #d7deea;
-  border-radius: 10px;
-  background: #ffffff;
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
 }
 
-/* ========================= Tabela ========================= */
 .table-panel {
   overflow: auto;
 }
@@ -1267,7 +1194,7 @@ table {
   width: 100%;
   min-width: 1400px;
   border-collapse: collapse;
-  background: #ffffff;
+  background: var(--color-surface);
 }
 
 th,
@@ -1280,7 +1207,7 @@ td {
 }
 
 th {
-  background: #f8fafc;
+  background: var(--color-surface-soft);
   font-weight: 800;
   color: #334155;
   position: sticky;
@@ -1308,11 +1235,168 @@ tbody tr:hover {
 
 .empty-cell {
   text-align: center;
-  color: #6b7280;
+  color: var(--color-text-muted);
   padding: 28px;
 }
 
-/* ========================= Área de impressão ========================= */
+/* =========================================================
+   09. POPUPS / MODAIS
+   ========================================================= */
+.popup-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(17, 24, 39, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 4000;
+}
+
+.popup-card {
+  width: min(1000px, 100%);
+  max-height: 85vh;
+  background: var(--color-surface);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-popup);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--color-border-soft);
+  background: var(--color-surface-soft-2);
+}
+
+.popup-header h2 {
+  margin: 0;
+  font-size: 20px;
+  color: var(--color-text);
+}
+
+.popup-close {
+  border: none;
+  background: transparent;
+  font-size: 28px;
+  line-height: 1;
+  color: var(--color-text-soft);
+}
+
+.popup-text {
+  margin: 0;
+  padding: 16px 22px 0;
+  color: #4b5563;
+  font-size: 14px;
+}
+
+.popup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 16px 22px;
+}
+
+.popup-table-wrap {
+  padding: 0 22px 22px;
+  overflow: auto;
+}
+
+.force-password-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(17, 24, 39, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3000;
+  padding: 20px;
+}
+
+.force-password-modal {
+  width: 100%;
+  max-width: 460px;
+  background: var(--color-surface);
+  border-radius: var(--radius-2xl);
+  padding: 24px;
+  box-shadow: var(--shadow-modal);
+}
+
+.force-password-modal h2 {
+  margin: 0 0 10px;
+  font-size: 24px;
+  color: var(--color-text);
+}
+
+.force-password-modal p {
+  margin: 0 0 18px;
+  color: #4b5563;
+  line-height: 1.5;
+}
+
+.force-password-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.force-password-form label {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text-soft);
+}
+
+.force-password-form input {
+  width: 100%;
+  height: 46px;
+  border: 1px solid var(--color-input-border);
+  border-radius: var(--radius-md);
+  padding: 0 14px;
+  outline: none;
+}
+
+.force-password-form input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 4px rgba(236, 103, 7, 0.12);
+}
+
+.force-password-rules {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
+.force-password-error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--color-danger-soft);
+  color: var(--color-danger-text);
+  font-size: 14px;
+}
+
+.force-password-form button {
+  margin-top: 8px;
+  height: 48px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-primary);
+  color: #ffffff;
+  font-weight: 800;
+}
+
+.force-password-form button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* =========================================================
+   10. ETIQUETAS / IMPRESSÃO
+   ========================================================= */
 .print-area {
   width: 210mm;
   margin: 24px auto 0;
@@ -1323,7 +1407,7 @@ tbody tr:hover {
   width: 210mm;
   height: 297mm;
   margin: 0 auto;
-  background: #ffffff;
+  background: var(--color-surface);
   overflow: hidden;
   page-break-after: always;
   break-after: page;
@@ -1355,7 +1439,7 @@ tbody tr:hover {
   right: 14mm;
   top: 50%;
   transform: translateY(-50%);
-  border-top: 1px dashed #ec6707;
+  border-top: 1px dashed var(--color-primary);
   pointer-events: none;
   z-index: 5;
 }
@@ -1365,7 +1449,7 @@ tbody tr:hover {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #ffffff;
+  background: var(--color-surface);
   page-break-inside: avoid;
   break-inside: avoid;
   border-radius: 6mm;
@@ -1378,7 +1462,7 @@ tbody tr:hover {
   left: 5mm;
   right: 5mm;
   bottom: 5mm;
-  border: 5mm solid #ec6707;
+  border: 5mm solid var(--color-primary);
   border-radius: 4mm;
   pointer-events: none;
   z-index: 2;
@@ -1390,7 +1474,7 @@ tbody tr:hover {
   padding: 9mm;
   display: flex;
   flex-direction: column;
-  background: #ffffff;
+  background: var(--color-surface);
   overflow: hidden;
   page-break-inside: avoid;
   break-inside: avoid;
@@ -1424,14 +1508,13 @@ tbody tr:hover {
 }
 
 .label-vazia {
-  background: #ffffff;
+  background: var(--color-surface);
 }
 
-/* ========================= Cabeçalho da etiqueta ========================= */
 .topbar {
   width: 100%;
   height: 110px;
-  background: #ec6707;
+  background: var(--color-primary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1451,12 +1534,11 @@ tbody tr:hover {
   display: block;
 }
 
-/* ========================= Conteúdo da etiqueta ========================= */
 .content {
   position: relative;
   height: 100%;
   padding: 14px 16px 12px;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .topo {
@@ -1481,11 +1563,25 @@ tbody tr:hover {
 }
 
 .descricao {
-  font-size: 18px;
   font-weight: 800;
   line-height: 1.15;
   text-transform: uppercase;
   min-height: 60px;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 0 8px;
+}
+
+.precos {
+  position: absolute;
+  top: 52%;
+  left: 16px;
+  right: 16px;
+  transform: translateY(-50%);
+  text-align: center;
 }
 
 .precos {
@@ -1500,30 +1596,47 @@ tbody tr:hover {
 .linha-preco {
   display: flex;
   justify-content: center;
+  align-items: center;
+  width: 100%;
+}
+
+.antes,
+.desconto,
+.atual {
+  width: 100%;
+  display: block;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  margin: 0 auto;
 }
 
 .antes {
-  font-size: 30px;
   font-weight: 800;
   text-decoration: line-through;
   color: #111;
+  line-height: 1;
+  opacity: 0.8;
+}
+
+.desconto {
+  font-weight: 900;
+  color: #d71920;
+  line-height: 1;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.atual {
+  font-weight: 900;
+  color: #111;
+  line-height: 1;
+  letter-spacing: -1px;
+  text-shadow: 0 1px 0 rgba(0,0,0,0.15);
 }
 
 .desconto-linha {
   margin: 4px 0;
-}
-
-.desconto {
-  font-size: 32px;
-  font-weight: 900;
-  color: #d71920;
-}
-
-.atual {
-  font-size: 50px;
-  font-weight: 900;
-  color: #111;
-  line-height: 1;
 }
 
 .rodape {
@@ -1532,30 +1645,43 @@ tbody tr:hover {
   right: 16px;
   bottom: 12px;
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  z-index: 3;
 }
 
 .rodape svg {
   width: 70%;
   display: block;
-  margin: 2px auto 6px;
+  margin: 2px auto 4px;
+  flex-shrink: 0;
 }
 
 .validade {
+  width: 100%;
   text-align: center;
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 700;
-  margin-top: 8px;
+  line-height: 1.2;
+  margin-top: 2px;
+  display: block;
+  white-space: normal;
+  word-break: break-word;
 }
 
 .nota {
+  width: 100%;
   text-align: center;
-  font-size: 11px;
+  font-size: 10px;
   color: #444;
-  line-height: 1.25;
-  margin-top: 6px;
+  line-height: 1.15;
+  margin-top: 4px;
+  display: block;
+  white-space: normal;
 }
 
-/* ========================= Ajustes A5 ========================= */
 .label.label-a5 .topbar {
   height: 140px;
 }
@@ -1581,9 +1707,8 @@ tbody tr:hover {
 }
 
 .label.label-a5 .descricao {
-  font-size: 24px;
-  line-height: 1.2;
   min-height: 80px;
+  padding: 0 12px;
 }
 
 .label.label-a5 .precos {
@@ -1597,34 +1722,167 @@ tbody tr:hover {
 
 .label.label-a5 .desconto {
   font-size: 44px;
+  letter-spacing: 2px;
 }
 
 .label.label-a5 .atual {
   font-size: 72px;
+  letter-spacing: -2px;
 }
 
 .label.label-a5 .rodape {
   left: 24px;
   right: 24px;
   bottom: 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  background: #fff;
 }
 
 .label.label-a5 .rodape svg {
   width: 62%;
-  margin: 4px auto 10px;
+  margin: 4px auto 6px;
 }
 
 .label.label-a5 .validade {
-  font-size: 16px;
-  margin-top: 10px;
+  font-size: 14px;
+  line-height: 1.2;
+  margin-top: 2px;
+  white-space: normal;
+  word-break: break-word;
 }
 
 .label.label-a5 .nota {
-  font-size: 13px;
-  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.15;
+  margin-top: 4px;
+  white-space: normal;
 }
 
-/* ========================= Print ========================= */
+/* =========================================================
+   11. RESPONSIVE
+   ========================================================= */
+@media (max-width: 768px) {
+  .login-card {
+    width: min(420px, calc(100vw - 24px));
+    padding: 28px 20px 22px;
+    border-radius: 24px;
+  }
+
+  .login-card h1 {
+    font-size: 36px;
+  }
+
+  .login-logo {
+    width: 60px;
+    height: 60px;
+  }
+
+  .shape-ring-1,
+  .shape-ring-2,
+  .shape-blob-1,
+  .shape-blob-2,
+  .shape-blob-3,
+  .shape-pill-1,
+  .shape-pill-2,
+  .shape-pill-3 {
+    opacity: 0.35;
+  }
+}
+
+@media (max-width: 700px) {
+  .page-content {
+    padding: 0 12px 12px;
+  }
+
+  .toolbar-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .topbar-title {
+    font-size: 18px;
+  }
+
+  .page-title {
+    font-size: 24px;
+  }
+
+  .control-card,
+  .toolbar {
+    padding: 16px;
+  }
+
+  .toolbar-actions {
+    flex-direction: column;
+  }
+
+  .toolbar-actions button,
+  .btn {
+    width: 100%;
+  }
+
+  .ano-formato-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .formato-btn {
+    width: 100%;
+  }
+}
+
+@media (max-width: 600px) {
+  .splash-logo {
+    height: 20vh;
+    max-height: 150px;
+  }
+
+  .splash-loader {
+    width: 80%;
+    height: 6px;
+  }
+}
+
+@media (max-width: 560px) {
+  .login-brand {
+    gap: 12px;
+  }
+
+  .login-card h1 {
+    font-size: 32px;
+  }
+
+  .login-subtitle {
+    font-size: 13px;
+  }
+
+  .login-form input,
+  .login-submit {
+    height: 48px;
+  }
+
+  .login-shape {
+    display: none;
+  }
+}
+
+@media (min-width: 1200px) {
+  .splash-logo {
+    height: 35vh;
+    max-height: 400px;
+  }
+
+  .splash-loader {
+    width: 40%;
+    height: 10px;
+  }
+}
+
+/* =========================================================
+   12. PRINT
+   ========================================================= */
 @page {
   size: A4;
   margin: 0;
@@ -1709,98 +1967,5 @@ tbody tr:hover {
   .label-inner {
     page-break-inside: avoid;
     break-inside: avoid;
-  }
-}
-
-/* ========================= Responsive ========================= */
-@media (max-width: 768px) {
-  .login-card {
-    width: min(420px, calc(100vw - 24px));
-    padding: 28px 20px 22px;
-    border-radius: 24px;
-  }
-
-  .login-card h1 {
-    font-size: 36px;
-  }
-
-  .login-logo {
-    width: 60px;
-    height: 60px;
-  }
-
-  .shape-ring-1,
-  .shape-ring-2,
-  .shape-blob-1,
-  .shape-blob-2,
-  .shape-blob-3,
-  .shape-pill-1,
-  .shape-pill-2,
-  .shape-pill-3 {
-    opacity: 0.35;
-  }
-}
-
-@media (max-width: 700px) {
-  .page-content {
-    padding: 0 12px 12px;
-  }
-
-  .toolbar-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .topbar-title {
-    font-size: 18px;
-  }
-
-  .page-title {
-    font-size: 24px;
-  }
-
-  .control-card,
-  .toolbar {
-    padding: 16px;
-  }
-
-  .toolbar-actions {
-    flex-direction: column;
-  }
-
-  .toolbar-actions button,
-  .btn {
-    width: 100%;
-  }
-
-  .ano-formato-row {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .formato-btn {
-    width: 100%;
-  }
-}
-
-@media (max-width: 560px) {
-  .login-brand {
-    gap: 12px;
-  }
-
-  .login-card h1 {
-    font-size: 32px;
-  }
-
-  .login-subtitle {
-    font-size: 13px;
-  }
-
-  .login-form input,
-  .login-submit {
-    height: 48px;
-  }
-
-  .login-shape {
-    display: none;
   }
 }

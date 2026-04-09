@@ -2,16 +2,79 @@ import React, { useEffect, useMemo, useState } from "react";
 import Barcode from "../components/Barcode";
 import FilterMenu from "../components/FilterMenu";
 import logo from "../logo.png";
+import "../styles/styles.css";
 
 import { formatarEuro } from "../utils/formatters";
+import { useAutoFontSize } from "../utils/useAutoFontSize";
 import { parseTabelaColada } from "../utils/parsers";
 import {
   aplicarFiltroTexto,
   compararNumero,
   dividirEmPaginas,
 } from "../utils/filters";
-
 import { TABLE_COLUMNS } from "../data/tableColumns";
+
+function AutoText({ texto, className, min, max, style = {} }) {
+  const autoFont = useAutoFontSize(texto, min, max);
+
+  return (
+    <div
+      ref={autoFont.ref}
+      className={className}
+      style={{
+        width: "100%",
+        ...style,
+        fontSize: `${autoFont.fontSize}px`,
+      }}
+    >
+      {texto}
+    </div>
+  );
+}
+
+function DescricaoAuto({ texto, formatoEtiqueta }) {
+  return (
+    <AutoText
+      texto={texto}
+      className="descricao"
+      min={formatoEtiqueta === "a5" ? 36 : 12}
+      max={formatoEtiqueta === "a5" ? 46 : 18}
+    />
+  );
+}
+
+function PrecoAntesAuto({ valor, formatoEtiqueta }) {
+  return (
+    <AutoText
+      texto={`${formatarEuro(valor)}€`}
+      className="antes"
+      min={formatoEtiqueta === "a5" ? 44 : 38}
+      max={formatoEtiqueta === "a5" ? 54 : 46}
+    />
+  );
+}
+
+function DescontoAuto({ valor, formatoEtiqueta }) {
+  return (
+    <AutoText
+      texto={`-${formatarEuro(valor)}€`}
+      className="desconto"
+      min={formatoEtiqueta === "a5" ? 48 : 40}
+      max={formatoEtiqueta === "a5" ? 60 : 50}
+    />
+  );
+}
+
+function PrecoAtualAuto({ valor, formatoEtiqueta }) {
+  return (
+    <AutoText
+      texto={`${formatarEuro(valor)}€`}
+      className="atual"
+      min={formatoEtiqueta === "a5" ? 62 : 48}
+      max={formatoEtiqueta === "a5" ? 88 : 68}
+    />
+  );
+}
 
 export default function EtiquetasPage() {
   const [titulo, setTitulo] = useState("PROMO");
@@ -22,8 +85,6 @@ export default function EtiquetasPage() {
   const [popupArtigosInvalidosAberto, setPopupArtigosInvalidosAberto] =
     useState(false);
   const [artigosInvalidosPopup, setArtigosInvalidosPopup] = useState([]);
-  const [artigosInvalidosSelecionados, setArtigosInvalidosSelecionados] =
-    useState({});
   const [filtroAberto, setFiltroAberto] = useState(null);
   const [ordenacao, setOrdenacao] = useState({
     coluna: "",
@@ -62,8 +123,8 @@ export default function EtiquetasPage() {
 
     setDados((prev) =>
       prev.map((item) =>
-        idsInvalidos.has(item.id) ? { ...item, selecionado: false } : item
-      )
+        idsInvalidos.has(item.id) ? { ...item, selecionado: false } : item,
+      ),
     );
   }
 
@@ -115,10 +176,15 @@ export default function EtiquetasPage() {
 
   function carregarTextoColado() {
     try {
+      if (!textoColado.trim()) {
+        throw new Error("Sem conteúdo");
+      }
+
       const linhas = parseTabelaColada(textoColado);
 
-      if (!textoColado.trim()) throw new Error("Sem conteúdo");
-      if (!linhas.length) throw new Error("Sem linhas válidas");
+      if (!linhas.length) {
+        throw new Error("Sem linhas válidas");
+      }
 
       const erro = linhas.some((item) => {
         const nomeInvalido = !item.descricao || item.descricao.length < 3;
@@ -128,9 +194,10 @@ export default function EtiquetasPage() {
           !item.ean || String(item.ean).replace(/\D/g, "").length < 8;
 
         const dataInvalida = (data) => {
-          if (!data || data === "-") return false;
+          const texto = String(data || "").trim();
 
-          const texto = data.trim();
+          if (!texto || texto === "-") return false;
+
           const formatoMesTexto = /^\d{1,2}\/[a-z]{3}\.?$/i;
           const formatoMesNumero = /^\d{1,2}\/\d{2}$/;
 
@@ -149,137 +216,14 @@ export default function EtiquetasPage() {
         );
       });
 
-      if (erro) throw new Error("Dados inválidos");
+      if (erro) {
+        throw new Error("Dados inválidos");
+      }
 
       setDados(linhas);
     } catch (error) {
       alert("Verifique se os dados inseridos estão corretos.");
     }
-  }
-
-  function alternarArtigoInvalidoSelecionado(id) {
-    setArtigosInvalidosSelecionados((prev) => ({
-      ...prev,
-      [id]: !prev[id],
-    }));
-  }
-
-  function selecionarTodosInvalidos() {
-    const todos = {};
-    artigosInvalidos.forEach((item) => {
-      todos[item.id] = true;
-    });
-    setArtigosInvalidosSelecionados(todos);
-  }
-
-  function desmarcarTodosInvalidos() {
-    const todos = {};
-    artigosInvalidos.forEach((item) => {
-      todos[item.id] = false;
-    });
-    setArtigosInvalidosSelecionados(todos);
-  }
-
-  async function copiarCodigosInvalidosEProsseguir() {
-    const texto = artigosInvalidosPopup
-      .map((item) => String(item.codigo || "").trim())
-      .filter(Boolean)
-      .join("|");
-
-    try {
-      if (texto) {
-        await navigator.clipboard.writeText(texto);
-      }
-    } catch (error) {
-      console.error("Não foi possível copiar os códigos.", error);
-    }
-
-    removerInvalidosDaSelecao();
-    setPopupArtigosInvalidosAberto(false);
-
-    setTimeout(() => {
-      window.print();
-    }, 150);
-  }
-
-  function fecharPopupEProsseguir() {
-    removerInvalidosDaSelecao();
-    setPopupArtigosInvalidosAberto(false);
-
-    setTimeout(() => {
-      window.print();
-    }, 150);
-  }
-
-  function fecharPopupEProsseguir() {
-    setPopupArtigosInvalidosAberto(false);
-
-    setTimeout(() => {
-      window.print();
-    }, 150);
-  }
-
-  function fecharPopupEProsseguir() {
-    setPopupArtigosInvalidosAberto(false);
-    window.print();
-  }
-
-  function fecharPopupEProsseguir() {
-    setPopupArtigosInvalidosAberto(false);
-    window.print();
-  }
-
-  async function copiarCodigosInvalidosEProsseguir() {
-    const texto = artigosInvalidosPopup
-      .map((item) => String(item.codigo || "").trim())
-      .filter(Boolean)
-      .join("|");
-
-    try {
-      if (texto) {
-        await navigator.clipboard.writeText(texto);
-      }
-    } catch (error) {
-      console.error("Não foi possível copiar os códigos.", error);
-    }
-
-    const idsInvalidos = new Set(artigosInvalidosPopup.map((item) => item.id));
-
-    const restantesValidos = selecionados.filter(
-      (item) => !idsInvalidos.has(item.id)
-    );
-
-    removerInvalidosDaSelecao();
-    setPopupArtigosInvalidosAberto(false);
-
-    if (restantesValidos.length === 0) {
-      alert("Não existem etiquetas válidas para imprimir.");
-      return;
-    }
-
-    setTimeout(() => {
-      window.print();
-    }, 150);
-  }
-
-  function fecharPopupEProsseguir() {
-    const idsInvalidos = new Set(artigosInvalidosPopup.map((item) => item.id));
-
-    const restantesValidos = selecionados.filter(
-      (item) => !idsInvalidos.has(item.id)
-    );
-
-    removerInvalidosDaSelecao();
-    setPopupArtigosInvalidosAberto(false);
-
-    if (restantesValidos.length === 0) {
-      alert("Não existem etiquetas válidas para imprimir.");
-      return;
-    }
-
-    setTimeout(() => {
-      window.print();
-    }, 150);
   }
 
   const dadosFiltrados = useMemo(() => {
@@ -314,17 +258,14 @@ export default function EtiquetasPage() {
   }, [dados, filtros, ordenacao]);
 
   const selecionados = dados.filter((item) => item.selecionado);
-  const selecionadosInvalidos = selecionados.filter(
-    (item) => Number(item.antes) <= Number(item.atual)
-  );
   const etiquetasPorPagina = formatoEtiqueta === "a5" ? 2 : 4;
   const paginas = dividirEmPaginas(selecionados, etiquetasPorPagina);
 
   function alternarSelecionado(id) {
     setDados((prev) =>
       prev.map((item) =>
-        item.id === id ? { ...item, selecionado: !item.selecionado } : item
-      )
+        item.id === id ? { ...item, selecionado: !item.selecionado } : item,
+      ),
     );
   }
 
@@ -333,8 +274,8 @@ export default function EtiquetasPage() {
 
     setDados((prev) =>
       prev.map((item) =>
-        ids.has(item.id) ? { ...item, selecionado: true } : item
-      )
+        ids.has(item.id) ? { ...item, selecionado: true } : item,
+      ),
     );
   }
 
@@ -343,13 +284,64 @@ export default function EtiquetasPage() {
 
     setDados((prev) =>
       prev.map((item) =>
-        ids.has(item.id) ? { ...item, selecionado: false } : item
-      )
+        ids.has(item.id) ? { ...item, selecionado: false } : item,
+      ),
     );
   }
 
   function limparSelecao() {
     setDados((prev) => prev.map((item) => ({ ...item, selecionado: false })));
+  }
+
+  async function copiarCodigosInvalidosEProsseguir() {
+    const texto = artigosInvalidosPopup
+      .map((item) => String(item.codigo || "").trim())
+      .filter(Boolean)
+      .join("|");
+
+    try {
+      if (texto) {
+        await navigator.clipboard.writeText(texto);
+      }
+    } catch (error) {
+      console.error("Não foi possível copiar os códigos.", error);
+    }
+
+    const idsInvalidos = new Set(artigosInvalidosPopup.map((item) => item.id));
+    const restantesValidos = selecionados.filter(
+      (item) => !idsInvalidos.has(item.id),
+    );
+
+    removerInvalidosDaSelecao();
+    setPopupArtigosInvalidosAberto(false);
+
+    if (restantesValidos.length === 0) {
+      alert("Não existem etiquetas válidas para imprimir.");
+      return;
+    }
+
+    setTimeout(() => {
+      window.print();
+    }, 150);
+  }
+
+  function fecharPopupEProsseguir() {
+    const idsInvalidos = new Set(artigosInvalidosPopup.map((item) => item.id));
+    const restantesValidos = selecionados.filter(
+      (item) => !idsInvalidos.has(item.id),
+    );
+
+    removerInvalidosDaSelecao();
+    setPopupArtigosInvalidosAberto(false);
+
+    if (restantesValidos.length === 0) {
+      alert("Não existem etiquetas válidas para imprimir.");
+      return;
+    }
+
+    setTimeout(() => {
+      window.print();
+    }, 150);
   }
 
   function imprimirSelecionados() {
@@ -359,7 +351,7 @@ export default function EtiquetasPage() {
     }
 
     const invalidos = selecionados.filter(
-      (item) => Number(item.antes) <= Number(item.atual)
+      (item) => Number(item.antes) <= Number(item.atual),
     );
 
     if (invalidos.length > 0) {
@@ -369,6 +361,34 @@ export default function EtiquetasPage() {
     }
 
     window.print();
+  }
+
+  function formatarDataDiaMes(data) {
+    const dia = String(data.getDate()).padStart(2, "0");
+    const mes = String(data.getMonth() + 1).padStart(2, "0");
+    return `${dia}/${mes}`;
+  }
+
+  function obterTextoValidade(item, anoValidade) {
+    const normalizarData = (valor) => {
+      const texto = String(valor || "").trim();
+      return texto && texto !== "-" ? texto : "";
+    };
+
+    const dataInicio = normalizarData(item.dataInicio);
+    const dataFim = normalizarData(item.dataFim);
+
+    if (!dataInicio && !dataFim) {
+      const hoje = new Date();
+      const fim = new Date();
+      fim.setDate(hoje.getDate() + 30);
+
+      return `VÁLIDO DE ${formatarDataDiaMes(hoje)}/${hoje.getFullYear()} A ${formatarDataDiaMes(fim)}/${fim.getFullYear()}`;
+    }
+
+    return `VÁLIDO DE ${dataInicio || "-"}${
+      dataInicio ? `/${anoValidade}` : ""
+    } A ${dataFim || "-"}${dataFim ? `/${anoValidade}` : ""}`;
   }
 
   return (
@@ -428,11 +448,16 @@ export default function EtiquetasPage() {
           </div>
 
           <div className="toolbar-actions">
-            <button className="btn btn-primary" onClick={carregarTextoColado}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={carregarTextoColado}
+            >
               Carregar tabela
             </button>
 
             <button
+              type="button"
               className="btn btn-secondary"
               onClick={selecionarTodosFiltrados}
             >
@@ -440,17 +465,26 @@ export default function EtiquetasPage() {
             </button>
 
             <button
+              type="button"
               className="btn btn-secondary"
               onClick={desmarcarTodosFiltrados}
             >
               Desmarcar filtrados
             </button>
 
-            <button className="btn btn-secondary" onClick={limparSelecao}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={limparSelecao}
+            >
               Limpar seleção
             </button>
 
-            <button className="btn btn-success" onClick={imprimirSelecionados}>
+            <button
+              type="button"
+              className="btn btn-success"
+              onClick={imprimirSelecionados}
+            >
               Imprimir selecionados
             </button>
           </div>
@@ -496,7 +530,7 @@ export default function EtiquetasPage() {
                             className="filter-button"
                             onClick={() =>
                               setFiltroAberto(
-                                filtroAberto === col.key ? null : col.key
+                                filtroAberto === col.key ? null : col.key,
                               )
                             }
                           >
@@ -546,7 +580,7 @@ export default function EtiquetasPage() {
                       >
                         <input
                           type="checkbox"
-                          checked={item.selecionado}
+                          checked={!!item.selecionado}
                           readOnly
                         />
                       </td>
@@ -577,27 +611,30 @@ export default function EtiquetasPage() {
           </div>
         </div>
       </div>
+
       {popupArtigosInvalidosAberto && (
         <div className="popup-overlay">
           <div className="popup-card">
             <div className="popup-header">
-              <h2>Artigos com preço Superior</h2>
+              <h2>Artigos com preço superior</h2>
             </div>
 
             <p className="popup-text">
               Os artigos abaixo foram selecionados para impressão, mas têm o
-              PVP2 anterior maior ou igual ao PVP2 atual.
+              PVP2 anterior menor ou igual ao PVP2 atual.
             </p>
 
             <div className="popup-actions">
               <button
+                type="button"
                 className="btn btn-primary"
                 onClick={copiarCodigosInvalidosEProsseguir}
               >
-                Copiar Código
+                Copiar código
               </button>
 
               <button
+                type="button"
                 className="btn btn-secondary"
                 onClick={fecharPopupEProsseguir}
               >
@@ -642,6 +679,7 @@ export default function EtiquetasPage() {
           >
             {pagina.map((item) => {
               const desconto = Math.max(0, item.antes - item.atual);
+              const textoValidade = obterTextoValidade(item, anoValidade);
 
               return (
                 <div
@@ -661,45 +699,43 @@ export default function EtiquetasPage() {
                           <div className="topo">
                             <div className="codigo">{item.codigo}</div>
                             <div className="titulo">{titulo}</div>
-                            <div className="descricao">{item.descricao}</div>
+                            <DescricaoAuto
+                              texto={item.descricao}
+                              formatoEtiqueta={formatoEtiqueta}
+                            />
                           </div>
 
                           <div className="precos">
                             <div className="linha-preco">
-                              <span className="antes">
-                                {formatarEuro(item.antes)}€
-                              </span>
+                              <PrecoAntesAuto
+                                valor={item.antes}
+                                formatoEtiqueta={formatoEtiqueta}
+                              />
                             </div>
 
                             <div className="linha-preco desconto-linha">
-                              <span className="desconto">
-                                -{formatarEuro(desconto)}€
-                              </span>
+                              <DescontoAuto
+                                valor={desconto}
+                                formatoEtiqueta={formatoEtiqueta}
+                              />
                             </div>
 
                             <div className="linha-preco">
-                              <span className="atual">
-                                {formatarEuro(item.atual)}€
-                              </span>
+                              <PrecoAtualAuto
+                                valor={item.atual}
+                                formatoEtiqueta={formatoEtiqueta}
+                              />
                             </div>
                           </div>
 
                           <div className="rodape">
                             <Barcode value={item.ean} />
 
-                            <div className="validade">
-                              {item.dataInicio || item.dataFim
-                                ? `VÁLIDO DE ${item.dataInicio || "-"}${
-                                    item.dataInicio ? `/${anoValidade}` : ""
-                                  } A ${item.dataFim || "-"}${
-                                    item.dataFim ? `/${anoValidade}` : ""
-                                  }`
-                                : "VÁLIDO ENQUANTO DURAR O STOCK"}
-                            </div>
+                            <div className="validade">{textoValidade}</div>
 
                             <div className="nota">
-                              Limitado ao stock existente e não acumulável com
-                              outras promoções.
+                              VÁLIDO ENQUANTO DURAR O STOCK. Limitado ao stock
+                              existente e não acumulável com outras promoções.
                             </div>
                           </div>
                         </div>
@@ -715,45 +751,43 @@ export default function EtiquetasPage() {
                         <div className="topo">
                           <div className="codigo">{item.codigo}</div>
                           <div className="titulo">{titulo}</div>
-                          <div className="descricao">{item.descricao}</div>
+                          <DescricaoAuto
+                            texto={item.descricao}
+                            formatoEtiqueta={formatoEtiqueta}
+                          />
                         </div>
 
                         <div className="precos">
                           <div className="linha-preco">
-                            <span className="antes">
-                              {formatarEuro(item.antes)}€
-                            </span>
+                            <PrecoAntesAuto
+                              valor={item.antes}
+                              formatoEtiqueta={formatoEtiqueta}
+                            />
                           </div>
 
                           <div className="linha-preco desconto-linha">
-                            <span className="desconto">
-                              -{formatarEuro(desconto)}€
-                            </span>
+                            <DescontoAuto
+                              valor={desconto}
+                              formatoEtiqueta={formatoEtiqueta}
+                            />
                           </div>
 
                           <div className="linha-preco">
-                            <span className="atual">
-                              {formatarEuro(item.atual)}€
-                            </span>
+                            <PrecoAtualAuto
+                              valor={item.atual}
+                              formatoEtiqueta={formatoEtiqueta}
+                            />
                           </div>
                         </div>
 
                         <div className="rodape">
                           <Barcode value={item.ean} />
 
-                          <div className="validade">
-                            {item.dataInicio || item.dataFim
-                              ? `VÁLIDO DE ${item.dataInicio || "-"}${
-                                  item.dataInicio ? `/${anoValidade}` : ""
-                                } A ${item.dataFim || "-"}${
-                                  item.dataFim ? `/${anoValidade}` : ""
-                                }`
-                              : "VÁLIDO ENQUANTO DURAR O STOCK"}
-                          </div>
+                          <div className="validade">{textoValidade}</div>
 
                           <div className="nota">
-                            Limitado ao stock existente e não acumulável com
-                            outras promoções.
+                            VÁLIDO ENQUANTO DURAR O STOCK. Limitado ao stock
+                            existente e não acumulável com outras promoções.
                           </div>
                         </div>
                       </div>

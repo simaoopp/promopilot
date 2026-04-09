@@ -11,16 +11,27 @@ export function AuthProvider({ children }) {
     let ativo = true;
 
     async function carregarSessao() {
-      const { data, error } = await supabase.auth.getSession();
+      try {
+        const { data, error } = await supabase.auth.getSession();
 
-      if (!ativo) return;
+        if (!ativo) return;
 
-      if (error) {
-        console.error("Erro ao buscar sessão:", error.message);
+        if (error) {
+          console.error("Erro ao buscar sessão:", error.message);
+          setUser(null);
+          return;
+        }
+
+        setUser(data?.session?.user ?? null);
+      } catch (error) {
+        if (!ativo) return;
+        console.error("Erro inesperado ao carregar sessão:", error);
+        setUser(null);
+      } finally {
+        if (ativo) {
+          setLoadingAuth(false);
+        }
       }
-
-      setUser(data?.session?.user ?? null);
-      setLoadingAuth(false);
     }
 
     carregarSessao();
@@ -28,19 +39,20 @@ export function AuthProvider({ children }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!ativo) return;
       setUser(session?.user ?? null);
       setLoadingAuth(false);
     });
 
     return () => {
       ativo = false;
-      subscription.unsubscribe();
+      subscription?.unsubscribe();
     };
   }, []);
 
   async function signIn(email, password) {
     const { error } = await supabase.auth.signInWithPassword({
-      email,
+      email: String(email || "").trim(),
       password,
     });
 
@@ -49,8 +61,11 @@ export function AuthProvider({ children }) {
 
   async function signOut() {
     const { error } = await supabase.auth.signOut();
+
     if (error) throw error;
+
     sessionStorage.removeItem("force_password_change");
+    setUser(null);
   }
 
   async function updatePassword(newPassword) {
@@ -77,5 +92,11 @@ export function AuthProvider({ children }) {
 }
 
 export function useAuth() {
-  return useContext(AuthContext);
+  const context = useContext(AuthContext);
+
+  if (!context) {
+    throw new Error("useAuth deve ser usado dentro de um AuthProvider.");
+  }
+
+  return context;
 }

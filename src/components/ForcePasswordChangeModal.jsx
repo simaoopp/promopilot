@@ -1,10 +1,27 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 
 function passwordValida(password) {
-  const minLength = password.length >= 6;
-  const hasSpecial = /[!@#$%^&*(),.?":{}|<>_\-\\/\[\];'`~+=]/.test(password);
-  return minLength && hasSpecial;
+  const limpa = String(password || "").trim();
+
+  const minLength = limpa.length >= 8;
+  const hasLetter = /[A-Za-zÀ-ÿ]/.test(limpa);
+  const hasNumber = /\d/.test(limpa);
+  const hasSpecial = /[!@#$%^&*(),.?":{}|<>_\-\\/\[\];'`~+=]/.test(limpa);
+
+  const passwordsProibidas = [
+    "123",
+    "1234",
+    "12345",
+    "123456",
+    "password",
+    "admin",
+    "qwerty",
+  ];
+
+  const notCommon = !passwordsProibidas.includes(limpa.toLowerCase());
+
+  return minLength && hasLetter && hasNumber && hasSpecial && notCommon;
 }
 
 export default function ForcePasswordChangeModal({ open, onSuccess }) {
@@ -15,36 +32,36 @@ export default function ForcePasswordChangeModal({ open, onSuccess }) {
   const [erro, setErro] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const passwordTrimmed = useMemo(
+    () => String(novaPassword || "").trim(),
+    [novaPassword]
+  );
+
   if (!open) return null;
 
   async function handleSubmit(e) {
     e.preventDefault();
     setErro("");
 
-    if (!passwordValida(novaPassword)) {
+    if (!passwordValida(passwordTrimmed)) {
       setErro(
-        "A nova palavra-passe deve ter no mínimo 6 caracteres e 1 carácter especial."
+        "A nova palavra-passe deve ter pelo menos 8 caracteres, incluir letras, números e 1 carácter especial, e não pode ser demasiado comum."
       );
       return;
     }
 
-    if (novaPassword === "123") {
-      setErro("A nova palavra-passe não pode ser 123.");
-      return;
-    }
-
-    if (novaPassword !== confirmarPassword) {
+    if (passwordTrimmed !== confirmarPassword.trim()) {
       setErro("As palavras-passe não coincidem.");
       return;
     }
 
     try {
       setLoading(true);
-      await updatePassword(novaPassword);
+      await updatePassword(passwordTrimmed);
       sessionStorage.removeItem("force_password_change");
-      onSuccess();
+      onSuccess?.();
     } catch (err) {
-      setErro(err.message || "Erro ao atualizar a palavra-passe.");
+      setErro(err?.message || "Erro ao atualizar a palavra-passe.");
     } finally {
       setLoading(false);
     }
@@ -52,34 +69,49 @@ export default function ForcePasswordChangeModal({ open, onSuccess }) {
 
   return (
     <div className="force-password-overlay">
-      <div className="force-password-modal">
-        <h2>Alteração obrigatória da palavra-passe</h2>
+      <div
+        className="force-password-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="force-password-title"
+      >
+        <h2 id="force-password-title">
+          Alteração obrigatória da palavra-passe
+        </h2>
+
         <p>
           Está a usar a palavra-passe padrão. Para continuar, precisa definir
           uma nova palavra-passe.
         </p>
 
         <form onSubmit={handleSubmit} className="force-password-form">
-          <label>Nova palavra-passe</label>
+          <label htmlFor="nova-password">Nova palavra-passe</label>
           <input
+            id="nova-password"
             type="password"
             value={novaPassword}
             onChange={(e) => setNovaPassword(e.target.value)}
             placeholder="Nova palavra-passe"
+            autoComplete="new-password"
             required
+            disabled={loading}
           />
 
-          <label>Confirmar palavra-passe</label>
+          <label htmlFor="confirmar-password">Confirmar palavra-passe</label>
           <input
+            id="confirmar-password"
             type="password"
             value={confirmarPassword}
             onChange={(e) => setConfirmarPassword(e.target.value)}
             placeholder="Confirmar palavra-passe"
+            autoComplete="new-password"
             required
+            disabled={loading}
           />
 
           <div className="force-password-rules">
-            Mínimo 6 caracteres e pelo menos 1 carácter especial.
+            Mínimo 8 caracteres, com letras, números e pelo menos 1 carácter
+            especial.
           </div>
 
           {erro && <p className="force-password-error">{erro}</p>}

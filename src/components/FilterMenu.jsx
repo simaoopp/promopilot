@@ -1,50 +1,114 @@
+import { useEffect, useRef } from "react";
+
 export default function FilterMenu({
   coluna,
   tipo = "text",
   aberto,
-  filtro,
+  filtro = {},
   onClose,
   onUpdate,
   onSort,
   onClear,
 }) {
+  const popupRef = useRef(null);
+  const firstInputRef = useRef(null);
+
+  useEffect(() => {
+    if (!aberto) return;
+
+    function handleKeyDown(e) {
+      if (e.key === "Escape") {
+        onClose?.();
+      }
+
+      if (e.key === "Enter") {
+        onClose?.();
+      }
+    }
+
+    function handleClickOutside(e) {
+      if (popupRef.current && !popupRef.current.contains(e.target)) {
+        onClose?.();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("mousedown", handleClickOutside);
+
+    if (firstInputRef.current) {
+      firstInputRef.current.focus();
+    }
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [aberto, onClose]);
+
   if (!aberto) return null;
 
+  const contains = filtro.contains || "";
+  const equals = filtro.equals || "";
+  const op = filtro.op || "";
+  const valor = filtro.valor || "";
+
+  function renderSortButtons(labels = ["asc", "desc"]) {
+    return (
+      <div className="filter-section">
+        <button type="button" onClick={() => onSort?.("asc")}>
+          {labels[0]}
+        </button>
+        <button type="button" onClick={() => onSort?.("desc")}>
+          {labels[1]}
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className="filter-popup">
+    <div
+      ref={popupRef}
+      className="filter-popup"
+      role="dialog"
+      aria-modal="false"
+      aria-label={`Filtro da coluna ${coluna}`}
+    >
       <div className="filter-popup-header">
         <strong>{coluna}</strong>
-        <button type="button" className="filter-close" onClick={onClose}>
+        <button
+          type="button"
+          className="filter-close"
+          onClick={onClose}
+          aria-label={`Fechar filtro da coluna ${coluna}`}
+        >
           ×
         </button>
       </div>
 
       {tipo === "text" && (
         <>
-          <div className="filter-section">
-            <button type="button" onClick={() => onSort("asc")}>
-              Ordenar A → Z
-            </button>
-            <button type="button" onClick={() => onSort("desc")}>
-              Ordenar Z → A
-            </button>
-          </div>
+          {renderSortButtons(["Ordenar A → Z", "Ordenar Z → A"])}
 
           <div className="filter-section">
-            <label>Contém</label>
+            <label htmlFor={`filter-contains-${coluna}`}>Contém</label>
             <input
+              id={`filter-contains-${coluna}`}
+              ref={firstInputRef}
               type="text"
-              value={filtro?.contains || ""}
-              onChange={(e) => onUpdate("contains", e.target.value)}
+              value={contains}
+              placeholder="Texto a procurar"
+              onChange={(e) => onUpdate?.("contains", e.target.value)}
             />
           </div>
 
           <div className="filter-section">
-            <label>Igual a</label>
+            <label htmlFor={`filter-equals-${coluna}`}>Igual a</label>
             <input
+              id={`filter-equals-${coluna}`}
               type="text"
-              value={filtro?.equals || ""}
-              onChange={(e) => onUpdate("equals", e.target.value)}
+              value={equals}
+              placeholder="Valor exato"
+              onChange={(e) => onUpdate?.("equals", e.target.value)}
             />
           </div>
         </>
@@ -52,20 +116,15 @@ export default function FilterMenu({
 
       {tipo === "number" && (
         <>
-          <div className="filter-section">
-            <button type="button" onClick={() => onSort("asc")}>
-              Ordem crescente
-            </button>
-            <button type="button" onClick={() => onSort("desc")}>
-              Ordem decrescente
-            </button>
-          </div>
+          {renderSortButtons(["Ordem crescente", "Ordem decrescente"])}
 
           <div className="filter-section">
-            <label>Operador</label>
+            <label htmlFor={`filter-op-${coluna}`}>Operador</label>
             <select
-              value={filtro?.op || ""}
-              onChange={(e) => onUpdate("op", e.target.value)}
+              id={`filter-op-${coluna}`}
+              ref={firstInputRef}
+              value={op}
+              onChange={(e) => onUpdate?.("op", e.target.value)}
             >
               <option value="">-</option>
               <option value="=">=</option>
@@ -77,11 +136,13 @@ export default function FilterMenu({
           </div>
 
           <div className="filter-section">
-            <label>Valor</label>
+            <label htmlFor={`filter-value-${coluna}`}>Valor</label>
             <input
+              id={`filter-value-${coluna}`}
               type="number"
-              value={filtro?.valor || ""}
-              onChange={(e) => onUpdate("valor", e.target.value)}
+              value={valor}
+              placeholder="Introduz um número"
+              onChange={(e) => onUpdate?.("valor", e.target.value)}
             />
           </div>
         </>

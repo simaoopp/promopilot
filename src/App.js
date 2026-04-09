@@ -1,34 +1,37 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
-import "./styles.css";
 import Sidebar from "./components/Sidebar";
 import EtiquetasPage from "./pages/EtiquetasCampanha";
 import EtiquetasExcelPage from "./pages/EtiquetasCampanhaExcel";
 import Etiquetas from "./pages/Etiquetas";
 import Login from "./pages/Login";
 import ProtectedRoute from "./components/ProtectedRoute";
+import ForcePasswordChangeModal from "./components/ForcePasswordChangeModal";
 import { useAuth } from "./context/AuthContext";
 import logo from "./logo.png";
-import ForcePasswordChangeModal from "./components/ForcePasswordChangeModal";
+import "./styles/styles.css";
 
 export default function App() {
   const [menuAberto, setMenuAberto] = useState(false);
   const [loadingInicial, setLoadingInicial] = useState(true);
-  const { user, loadingAuth } = useAuth();
   const [forcarTrocaPassword, setForcarTrocaPassword] = useState(false);
 
+  const { user, loadingAuth } = useAuth();
+
+  const rotaInicial = useMemo(() => {
+    return user ? "/EtiquetasCampanha" : "/login";
+  }, [user]);
+
   useEffect(() => {
-    if (user && sessionStorage.getItem("force_password_change") === "true") {
-      setForcarTrocaPassword(true);
-    } else {
-      setForcarTrocaPassword(false);
-    }
+    setForcarTrocaPassword(
+      !!user && sessionStorage.getItem("force_password_change") === "true"
+    );
   }, [user]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
       setLoadingInicial(false);
-    }, 1800);
+    }, 1200);
 
     return () => clearTimeout(timer);
   }, []);
@@ -53,18 +56,11 @@ export default function App() {
       )}
 
       <Routes>
-        <Route
-          path="/"
-          element={
-            <Navigate to={user ? "/EtiquetasCampanha" : "/login"} replace />
-          }
-        />
+        <Route path="/" element={<Navigate to={rotaInicial} replace />} />
 
         <Route
           path="/login"
-          element={
-            user ? <Navigate to="/EtiquetasCampanha" replace /> : <Login />
-          }
+          element={user ? <Navigate to="/EtiquetasCampanha" replace /> : <Login />}
         />
 
         <Route
@@ -94,17 +90,15 @@ export default function App() {
           }
         />
 
-        <Route
-          path="*"
-          element={
-            <Navigate to={user ? "/EtiquetasCampanha" : "/login"} replace />
-          }
-        />
+        <Route path="*" element={<Navigate to={rotaInicial} replace />} />
       </Routes>
-      <ForcePasswordChangeModal
-        open={forcarTrocaPassword}
-        onSuccess={() => setForcarTrocaPassword(false)}
-      />
+
+      {user && (
+        <ForcePasswordChangeModal
+          open={forcarTrocaPassword}
+          onSuccess={() => setForcarTrocaPassword(false)}
+        />
+      )}
     </div>
   );
 }

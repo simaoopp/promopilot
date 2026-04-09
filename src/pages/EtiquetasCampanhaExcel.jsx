@@ -3,6 +3,7 @@ import * as XLSX from "xlsx";
 import logo from "../logo.png";
 import Barcode from "../components/Barcode";
 import FilterMenu from "../components/FilterMenu";
+import "../styles/styles.css";
 
 import { formatarEuro, parseNumero } from "../utils/formatters";
 import {
@@ -18,7 +19,17 @@ function normalizarCabecalho(texto) {
     .toUpperCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\s+/g, " ");
+    .replace(/\s+/g, " ")
+    .replace(/_/g, " ");
+}
+
+function obterValor(normalizado, chaves = [], fallback = "") {
+  for (const chave of chaves) {
+    if (normalizado[chave] !== undefined && normalizado[chave] !== null) {
+      return normalizado[chave];
+    }
+  }
+  return fallback;
 }
 
 function mapearLinhaExcel(row, index) {
@@ -28,37 +39,30 @@ function mapearLinhaExcel(row, index) {
     normalizado[normalizarCabecalho(key)] = row[key];
   });
 
-  console.log(`Linha ${index} normalizada:`, normalizado);
-
   return {
     id: `excel-${index}`,
-    codigo: normalizado["CODIGO"] || normalizado["CÓDIGO"] || "",
-    descricao: normalizado["DESCRICAO"] || normalizado["DESCRIÇÃO"] || "",
-    pn: normalizado["PN"] || "",
-    ean: normalizado["EAN"] || "",
-    antes: parseNumero(normalizado["PVP2 ANTES"] || 0),
-    atual: parseNumero(normalizado["PVP2 ATUAL"] || 0),
-    pv3: normalizado["PV3"] || "",
-    estado: normalizado["ESTADO"] || "",
-    ae: normalizado["AE"] || "",
-    aea: normalizado["AEA"] || "",
-    aev: normalizado["AEV"] || "",
-    a10: normalizado["A10"] || "",
-    a1e: normalizado["A1E"] || "",
-    data: normalizado["DATA"] || "",
-    dataInicio:
-      normalizado["DATA INICIO"] ||
-      normalizado["DATA_INICIO"] ||
-      normalizado["DATA INÍCIO"] ||
-      "",
-    dataFim: normalizado["DATA FIM"] || normalizado["DATA_FIM"] || "",
-    alterado:
-      normalizado["ALTERADO PRIMAVERA"] || normalizado["ALTERADO"] || "",
-    info:
-      normalizado["INFORMAÇÃO"] ||
-      normalizado["INFORMACAO"] ||
-      normalizado["INFO"] ||
-      "",
+    codigo: obterValor(normalizado, ["CODIGO", "CÓDIGO", "ARTIGO"], ""),
+    descricao: obterValor(normalizado, ["DESCRICAO", "DESCRIÇÃO", "DESIGNACAO", "DESIGNAÇÃO"], ""),
+    pn: obterValor(normalizado, ["PN", "PART NUMBER"], ""),
+    ean: obterValor(normalizado, ["EAN", "CODIGO BARRAS", "CÓDIGO BARRAS"], ""),
+    antes: parseNumero(
+      obterValor(normalizado, ["PVP2 ANTES", "ANTES", "PRECO ANTES", "PREÇO ANTES"], 0)
+    ),
+    atual: parseNumero(
+      obterValor(normalizado, ["PVP2 ATUAL", "ATUAL", "PRECO ATUAL", "PREÇO ATUAL"], 0)
+    ),
+    pv3: obterValor(normalizado, ["PV3"], ""),
+    estado: obterValor(normalizado, ["ESTADO"], ""),
+    ae: obterValor(normalizado, ["AE"], ""),
+    aea: obterValor(normalizado, ["AEA"], ""),
+    aev: obterValor(normalizado, ["AEV"], ""),
+    a10: obterValor(normalizado, ["A10"], ""),
+    a1e: obterValor(normalizado, ["A1E"], ""),
+    data: obterValor(normalizado, ["DATA"], ""),
+    dataInicio: obterValor(normalizado, ["DATA INICIO", "DATA INÍCIO", "DATA_INICIO"], ""),
+    dataFim: obterValor(normalizado, ["DATA FIM", "DATA_FIM"], ""),
+    alterado: obterValor(normalizado, ["ALTERADO PRIMAVERA", "ALTERADO"], ""),
+    info: obterValor(normalizado, ["INFORMAÇÃO", "INFORMACAO", "INFO"], ""),
     selecionado: false,
   };
 }
@@ -69,6 +73,11 @@ export default function EtiquetasExcelPage() {
   const [dados, setDados] = useState([]);
   const [loading, setLoading] = useState(false);
   const [nomeFicheiro, setNomeFicheiro] = useState("");
+  const [formatoEtiqueta, setFormatoEtiqueta] = useState("a6");
+
+  const [popupArtigosInvalidosAberto, setPopupArtigosInvalidosAberto] =
+    useState(false);
+  const [artigosInvalidosPopup, setArtigosInvalidosPopup] = useState([]);
 
   const [filtroAberto, setFiltroAberto] = useState(null);
   const [ordenacao, setOrdenacao] = useState({
@@ -168,15 +177,9 @@ export default function EtiquetasExcelPage() {
       const sheet = workbook.Sheets[nomeSheet];
       const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
 
-      console.log("Sheet escolhida:", nomeSheet);
-      console.log("Total de linhas lidas:", rows.length);
-      console.log("Primeira linha bruta:", rows[0]);
-
       const linhas = rows
         .map((row, index) => mapearLinhaExcel(row, index))
         .filter((item) => item.codigo || item.descricao || item.ean);
-
-      console.log("Total de linhas válidas:", linhas.length);
 
       if (!linhas.length) {
         throw new Error("Sem linhas válidas");
@@ -224,7 +227,8 @@ export default function EtiquetasExcelPage() {
   }, [dados, filtros, ordenacao]);
 
   const selecionados = dados.filter((item) => item.selecionado);
-  const paginas = dividirEmPaginas(selecionados, 4);
+  const etiquetasPorPagina = formatoEtiqueta === "a5" ? 2 : 4;
+  const paginas = dividirEmPaginas(selecionados, etiquetasPorPagina);
 
   function alternarSelecionado(id) {
     setDados((prev) =>
@@ -236,6 +240,7 @@ export default function EtiquetasExcelPage() {
 
   function selecionarTodosFiltrados() {
     const ids = new Set(dadosFiltrados.map((item) => item.id));
+
     setDados((prev) =>
       prev.map((item) =>
         ids.has(item.id) ? { ...item, selecionado: true } : item
@@ -245,6 +250,7 @@ export default function EtiquetasExcelPage() {
 
   function desmarcarTodosFiltrados() {
     const ids = new Set(dadosFiltrados.map((item) => item.id));
+
     setDados((prev) =>
       prev.map((item) =>
         ids.has(item.id) ? { ...item, selecionado: false } : item
@@ -256,11 +262,86 @@ export default function EtiquetasExcelPage() {
     setDados((prev) => prev.map((item) => ({ ...item, selecionado: false })));
   }
 
+  function removerInvalidosDaSelecao() {
+    const idsInvalidos = new Set(artigosInvalidosPopup.map((item) => item.id));
+
+    setDados((prev) =>
+      prev.map((item) =>
+        idsInvalidos.has(item.id) ? { ...item, selecionado: false } : item
+      )
+    );
+  }
+
+  async function copiarCodigosInvalidosEProsseguir() {
+    const texto = artigosInvalidosPopup
+      .map((item) => String(item.codigo || "").trim())
+      .filter(Boolean)
+      .join("|");
+
+    try {
+      if (texto) {
+        await navigator.clipboard.writeText(texto);
+      }
+    } catch (error) {
+      console.error("Não foi possível copiar os códigos.", error);
+    }
+
+    const idsInvalidos = new Set(artigosInvalidosPopup.map((item) => item.id));
+    const restantesValidos = selecionados.filter(
+      (item) => !idsInvalidos.has(item.id)
+    );
+
+    removerInvalidosDaSelecao();
+    setPopupArtigosInvalidosAberto(false);
+
+    if (restantesValidos.length === 0) {
+      alert("Não existem etiquetas válidas para imprimir.");
+      return;
+    }
+
+    setTimeout(() => {
+      window.print();
+    }, 150);
+  }
+
+  function fecharPopupEProsseguir() {
+    const idsInvalidos = new Set(artigosInvalidosPopup.map((item) => item.id));
+    const restantesValidos = selecionados.filter(
+      (item) => !idsInvalidos.has(item.id)
+    );
+
+    removerInvalidosDaSelecao();
+    setPopupArtigosInvalidosAberto(false);
+
+    if (restantesValidos.length === 0) {
+      alert("Não existem etiquetas válidas para imprimir.");
+      return;
+    }
+
+    setTimeout(() => {
+      window.print();
+    }, 150);
+  }
+
   function imprimirSelecionados() {
     if (selecionados.length === 0) {
       alert("Seleciona pelo menos um artigo.");
       return;
     }
+
+    const invalidos = selecionados.filter(
+      (item) =>
+        Number(item.antes) > 0 &&
+        Number(item.atual) > 0 &&
+        Number(item.antes) <= Number(item.atual)
+    );
+
+    if (invalidos.length > 0) {
+      setArtigosInvalidosPopup(invalidos);
+      setPopupArtigosInvalidosAberto(true);
+      return;
+    }
+
     window.print();
   }
 
@@ -289,15 +370,27 @@ export default function EtiquetasExcelPage() {
               />
             </label>
 
-            <label className="input-group">
+            <div className="input-group">
               <span>Ano de validade</span>
-              <input
-                type="number"
-                value={anoValidade}
-                onChange={(e) => setAnoValidade(e.target.value)}
-                placeholder="2026"
-              />
-            </label>
+              <div className="ano-formato-row">
+                <input
+                  type="number"
+                  value={anoValidade}
+                  onChange={(e) => setAnoValidade(e.target.value)}
+                  placeholder="2026"
+                />
+
+                <button
+                  type="button"
+                  className="btn btn-secondary formato-btn"
+                  onClick={() =>
+                    setFormatoEtiqueta((prev) => (prev === "a6" ? "a5" : "a6"))
+                  }
+                >
+                  Formato: {formatoEtiqueta.toUpperCase()}
+                </button>
+              </div>
+            </div>
           </div>
 
           <div className="input-group">
@@ -313,21 +406,34 @@ export default function EtiquetasExcelPage() {
 
           <div className="toolbar-actions">
             <button
+              type="button"
               className="btn btn-secondary"
               onClick={selecionarTodosFiltrados}
             >
               Selecionar filtrados
             </button>
+
             <button
+              type="button"
               className="btn btn-secondary"
               onClick={desmarcarTodosFiltrados}
             >
               Desmarcar filtrados
             </button>
-            <button className="btn btn-secondary" onClick={limparSelecao}>
+
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={limparSelecao}
+            >
               Limpar seleção
             </button>
-            <button className="btn btn-success" onClick={imprimirSelecionados}>
+
+            <button
+              type="button"
+              className="btn btn-success"
+              onClick={imprimirSelecionados}
+            >
               Imprimir selecionados
             </button>
           </div>
@@ -337,10 +443,12 @@ export default function EtiquetasExcelPage() {
               <span className="resumo-label">Total artigos</span>
               <strong>{dados.length}</strong>
             </div>
+
             <div className="resumo-card">
               <span className="resumo-label">Filtrados</span>
               <strong>{dadosFiltrados.length}</strong>
             </div>
+
             <div className="resumo-card">
               <span className="resumo-label">Selecionados</span>
               <strong>{selecionados.length}</strong>
@@ -421,7 +529,7 @@ export default function EtiquetasExcelPage() {
                       >
                         <input
                           type="checkbox"
-                          checked={item.selecionado}
+                          checked={!!item.selecionado}
                           readOnly
                         />
                       </td>
@@ -453,9 +561,71 @@ export default function EtiquetasExcelPage() {
         </div>
       </div>
 
-      <div className="print-area">
+      {popupArtigosInvalidosAberto && (
+        <div className="popup-overlay">
+          <div className="popup-card">
+            <div className="popup-header">
+              <h2>Artigos com preço superior</h2>
+            </div>
+
+            <p className="popup-text">
+              Os artigos abaixo foram selecionados para impressão, mas têm o
+              PVP2 anterior maior ou igual ao PVP2 atual.
+            </p>
+
+            <div className="popup-actions">
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={copiarCodigosInvalidosEProsseguir}
+              >
+                Copiar código
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={fecharPopupEProsseguir}
+              >
+                Fechar e prosseguir
+              </button>
+            </div>
+
+            <div className="popup-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Código</th>
+                    <th>Designação</th>
+                    <th>PVP2 Antes</th>
+                    <th>PVP2 Atual</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {artigosInvalidosPopup.map((item) => (
+                    <tr key={item.id}>
+                      <td>{item.codigo}</td>
+                      <td>{item.descricao}</td>
+                      <td>{formatarEuro(item.antes)}€</td>
+                      <td>{formatarEuro(item.atual)}€</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className={`print-area formato-${formatoEtiqueta}`}>
         {paginas.map((pagina, pageIndex) => (
-          <div key={pageIndex} className="sheet">
+          <div
+            key={pageIndex}
+            className={`sheet ${
+              formatoEtiqueta === "a5" ? "sheet-a5" : "sheet-a6"
+            }`}
+          >
             {pagina.map((item) => {
               const desconto = Math.max(0, item.antes - item.atual);
 
@@ -466,61 +636,124 @@ export default function EtiquetasExcelPage() {
                     formatoEtiqueta === "a5" ? "label-a5" : "label-a6"
                   }`}
                 >
-                  <div className="label-inner">
-                    <div className="topbar">
-                      <img src={logo} alt="Expert" className="print-logo" />
+                  {formatoEtiqueta === "a5" ? (
+                    <div className="label-a5-rotator">
+                      <div className="label-inner">
+                        <div className="topbar">
+                          <img src={logo} alt="Expert" className="print-logo" />
+                        </div>
+
+                        <div className="content">
+                          <div className="topo">
+                            <div className="codigo">{item.codigo}</div>
+                            <div className="titulo">{titulo}</div>
+                            <div className="descricao">{item.descricao}</div>
+                          </div>
+
+                          <div className="precos">
+                            <div className="linha-preco">
+                              <span className="antes">
+                                {formatarEuro(item.antes)}€
+                              </span>
+                            </div>
+
+                            <div className="linha-preco desconto-linha">
+                              <span className="desconto">
+                                -{formatarEuro(desconto)}€
+                              </span>
+                            </div>
+
+                            <div className="linha-preco">
+                              <span className="atual">
+                                {formatarEuro(item.atual)}€
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="rodape">
+                            <Barcode value={item.ean} />
+
+                            <div className="validade">
+                              {item.dataInicio || item.dataFim
+                                ? `VÁLIDO DE ${item.dataInicio || "-"}${
+                                    item.dataInicio ? `/${anoValidade}` : ""
+                                  } A ${item.dataFim || "-"}${
+                                    item.dataFim ? `/${anoValidade}` : ""
+                                  }`
+                                : "VÁLIDO ENQUANTO DURAR O STOCK"}
+                            </div>
+
+                            <div className="nota">
+                              Limitado ao stock existente e não acumulável com
+                              outras promoções.
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-
-                    <div className="content">
-                      <div className="topo">
-                        <div className="codigo">{item.codigo}</div>
-                        <div className="titulo">{titulo}</div>
-                        <div className="descricao">{item.descricao}</div>
+                  ) : (
+                    <div className="label-inner">
+                      <div className="topbar">
+                        <img src={logo} alt="Expert" className="print-logo" />
                       </div>
 
-                      <div className="precos">
-                        <div className="linha-preco">
-                          <span className="antes">
-                            {formatarEuro(item.antes)}€
-                          </span>
+                      <div className="content">
+                        <div className="topo">
+                          <div className="codigo">{item.codigo}</div>
+                          <div className="titulo">{titulo}</div>
+                          <div className="descricao">{item.descricao}</div>
                         </div>
 
-                        <div className="linha-preco desconto-linha">
-                          <span className="desconto">
-                            -{formatarEuro(desconto)}€
-                          </span>
+                        <div className="precos">
+                          <div className="linha-preco">
+                            <span className="antes">
+                              {formatarEuro(item.antes)}€
+                            </span>
+                          </div>
+
+                          <div className="linha-preco desconto-linha">
+                            <span className="desconto">
+                              -{formatarEuro(desconto)}€
+                            </span>
+                          </div>
+
+                          <div className="linha-preco">
+                            <span className="atual">
+                              {formatarEuro(item.atual)}€
+                            </span>
+                          </div>
                         </div>
 
-                        <div className="linha-preco">
-                          <span className="atual">
-                            {formatarEuro(item.atual)}€
-                          </span>
-                        </div>
-                      </div>
+                        <div className="rodape">
+                          <Barcode value={item.ean} />
 
-                      <div className="rodape">
-                        <Barcode value={item.ean} />
+                          <div className="validade">
+                            {item.dataInicio || item.dataFim
+                              ? `VÁLIDO DE ${item.dataInicio || "-"}${
+                                  item.dataInicio ? `/${anoValidade}` : ""
+                                } A ${item.dataFim || "-"}${
+                                  item.dataFim ? `/${anoValidade}` : ""
+                                }`
+                              : "VÁLIDO ENQUANTO DURAR O STOCK"}
+                          </div>
 
-                        <div className="validade">
-                          {item.dataInicio || item.dataFim
-                            ? `VÁLIDO DE ${item.dataInicio || "-"}${
-                                item.dataInicio ? `/${anoValidade}` : ""
-                              } A ${item.dataFim || "-"}${
-                                item.dataFim ? `/${anoValidade}` : ""
-                              }`
-                            : "VÁLIDO ENQUANTO DURAR O STOCK"}
-                        </div>
-
-                        <div className="nota">
-                          Limitado ao stock existente e não acumulável com
-                          outras promoções.
+                          <div className="nota">
+                            Limitado ao stock existente e não acumulável com
+                            outras promoções.
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               );
             })}
+
+            {formatoEtiqueta === "a5" && pagina.length === 1 ? (
+              <div className="label label-a5 label-vazia">
+                <div className="label-inner"></div>
+              </div>
+            ) : null}
           </div>
         ))}
       </div>

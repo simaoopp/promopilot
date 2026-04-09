@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import logo from "../logo.png";
@@ -8,9 +8,42 @@ export default function Sidebar({
   setMenuAberto,
   titulo = "Expert Administração",
 }) {
-  const [submenuEtiquetasAberto, setSubmenuEtiquetasAberto] = useState(false);
   const location = useLocation();
   const { signOut } = useAuth();
+
+  const [submenuEtiquetasAberto, setSubmenuEtiquetasAberto] = useState(false);
+  const [loadingLogout, setLoadingLogout] = useState(false);
+
+  const rotaEtiquetasAtiva = useMemo(() => {
+    return (
+      location.pathname === "/" ||
+      location.pathname === "/Etiquetas" ||
+      location.pathname === "/EtiquetasCampanha" ||
+      location.pathname === "/EtiquetasCampanhaExcel"
+    );
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (rotaEtiquetasAtiva) {
+      setSubmenuEtiquetasAberto(true);
+    }
+  }, [rotaEtiquetasAtiva]);
+
+  useEffect(() => {
+    function handleKeyDown(e) {
+      if (e.key === "Escape") {
+        setMenuAberto(false);
+      }
+    }
+
+    if (menuAberto) {
+      window.addEventListener("keydown", handleKeyDown);
+    }
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [menuAberto, setMenuAberto]);
 
   function fecharTudo() {
     setMenuAberto(false);
@@ -20,12 +53,25 @@ export default function Sidebar({
     setSubmenuEtiquetasAberto((prev) => !prev);
   }
 
+  function isActive(path) {
+    if (path === "/EtiquetasCampanha") {
+      return (
+        location.pathname === "/EtiquetasCampanha" || location.pathname === "/"
+      );
+    }
+
+    return location.pathname === path;
+  }
+
   async function handleLogout() {
     try {
+      setLoadingLogout(true);
       await signOut();
       fecharTudo();
     } catch (error) {
       console.error("Erro ao sair:", error.message);
+    } finally {
+      setLoadingLogout(false);
     }
   }
 
@@ -33,9 +79,12 @@ export default function Sidebar({
     <>
       <div className="topbar-site no-print">
         <button
+          type="button"
           className="menu-button"
           onClick={() => setMenuAberto(true)}
           aria-label="Abrir menu"
+          aria-expanded={menuAberto}
+          aria-controls="sidebar-navigation"
         >
           ☰
         </button>
@@ -47,12 +96,18 @@ export default function Sidebar({
       <div
         className={`sidebar-overlay ${menuAberto ? "show" : ""}`}
         onClick={fecharTudo}
-      ></div>
+        aria-hidden={!menuAberto}
+      />
 
-      <aside className={`sidebar no-print ${menuAberto ? "open" : ""}`}>
+      <aside
+        id="sidebar-navigation"
+        className={`sidebar no-print ${menuAberto ? "open" : ""}`}
+        aria-hidden={!menuAberto}
+      >
         <div className="sidebar-header">
           <img src={logo} alt="Expert" className="logo-sidebar" />
           <button
+            type="button"
             className="close-sidebar"
             onClick={fecharTudo}
             aria-label="Fechar menu"
@@ -62,7 +117,13 @@ export default function Sidebar({
         </div>
 
         <div className="sidebar-body">
-          <button className="sidebar-link" onClick={toggleSubmenu}>
+          <button
+            type="button"
+            className="sidebar-link"
+            onClick={toggleSubmenu}
+            aria-expanded={submenuEtiquetasAberto}
+            aria-controls="submenu-etiquetas"
+          >
             <span>Etiquetas</span>
             <span className={`arrow ${submenuEtiquetasAberto ? "open" : ""}`}>
               ▸
@@ -70,14 +131,22 @@ export default function Sidebar({
           </button>
 
           {submenuEtiquetasAberto && (
-            <div className="sidebar-submenu">
+            <div id="submenu-etiquetas" className="sidebar-submenu">
+
+              <Link
+                to="/Etiquetas"
+                className={`sidebar-sublink ${
+                  isActive("/Etiquetas") ? "active" : ""
+                }`}
+                onClick={fecharTudo}
+              >
+                Etiquetas
+              </Link>
+
               <Link
                 to="/EtiquetasCampanha"
                 className={`sidebar-sublink ${
-                  location.pathname === "/EtiquetasCampanha" ||
-                  location.pathname === "/"
-                    ? "active"
-                    : ""
+                  isActive("/EtiquetasCampanha") ? "active" : ""
                 }`}
                 onClick={fecharTudo}
               >
@@ -85,22 +154,24 @@ export default function Sidebar({
               </Link>
 
               <Link
-                to="/Etiquetas"
+                to="/EtiquetasCampanhaExcel"
                 className={`sidebar-sublink ${
-                  location.pathname === "/Etiquetas" ? "active" : ""
+                  isActive("/EtiquetasCampanhaExcel") ? "active" : ""
                 }`}
                 onClick={fecharTudo}
               >
-                Etiquetas
+                Etiquetas de Campanha (Excel)
               </Link>
             </div>
           )}
 
           <button
+            type="button"
             className="sidebar-link sidebar-logout"
             onClick={handleLogout}
+            disabled={loadingLogout}
           >
-            Sair
+            {loadingLogout ? "A sair..." : "Sair"}
           </button>
         </div>
       </aside>
