@@ -963,6 +963,79 @@ button {
   object-fit: cover;
 }
 
+.input-com-icon {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.input-com-icon input {
+  width: 100%;
+  padding-right: 56px;
+}
+
+.btn-camera {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--color-input-border);
+  border-radius: 12px;
+  background: #eef2f7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  line-height: 1;
+  transition: 0.2s ease;
+  padding: 0;
+}
+
+.btn-camera:hover {
+  background: #e5ebf3;
+}
+
+.scanner-card {
+  width: min(640px, 100%);
+}
+
+.scanner-body {
+  padding: 20px;
+}
+
+.scanner-video {
+  width: 100%;
+  min-height: 320px;
+  max-height: 60vh;
+  background: #000;
+  border-radius: 12px;
+  object-fit: cover;
+}
+
+.scanner-result-body {
+  padding: 18px 22px 22px;
+}
+
+.scan-result-card {
+  margin-top: 12px;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-soft);
+}
+
+.scan-result-card p {
+  margin: 0 0 8px;
+  color: var(--color-text);
+}
+
+.scan-result-card p:last-child {
+  margin-bottom: 0;
+}
+
 .input-group {
   display: flex;
   flex-direction: column;
