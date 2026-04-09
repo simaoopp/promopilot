@@ -905,6 +905,47 @@ button {
   margin-bottom: 18px;
 }
 
+.input-com-icon {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.input-com-icon input {
+  width: 100%;
+  padding-right: 56px;
+}
+
+.btn-camera {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--color-input-border);
+  border-radius: 12px;
+  background: #eef2f7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  line-height: 1;
+  transition: 0.2s ease;
+  padding: 0;
+}
+
+.btn-camera:hover {
+  background: #e5ebf3;
+}
+
+.btn-camera.ativo {
+  background: var(--color-primary-action);
+  border-color: var(--color-primary-action);
+  color: #ffffff;
+}
+
 .input-group {
   display: flex;
   flex-direction: column;

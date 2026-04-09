@@ -6,6 +6,7 @@
   "main": "src/index.tsx",
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
+    "@zxing/browser": "^0.1.5",
     "jsbarcode": "3.12.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
