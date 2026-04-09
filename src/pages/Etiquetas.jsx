@@ -79,7 +79,14 @@ export default function EtiquetasCampanhaExcelPage() {
             if (!ativo) return;
 
             if (result) {
-              const codigo = result.getText();
+              const codigo = String(result.getText() || "")
+                .replace(/\s+/g, "")
+                .trim();
+              console.log("CÓDIGO LIDO:", codigo);
+
+              setModoPesquisa("scan");
+              setPesquisa(codigo);
+              setMensagem(`Código lido: ${codigo}`);
 
               setModoPesquisa("scan");
               setPesquisa(codigo);
