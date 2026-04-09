@@ -25,6 +25,9 @@ export default function EtiquetasCampanhaExcelPage() {
   const [mensagem, setMensagem] = useState("");
   const [scannerAberto, setScannerAberto] = useState(false);
 
+  const [resultadoScan, setResultadoScan] = useState(null);
+  const [codigoLidoPopup, setCodigoLidoPopup] = useState("");
+
   const videoRef = useRef(null);
   const readerRef = useRef(null);
   const controlsRef = useRef(null);
@@ -49,13 +52,67 @@ export default function EtiquetasCampanhaExcelPage() {
     return () => clearTimeout(timer);
   }, [mensagem]);
 
+  const artigosPreparados = useMemo(() => {
+    return artigos.map((item, index) => ({
+      ...item,
+      _id: `${item.artigo}-${item.armazem}-${item.codigoBarras || ""}-${index}`,
+      artigoLower: String(item.artigo || "").toLowerCase(),
+      artigoNormalizado: normalizarPesquisaLivre(item.artigo),
+      descricaoLower: String(item.descricao || "").toLowerCase(),
+      descricaoNormalizada: normalizarTexto(item.descricao),
+      descricaoPesquisaLivre: normalizarPesquisaLivre(item.descricao),
+      codigoBarrasTexto: normalizarPesquisaLivre(item.codigoBarras || ""),
+    }));
+  }, [artigos]);
+
+  function pararScanner() {
+    try {
+      if (controlsRef.current?.stop) {
+        controlsRef.current.stop();
+      }
+    } catch (error) {
+      console.error("Erro ao parar controls do scanner:", error);
+    } finally {
+      controlsRef.current = null;
+    }
+
+    try {
+      if (readerRef.current?.reset) {
+        readerRef.current.reset();
+      }
+    } catch (error) {
+      console.error("Erro ao fazer reset do reader:", error);
+    }
+  }
+
+  function procurarArtigoPorCodigoLido(codigo) {
+    const codigoNormalizado = normalizarPesquisaLivre(codigo);
+
+    const encontrado = artigosPreparados.find(
+      (item) => item.codigoBarrasTexto === codigoNormalizado,
+    );
+
+    setCodigoLidoPopup(codigo);
+
+    if (encontrado) {
+      setResultadoScan({
+        encontrado: true,
+        item: encontrado,
+      });
+    } else {
+      setResultadoScan({
+        encontrado: false,
+        item: null,
+      });
+    }
+  }
+
   useEffect(() => {
     if (!scannerAberto || !videoRef.current) return;
 
+    let ativo = true;
     const reader = new BrowserMultiFormatReader();
     readerRef.current = reader;
-
-    let ativo = true;
 
     async function iniciarScanner() {
       try {
@@ -70,7 +127,7 @@ export default function EtiquetasCampanhaExcelPage() {
         const traseira =
           devices.find((d) =>
             /back|rear|environment|traseira/i.test(d.label || ""),
-          ) || devices[0];
+          ) || devices[devices.length - 1];
 
         const controls = await reader.decodeFromVideoDevice(
           traseira.deviceId,
@@ -82,22 +139,20 @@ export default function EtiquetasCampanhaExcelPage() {
               const codigo = String(result.getText() || "")
                 .replace(/\s+/g, "")
                 .trim();
-              console.log("CÓDIGO LIDO:", codigo);
 
               setModoPesquisa("scan");
               setPesquisa(codigo);
               setMensagem(`Código lido: ${codigo}`);
 
-              setModoPesquisa("scan");
-              setPesquisa(codigo);
-              setMensagem(`Código lido: ${codigo}`);
+              procurarArtigoPorCodigoLido(codigo);
 
-              if (controlsRef.current) {
-                controlsRef.current.stop();
-                controlsRef.current = null;
-              }
-
+              pararScanner();
               setScannerAberto(false);
+              return;
+            }
+
+            if (error && error.name !== "NotFoundException") {
+              console.error("Erro do scanner:", error);
             }
           },
         );
@@ -114,30 +169,9 @@ export default function EtiquetasCampanhaExcelPage() {
 
     return () => {
       ativo = false;
-
-      if (controlsRef.current) {
-        controlsRef.current.stop();
-        controlsRef.current = null;
-      }
-
-      if (readerRef.current?.reset) {
-        readerRef.current.reset();
-      }
+      pararScanner();
     };
-  }, [scannerAberto]);
-
-  const artigosPreparados = useMemo(() => {
-    return artigos.map((item, index) => ({
-      ...item,
-      _id: `${item.artigo}-${item.armazem}-${item.codigoBarras || ""}-${index}`,
-      artigoLower: String(item.artigo || "").toLowerCase(),
-      artigoNormalizado: normalizarPesquisaLivre(item.artigo),
-      descricaoLower: String(item.descricao || "").toLowerCase(),
-      descricaoNormalizada: normalizarTexto(item.descricao),
-      descricaoPesquisaLivre: normalizarPesquisaLivre(item.descricao),
-      codigoBarrasTexto: normalizarPesquisaLivre(item.codigoBarras || ""),
-    }));
-  }, [artigos]);
+  }, [scannerAberto, artigosPreparados]);
 
   const resultados = useMemo(() => {
     const termo = pesquisaDebounced.trim();
@@ -151,6 +185,13 @@ export default function EtiquetasCampanhaExcelPage() {
 
     return artigosPreparados.filter((item) => {
       if (modoPesquisa === "scan") {
+        const matchCodigoBarrasExato =
+          termoLivre &&
+          item.codigoBarrasTexto &&
+          item.codigoBarrasTexto === termoLivre;
+
+        if (matchCodigoBarrasExato) return true;
+
         const matchDireto =
           item.descricaoLower.includes(termoLower) ||
           item.descricaoNormalizada.includes(termoNormalizado) ||
@@ -265,16 +306,25 @@ export default function EtiquetasCampanhaExcelPage() {
   }
 
   function fecharScanner() {
-    if (controlsRef.current) {
-      controlsRef.current.stop();
-      controlsRef.current = null;
-    }
-
-    if (readerRef.current?.reset) {
-      readerRef.current.reset();
-    }
-
+    pararScanner();
     setScannerAberto(false);
+  }
+
+  function fecharResultadoScan() {
+    setResultadoScan(null);
+    setCodigoLidoPopup("");
+  }
+
+  function selecionarArtigoDoScan() {
+    if (!resultadoScan?.item?._id) return;
+
+    setSelecionados((prev) => ({
+      ...prev,
+      [resultadoScan.item._id]: true,
+    }));
+
+    setMensagem("Artigo selecionado com sucesso.");
+    fecharResultadoScan();
   }
 
   return (
@@ -464,6 +514,93 @@ export default function EtiquetasCampanhaExcelPage() {
               <p className="popup-text">
                 Aponte a câmara para o código de barras do produto.
               </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {resultadoScan && (
+        <div className="popup-overlay">
+          <div className="popup-card">
+            <div className="popup-header">
+              <h2>Resultado do scan</h2>
+              <button
+                type="button"
+                className="popup-close"
+                onClick={fecharResultadoScan}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="scanner-result-body">
+              <p className="popup-text">
+                <strong>Código lido:</strong> {codigoLidoPopup}
+              </p>
+
+              {resultadoScan.encontrado ? (
+                <>
+                  <p className="popup-text">
+                    <strong>Artigo encontrado com sucesso.</strong>
+                  </p>
+
+                  <div className="scan-result-card">
+                    <p>
+                      <strong>Artigo:</strong> {resultadoScan.item.artigo}
+                    </p>
+                    <p>
+                      <strong>Descrição:</strong> {resultadoScan.item.descricao}
+                    </p>
+                    <p>
+                      <strong>Código de barras:</strong>{" "}
+                      {resultadoScan.item.codigoBarras}
+                    </p>
+                    <p>
+                      <strong>PVP2:</strong> {resultadoScan.item.pvp2}
+                    </p>
+                    <p>
+                      <strong>Armazém:</strong> {resultadoScan.item.armazem}
+                    </p>
+                    <p>
+                      <strong>Stock:</strong> {resultadoScan.item.stock}
+                    </p>
+                  </div>
+
+                  <div className="popup-actions">
+                    <button
+                      type="button"
+                      className="btn btn-success"
+                      onClick={selecionarArtigoDoScan}
+                    >
+                      Selecionar artigo
+                    </button>
+
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={fecharResultadoScan}
+                    >
+                      Fechar
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="popup-text">
+                    Não foi encontrado nenhum artigo para este código de barras.
+                  </p>
+
+                  <div className="popup-actions">
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={fecharResultadoScan}
+                    >
+                      Fechar
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
