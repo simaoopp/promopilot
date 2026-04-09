@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { BrowserMultiFormatReader } from "@zxing/browser";
 import artigosData from "../data/artigos.json";
 import "../styles/styles.css";
 
@@ -22,6 +23,11 @@ export default function EtiquetasCampanhaExcelPage() {
   const [pesquisaDebounced, setPesquisaDebounced] = useState("");
   const [selecionados, setSelecionados] = useState({});
   const [mensagem, setMensagem] = useState("");
+  const [scannerAberto, setScannerAberto] = useState(false);
+
+  const videoRef = useRef(null);
+  const readerRef = useRef(null);
+  const controlsRef = useRef(null);
 
   const artigos = artigosData?.artigos || [];
 
@@ -42,6 +48,76 @@ export default function EtiquetasCampanhaExcelPage() {
 
     return () => clearTimeout(timer);
   }, [mensagem]);
+
+  useEffect(() => {
+    if (!scannerAberto || !videoRef.current) return;
+
+    const reader = new BrowserMultiFormatReader();
+    readerRef.current = reader;
+
+    let ativo = true;
+
+    async function iniciarScanner() {
+      try {
+        const devices = await BrowserMultiFormatReader.listVideoInputDevices();
+
+        if (!devices.length) {
+          setMensagem("Nenhuma câmara encontrada.");
+          setScannerAberto(false);
+          return;
+        }
+
+        const traseira =
+          devices.find((d) =>
+            /back|rear|environment|traseira/i.test(d.label || ""),
+          ) || devices[0];
+
+        const controls = await reader.decodeFromVideoDevice(
+          traseira.deviceId,
+          videoRef.current,
+          (result, error) => {
+            if (!ativo) return;
+
+            if (result) {
+              const codigo = result.getText();
+
+              setModoPesquisa("scan");
+              setPesquisa(codigo);
+              setMensagem(`Código lido: ${codigo}`);
+
+              if (controlsRef.current) {
+                controlsRef.current.stop();
+                controlsRef.current = null;
+              }
+
+              setScannerAberto(false);
+            }
+          },
+        );
+
+        controlsRef.current = controls;
+      } catch (error) {
+        console.error(error);
+        setMensagem("Não foi possível aceder à câmara.");
+        setScannerAberto(false);
+      }
+    }
+
+    iniciarScanner();
+
+    return () => {
+      ativo = false;
+
+      if (controlsRef.current) {
+        controlsRef.current.stop();
+        controlsRef.current = null;
+      }
+
+      if (readerRef.current?.reset) {
+        readerRef.current.reset();
+      }
+    };
+  }, [scannerAberto]);
 
   const artigosPreparados = useMemo(() => {
     return artigos.map((item, index) => ({
@@ -175,18 +251,23 @@ export default function EtiquetasCampanhaExcelPage() {
     }
   }
 
-  function alternarModoScan() {
-    setModoPesquisa((prev) => {
-      const proximo = prev === "scan" ? "manual" : "scan";
+  function abrirScanner() {
+    setModoPesquisa("scan");
+    setScannerAberto(true);
+    setMensagem("A abrir câmara...");
+  }
 
-      setMensagem(
-        proximo === "scan"
-          ? "Modo scan ativado."
-          : "Modo pesquisa manual ativado.",
-      );
+  function fecharScanner() {
+    if (controlsRef.current) {
+      controlsRef.current.stop();
+      controlsRef.current = null;
+    }
 
-      return proximo;
-    });
+    if (readerRef.current?.reset) {
+      readerRef.current.reset();
+    }
+
+    setScannerAberto(false);
   }
 
   return (
@@ -216,19 +297,15 @@ export default function EtiquetasCampanhaExcelPage() {
                   setModoPesquisa("manual");
                   setPesquisa(e.target.value);
                 }}
-                placeholder={
-                  modoPesquisa === "scan"
-                    ? "Modo scan ativo. Em breve: leitura por câmara..."
-                    : "Ex: samsung microondas, máquina lavar, 5601234567890"
-                }
+                placeholder="Ex: samsung microondas, máquina lavar, 5601234567890"
               />
 
               <button
                 type="button"
-                className={`btn-camera ${modoPesquisa === "scan" ? "ativo" : ""}`}
-                onClick={alternarModoScan}
-                aria-label="Ativar pesquisa por câmara"
-                title="Ativar pesquisa por câmara"
+                className="btn-camera"
+                onClick={abrirScanner}
+                aria-label="Abrir scanner"
+                title="Abrir scanner"
               >
                 <span role="img" aria-hidden="true">
                   📷
@@ -360,6 +437,30 @@ export default function EtiquetasCampanhaExcelPage() {
           </div>
         )}
       </div>
+
+      {scannerAberto && (
+        <div className="popup-overlay">
+          <div className="popup-card scanner-card">
+            <div className="popup-header">
+              <h2>Scanner de código de barras</h2>
+              <button
+                type="button"
+                className="popup-close"
+                onClick={fecharScanner}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="scanner-body">
+              <video ref={videoRef} className="scanner-video" />
+              <p className="popup-text">
+                Aponte a câmara para o código de barras do produto.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
