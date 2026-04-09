@@ -912,6 +912,13 @@ button {
   width: 100%;
 }
 
+.input-com-icon {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
 .input-com-icon input {
   width: 100%;
   padding-right: 56px;
@@ -940,10 +947,20 @@ button {
   background: #e5ebf3;
 }
 
-.btn-camera.ativo {
-  background: var(--color-primary-action);
-  border-color: var(--color-primary-action);
-  color: #ffffff;
+.scanner-card {
+  width: min(640px, 100%);
+}
+
+.scanner-body {
+  padding: 20px;
+}
+
+.scanner-video {
+  width: 100%;
+  max-height: 60vh;
+  background: #000;
+  border-radius: 12px;
+  object-fit: cover;
 }
 
 .input-group {
@@ -1632,7 +1649,7 @@ tbody tr:hover {
   color: #111;
   line-height: 1;
   letter-spacing: -1px;
-  text-shadow: 0 1px 0 rgba(0,0,0,0.15);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.15);
 }
 
 .desconto-linha {
