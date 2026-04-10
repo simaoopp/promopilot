@@ -4,6 +4,7 @@ import Sidebar from "./components/Sidebar";
 import EtiquetasPage from "./pages/EtiquetasCampanha";
 import EtiquetasExcelPage from "./pages/EtiquetasCampanhaExcel";
 import Etiquetas from "./pages/Etiquetas";
+import Homepage from "./pages/Homepage";
 import Login from "./pages/Login";
 import ProtectedRoute from "./components/ProtectedRoute";
 import ForcePasswordChangeModal from "./components/ForcePasswordChangeModal";
@@ -19,7 +20,7 @@ export default function App() {
   const { user, loadingAuth } = useAuth();
 
   const rotaInicial = useMemo(() => {
-    return user ? "/EtiquetasCampanha" : "/login";
+    return user ? "/Homepage" : "/login";
   }, [user]);
 
   useEffect(() => {
@@ -60,7 +61,25 @@ export default function App() {
 
         <Route
           path="/login"
-          element={user ? <Navigate to="/EtiquetasCampanha" replace /> : <Login />}
+          element={user ? <Navigate to="/Homepage" replace /> : <Login />}
+        />
+
+        <Route
+          path="/Homepage"
+          element={
+            <ProtectedRoute>
+              <Homepage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/EtiquetasCampanha"
+          element={
+            <ProtectedRoute>
+              <EtiquetasPage />
+            </ProtectedRoute>
+          }
         />
 
         <Route
