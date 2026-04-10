@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { BrowserMultiFormatReader } from "@zxing/browser";
+import { createWorker } from "tesseract.js";
 import artigosData from "../data/artigos.json";
 import "../styles/styles.css";
 
@@ -17,20 +18,61 @@ function normalizarPesquisaLivre(texto) {
   return normalizarTexto(texto).replace(/[^a-z0-9]/g, "");
 }
 
+function extrairMelhorTextoOCR(texto) {
+  const linhas = String(texto || "")
+    .split("\n")
+    .map((linha) => linha.trim())
+    .filter(Boolean);
+
+  const candidatos = [];
+
+  for (const linha of linhas) {
+    const limpo = linha.replace(/\s+/g, " ").trim();
+
+    if (!limpo) continue;
+
+    const matches = limpo.match(/[A-Z0-9][A-Z0-9\-\/\.]{4,}/gi);
+    if (matches) {
+      candidatos.push(...matches);
+    }
+  }
+
+  const unicos = [...new Set(candidatos)].filter((item) => item.length >= 5);
+
+  const comLetrasENumeros = unicos.filter(
+    (item) => /[A-Z]/i.test(item) && /\d/.test(item),
+  );
+
+  if (comLetrasENumeros.length > 0) {
+    return comLetrasENumeros[0];
+  }
+
+  if (unicos.length > 0) {
+    return unicos[0];
+  }
+
+  return linhas[0] || "";
+}
+
 export default function EtiquetasCampanhaExcelPage() {
   const [modoPesquisa, setModoPesquisa] = useState("manual");
   const [pesquisa, setPesquisa] = useState("");
   const [pesquisaDebounced, setPesquisaDebounced] = useState("");
   const [selecionados, setSelecionados] = useState({});
   const [mensagem, setMensagem] = useState("");
+
+  const [menuScanAberto, setMenuScanAberto] = useState(false);
   const [scannerAberto, setScannerAberto] = useState(false);
+  const [aLerOCR, setALerOCR] = useState(false);
 
   const [resultadoScan, setResultadoScan] = useState(null);
   const [codigoLidoPopup, setCodigoLidoPopup] = useState("");
 
   const videoRef = useRef(null);
+  const fileInputRef = useRef(null);
   const readerRef = useRef(null);
   const controlsRef = useRef(null);
+  const ocrWorkerRef = useRef(null);
 
   const artigos = artigosData?.artigos || [];
 
@@ -71,7 +113,7 @@ export default function EtiquetasCampanhaExcelPage() {
         controlsRef.current.stop();
       }
     } catch (error) {
-      console.error("Erro ao parar controls do scanner:", error);
+      console.error("Erro ao parar scanner:", error);
     } finally {
       controlsRef.current = null;
     }
@@ -85,19 +127,13 @@ export default function EtiquetasCampanhaExcelPage() {
     }
   }
 
-  function procurarArtigoPorCodigoLido(codigo) {
-    const codigoNormalizado = normalizarPesquisaLivre(codigo);
+  function abrirResultado(codigoOuTexto, itemEncontrado) {
+    setCodigoLidoPopup(codigoOuTexto);
 
-    const encontrado = artigosPreparados.find(
-      (item) => item.codigoBarrasTexto === codigoNormalizado,
-    );
-
-    setCodigoLidoPopup(codigo);
-
-    if (encontrado) {
+    if (itemEncontrado) {
       setResultadoScan({
         encontrado: true,
-        item: encontrado,
+        item: itemEncontrado,
       });
     } else {
       setResultadoScan({
@@ -105,6 +141,29 @@ export default function EtiquetasCampanhaExcelPage() {
         item: null,
       });
     }
+  }
+
+  function procurarArtigoPorCodigoBarras(codigo) {
+    const codigoNormalizado = normalizarPesquisaLivre(codigo);
+
+    const encontrado = artigosPreparados.find(
+      (item) => item.codigoBarrasTexto === codigoNormalizado,
+    );
+
+    abrirResultado(codigo, encontrado || null);
+  }
+
+  function procurarArtigoPorTextoOCR(texto) {
+    const termoNormalizado = normalizarTexto(texto);
+    const termoLivre = normalizarPesquisaLivre(texto);
+
+    const encontrado = artigosPreparados.find(
+      (item) =>
+        item.descricaoPesquisaLivre.includes(termoLivre) ||
+        item.descricaoNormalizada.includes(termoNormalizado),
+    );
+
+    abrirResultado(texto, encontrado || null);
   }
 
   useEffect(() => {
@@ -144,7 +203,7 @@ export default function EtiquetasCampanhaExcelPage() {
               setPesquisa(codigo);
               setMensagem(`Código lido: ${codigo}`);
 
-              procurarArtigoPorCodigoLido(codigo);
+              procurarArtigoPorCodigoBarras(codigo);
 
               pararScanner();
               setScannerAberto(false);
@@ -234,13 +293,15 @@ export default function EtiquetasCampanhaExcelPage() {
     });
   }, [pesquisaDebounced, artigosPreparados, modoPesquisa]);
 
-  const resultadosVisiveis = useMemo(() => {
-    return resultados.slice(0, LIMITE_RESULTADOS);
-  }, [resultados]);
+  const resultadosVisiveis = useMemo(
+    () => resultados.slice(0, LIMITE_RESULTADOS),
+    [resultados],
+  );
 
-  const artigosSelecionados = useMemo(() => {
-    return artigosPreparados.filter((item) => selecionados[item._id]);
-  }, [artigosPreparados, selecionados]);
+  const artigosSelecionados = useMemo(
+    () => artigosPreparados.filter((item) => selecionados[item._id]),
+    [artigosPreparados, selecionados],
+  );
 
   function alternarSelecionado(id) {
     setSelecionados((prev) => ({
@@ -288,10 +349,6 @@ export default function EtiquetasCampanhaExcelPage() {
     ].join("|");
 
     try {
-      if (!navigator.clipboard?.writeText) {
-        throw new Error("Clipboard API não suportada.");
-      }
-
       await navigator.clipboard.writeText(texto);
       setMensagem("Códigos copiados com sucesso.");
     } catch {
@@ -299,10 +356,16 @@ export default function EtiquetasCampanhaExcelPage() {
     }
   }
 
-  function abrirScanner() {
+  function abrirScannerCodigoBarras() {
+    setMenuScanAberto(false);
     setModoPesquisa("scan");
     setScannerAberto(true);
     setMensagem("A abrir câmara...");
+  }
+
+  function abrirOCR() {
+    setMenuScanAberto(false);
+    fileInputRef.current?.click();
   }
 
   function fecharScanner() {
@@ -326,6 +389,63 @@ export default function EtiquetasCampanhaExcelPage() {
     setMensagem("Artigo selecionado com sucesso.");
     fecharResultadoScan();
   }
+
+  async function handleImagemOCR(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setALerOCR(true);
+      setModoPesquisa("scan");
+      setMensagem("A ler texto da imagem...");
+
+      if (!ocrWorkerRef.current) {
+        ocrWorkerRef.current = await createWorker("eng");
+      }
+
+      const {
+        data: { text },
+      } = await ocrWorkerRef.current.recognize(file);
+
+      const melhorTexto = extrairMelhorTextoOCR(text);
+
+      if (!melhorTexto) {
+        setMensagem("Não foi possível ler texto da imagem.");
+        abrirResultado("Sem texto legível", null);
+        return;
+      }
+
+      setPesquisa(melhorTexto);
+      setMensagem(`Modelo lido: ${melhorTexto}`);
+      procurarArtigoPorTextoOCR(melhorTexto);
+    } catch (error) {
+      console.error(error);
+      setMensagem("Erro ao ler a imagem.");
+      abrirResultado("Erro OCR", null);
+    } finally {
+      setALerOCR(false);
+      event.target.value = "";
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      pararScanner();
+
+      async function terminarOCR() {
+        try {
+          if (ocrWorkerRef.current) {
+            await ocrWorkerRef.current.terminate();
+            ocrWorkerRef.current = null;
+          }
+        } catch (error) {
+          console.error("Erro ao terminar OCR:", error);
+        }
+      }
+
+      terminarOCR();
+    };
+  }, []);
 
   return (
     <div className="page-content">
@@ -360,15 +480,24 @@ export default function EtiquetasCampanhaExcelPage() {
               <button
                 type="button"
                 className="btn-camera"
-                onClick={abrirScanner}
-                aria-label="Abrir scanner"
-                title="Abrir scanner"
+                onClick={() => setMenuScanAberto(true)}
+                aria-label="Abrir opções de scan"
+                title="Abrir opções de scan"
               >
                 <span role="img" aria-hidden="true">
                   📷
                 </span>
               </button>
             </div>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handleImagemOCR}
+              style={{ display: "none" }}
+            />
           </label>
         </div>
 
@@ -495,6 +624,41 @@ export default function EtiquetasCampanhaExcelPage() {
         )}
       </div>
 
+      {menuScanAberto && (
+        <div className="popup-overlay">
+          <div className="popup-card scan-options-card">
+            <div className="popup-header">
+              <h2>Escolher tipo de leitura</h2>
+              <button
+                type="button"
+                className="popup-close"
+                onClick={() => setMenuScanAberto(false)}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="popup-actions">
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={abrirScannerCodigoBarras}
+              >
+                Ler código de barras
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={abrirOCR}
+              >
+                Ler texto / descrição
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {scannerAberto && (
         <div className="popup-overlay">
           <div className="popup-card scanner-card">
@@ -519,6 +683,22 @@ export default function EtiquetasCampanhaExcelPage() {
         </div>
       )}
 
+      {aLerOCR && (
+        <div className="popup-overlay">
+          <div className="popup-card scan-options-card">
+            <div className="popup-header">
+              <h2>A ler imagem</h2>
+            </div>
+
+            <div className="scanner-result-body">
+              <p className="popup-text">
+                A analisar texto da imagem. Aguarde um momento.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {resultadoScan && (
         <div className="popup-overlay">
           <div className="popup-card">
@@ -535,7 +715,7 @@ export default function EtiquetasCampanhaExcelPage() {
 
             <div className="scanner-result-body">
               <p className="popup-text">
-                <strong>Código lido:</strong> {codigoLidoPopup}
+                <strong>Lido:</strong> {codigoLidoPopup}
               </p>
 
               {resultadoScan.encontrado ? (
@@ -587,7 +767,7 @@ export default function EtiquetasCampanhaExcelPage() {
               ) : (
                 <>
                   <p className="popup-text">
-                    Não foi encontrado nenhum artigo para este código de barras.
+                    Não foi encontrado nenhum artigo para o valor lido.
                   </p>
 
                   <div className="popup-actions">

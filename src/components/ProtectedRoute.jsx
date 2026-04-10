@@ -14,16 +14,13 @@ function LoadingScreen() {
 export default function ProtectedRoute({ children }) {
   const { user, loadingAuth } = useAuth();
 
-  // 🔄 Enquanto verifica autenticação
   if (loadingAuth) {
     return <LoadingScreen />;
   }
 
-  // 🚫 Não autenticado → redireciona
   if (!user) {
     return <Navigate to="/login" replace />;
   }
 
-  // ✅ Autenticado → mostra conteúdo
   return children;
 }

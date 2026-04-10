@@ -16,7 +16,6 @@ export default function Sidebar({
 
   const rotaEtiquetasAtiva = useMemo(() => {
     return (
-      location.pathname === "/" ||
       location.pathname === "/Etiquetas" ||
       location.pathname === "/EtiquetasCampanha" ||
       location.pathname === "/EtiquetasCampanhaExcel"
@@ -54,10 +53,8 @@ export default function Sidebar({
   }
 
   function isActive(path) {
-    if (path === "/EtiquetasCampanha") {
-      return (
-        location.pathname === "/EtiquetasCampanha" || location.pathname === "/"
-      );
+    if (path === "/Homepage") {
+      return location.pathname === "/Homepage" || location.pathname === "/";
     }
 
     return location.pathname === path;
@@ -106,6 +103,7 @@ export default function Sidebar({
       >
         <div className="sidebar-header">
           <img src={logo} alt="Expert" className="logo-sidebar" />
+
           <button
             type="button"
             className="close-sidebar"
@@ -117,6 +115,14 @@ export default function Sidebar({
         </div>
 
         <div className="sidebar-body">
+          <Link
+            to="/Homepage"
+            className={`sidebar-link ${isActive("/Homepage") ? "active" : ""}`}
+            onClick={fecharTudo}
+          >
+            <span>Início</span>
+          </Link>
+
           <button
             type="button"
             className="sidebar-link"
@@ -132,7 +138,6 @@ export default function Sidebar({
 
           {submenuEtiquetasAberto && (
             <div id="submenu-etiquetas" className="sidebar-submenu">
-
               <Link
                 to="/Etiquetas"
                 className={`sidebar-sublink ${
