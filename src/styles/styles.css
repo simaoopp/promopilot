@@ -40,8 +40,8 @@
 }
 
 /* =========================================================
-   02. RESET / BASE
-   ========================================================= */
+     02. RESET / BASE
+     ========================================================= */
 *,
 *::before,
 *::after {
@@ -79,9 +79,9 @@ button {
 }
 
 .app {
+  min-height: 100vh;
   margin: 0;
   padding: 0;
-  min-height: 100vh;
 }
 
 .app-login {
@@ -92,8 +92,8 @@ button {
 }
 
 /* =========================================================
-   03. SPLASH / LOADING
-   ========================================================= */
+     03. SPLASH / LOADING
+     ========================================================= */
 .splash-screen {
   position: fixed;
   inset: 0;
@@ -116,20 +116,20 @@ button {
 }
 
 .splash-loader {
+  position: relative;
   width: 60%;
   max-width: 300px;
   height: 8px;
   background: rgba(255, 255, 255, 0.16);
   border-radius: 999px;
   overflow: hidden;
-  position: relative;
 }
 
 .splash-loader::before {
   content: "";
   position: absolute;
-  left: -35%;
   top: 0;
+  left: -35%;
   width: 35%;
   height: 100%;
   border-radius: 999px;
@@ -147,9 +147,8 @@ button {
 }
 
 /* =========================================================
-   03. LOGIN
-   ========================================================= */
-
+     04. HOME / AI POPUP PRO
+     ========================================================= */
 .ai-popup-card-pro {
   width: min(1100px, 96vw);
   max-height: 90vh;
@@ -170,12 +169,12 @@ button {
 }
 
 .popup-eyebrow {
+  margin-bottom: 6px;
   font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: #6b7280;
-  margin-bottom: 6px;
 }
 
 .popup-subtitle {
@@ -262,9 +261,9 @@ button {
 
 .tech-spec-label {
   display: block;
+  margin-bottom: 6px;
   font-size: 12px;
   color: #6b7280;
-  margin-bottom: 6px;
 }
 
 .tech-spec-value {
@@ -301,26 +300,14 @@ button {
   padding: 3px 8px;
   border-radius: 999px;
   background: #111827;
-  color: white;
+  color: #ffffff;
   font-size: 11px;
   font-weight: 700;
 }
 
 .empty-state-text {
-  color: #6b7280;
   margin: 0;
-}
-
-@media (max-width: 900px) {
-  .popup-grid-pro,
-  .tech-specs-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .ai-popup-card-pro {
-    width: min(96vw, 96vw);
-    max-height: 92vh;
-  }
+  color: #6b7280;
 }
 
 .home-hero {
@@ -338,9 +325,9 @@ button {
 
 .home-search-wrap {
   display: flex;
+  align-items: center;
   gap: 12px;
   margin-top: 18px;
-  align-items: center;
 }
 
 .home-search-input {
@@ -367,9 +354,9 @@ button {
 }
 
 .home-search-suggestions {
-  margin-top: 14px;
   display: grid;
   gap: 10px;
+  margin-top: 14px;
 }
 
 .home-suggestion-item {
@@ -387,8 +374,8 @@ button {
 
 .home-suggestion-item strong {
   display: block;
-  color: var(--color-text);
   margin-bottom: 4px;
+  color: var(--color-text);
 }
 
 .home-suggestion-item span {
@@ -414,10 +401,7 @@ button {
   align-items: flex-start;
   gap: 14px;
   text-align: left;
-  transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease,
-    border-color 0.2s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 .home-card:hover {
@@ -472,28 +456,9 @@ button {
   gap: 12px;
 }
 
-@media (max-width: 700px) {
-  .home-search-wrap {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .home-search-btn {
-    width: 100%;
-  }
-
-  .home-actions-row {
-    flex-direction: column;
-  }
-
-  .home-actions-row .btn {
-    width: 100%;
-  }
-}
-
 /* =========================================================
-   04. LOGIN
-   ========================================================= */
+     05. LOGIN
+     ========================================================= */
 .login-page {
   position: fixed;
   inset: 0;
@@ -547,12 +512,8 @@ button {
   overflow: hidden;
   border-radius: var(--radius-3xl);
   padding: 34px 28px 26px;
-  box-shadow:
-    0 20px 60px rgba(107, 39, 0, 0.3),
-    0 8px 20px rgba(0, 0, 0, 0.12);
-  animation:
-    loginEnter 0.8s ease,
-    cardFloat 5s ease-in-out infinite 0.8s;
+  box-shadow: 0 20px 60px rgba(107, 39, 0, 0.3), 0 8px 20px rgba(0, 0, 0, 0.12);
+  animation: loginEnter 0.8s ease, cardFloat 5s ease-in-out infinite 0.8s;
 }
 
 .login-card-glow {
@@ -620,9 +581,9 @@ button {
 }
 
 .login-form label {
-  color: #fff;
-  font-size: 15px;
   margin: 10px 0 7px;
+  color: #ffffff;
+  font-size: 15px;
   font-weight: 700;
 }
 
@@ -636,17 +597,13 @@ button {
   background: rgba(255, 255, 255, 0.94);
   color: #422100;
   outline: none;
-  transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease,
-    background 0.2s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 
 .login-form input:focus {
   transform: translateY(-1px);
   background: #ffffff;
-  box-shadow:
-    0 0 0 3px rgba(255, 255, 255, 0.18),
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.18),
     0 10px 24px rgba(0, 0, 0, 0.08);
 }
 
@@ -704,16 +661,12 @@ button {
     var(--color-primary) 0%,
     var(--color-primary-dark) 100%
   );
-  color: white;
+  color: #ffffff;
   font-size: 18px;
   font-weight: 800;
-  box-shadow:
-    0 12px 30px rgba(236, 103, 7, 0.4),
+  box-shadow: 0 12px 30px rgba(236, 103, 7, 0.4),
     inset 0 1px 0 rgba(255, 255, 255, 0.18);
-  transition:
-    transform 0.18s ease,
-    box-shadow 0.18s ease,
-    opacity 0.18s ease;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
 }
 
 .login-submit span {
@@ -740,8 +693,7 @@ button {
 
 .login-submit:hover {
   transform: translateY(-2px) scale(1.01);
-  box-shadow:
-    0 16px 38px rgba(236, 103, 7, 0.48),
+  box-shadow: 0 16px 38px rgba(236, 103, 7, 0.48),
     inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
@@ -807,8 +759,7 @@ button {
     rgba(255, 208, 158, 0.95),
     rgba(236, 103, 7, 0.74)
   );
-  box-shadow:
-    inset 0 10px 24px rgba(255, 255, 255, 0.24),
+  box-shadow: inset 0 10px 24px rgba(255, 255, 255, 0.24),
     0 16px 28px rgba(0, 0, 0, 0.12);
 }
 
@@ -1012,8 +963,8 @@ button {
 }
 
 /* =========================================================
-   05. TOPBAR / SIDEBAR
-   ========================================================= */
+     06. TOPBAR / SIDEBAR
+     ========================================================= */
 .topbar-site {
   position: sticky;
   top: 0;
@@ -1028,14 +979,14 @@ button {
 }
 
 .menu-button {
+  width: 34px;
+  height: 34px;
   border: none;
   background: transparent;
-  color: white;
+  color: #ffffff;
   font-size: 30px;
   line-height: 1;
   padding: 0;
-  width: 34px;
-  height: 34px;
 }
 
 .logo-topbar {
@@ -1046,7 +997,7 @@ button {
 }
 
 .topbar-title {
-  color: white;
+  color: #ffffff;
   font-size: 20px;
   font-weight: 800;
   letter-spacing: 0.2px;
@@ -1108,7 +1059,7 @@ button {
 .close-sidebar {
   border: none;
   background: transparent;
-  color: white;
+  color: #ffffff;
   font-size: 34px;
   line-height: 1;
   padding: 0;
@@ -1181,8 +1132,8 @@ button {
 }
 
 /* =========================================================
-   06. PÁGINAS / CARDS / FORMULÁRIOS
-   ========================================================= */
+     07. PÁGINAS / CARDS / FORMULÁRIOS
+     ========================================================= */
 .page-content {
   max-width: 1450px;
   margin: 18px auto 0;
@@ -1250,62 +1201,61 @@ button {
   margin-bottom: 18px;
 }
 
-.input-com-icon {
-  position: relative;
+.input-group {
   display: flex;
-  align-items: center;
-  width: 100%;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.input-com-icon {
-  position: relative;
-  display: flex;
-  align-items: center;
-  width: 100%;
+.input-group span {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text-soft);
 }
 
-.input-com-icon input {
+.input-group input[type="text"],
+.input-group input[type="number"],
+.input-group input[type="file"],
+.input-group select,
+.paste-box {
   width: 100%;
-  padding-right: 56px;
-}
-
-.btn-camera {
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 40px;
-  height: 40px;
+  padding: 12px 14px;
   border: 1px solid var(--color-input-border);
-  border-radius: 12px;
-  background: #eef2f7;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  font-size: 14px;
+  color: var(--color-text);
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.input-group input[type="text"]:focus,
+.input-group input[type="number"]:focus,
+.input-group input[type="file"]:focus,
+.input-group select:focus,
+.paste-box:focus {
+  border-color: var(--color-primary-action);
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+}
+
+.paste-box {
+  min-height: 180px;
+  resize: vertical;
+}
+
+.ano-formato-row {
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  line-height: 1;
-  transition: 0.2s ease;
-  padding: 0;
+  gap: 10px;
 }
 
-.btn-camera:hover {
-  background: #e5ebf3;
+.ano-formato-row input {
+  flex: 1;
 }
 
-.scanner-card {
-  width: min(640px, 100%);
-}
-
-.scanner-body {
-  padding: 20px;
-}
-
-.scanner-video {
-  width: 100%;
-  max-height: 60vh;
-  background: #000;
-  border-radius: 12px;
-  object-fit: cover;
+.formato-btn {
+  min-width: 120px;
+  white-space: nowrap;
 }
 
 .input-com-icon {
@@ -1355,7 +1305,7 @@ button {
   width: 100%;
   min-height: 320px;
   max-height: 60vh;
-  background: #000;
+  background: #000000;
   border-radius: 12px;
   object-fit: cover;
 }
@@ -1381,66 +1331,9 @@ button {
   margin-bottom: 0;
 }
 
-.input-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.input-group span {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--color-text-soft);
-}
-
-.input-group input[type="text"],
-.input-group input[type="number"],
-.input-group input[type="file"],
-.input-group select,
-.paste-box {
-  width: 100%;
-  padding: 12px 14px;
-  border: 1px solid var(--color-input-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  font-size: 14px;
-  color: var(--color-text);
-  outline: none;
-  transition: all 0.2s ease;
-}
-
-.input-group input[type="text"]:focus,
-.input-group input[type="number"]:focus,
-.input-group input[type="file"]:focus,
-.input-group select:focus,
-.paste-box:focus {
-  border-color: var(--color-primary-action);
-  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
-}
-
-.paste-box {
-  min-height: 180px;
-  resize: vertical;
-}
-
-.ano-formato-row {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
-.ano-formato-row input {
-  flex: 1;
-}
-
-.formato-btn {
-  white-space: nowrap;
-  min-width: 120px;
-}
-
 /* =========================================================
-   07. BOTÕES / RESUMOS
-   ========================================================= */
+     08. BOTÕES / RESUMOS
+     ========================================================= */
 .toolbar-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1504,10 +1397,10 @@ button {
   display: flex;
   flex-wrap: wrap;
   gap: 18px;
+  margin-top: 18px;
   font-size: 14px;
   font-weight: 700;
   color: #4b5563;
-  margin-top: 18px;
 }
 
 .resumo span {
@@ -1533,9 +1426,9 @@ button {
 
 .resumo-label {
   display: block;
+  margin-bottom: 8px;
   font-size: 12px;
   color: var(--color-text-muted);
-  margin-bottom: 8px;
 }
 
 .resumo-card strong {
@@ -1544,8 +1437,8 @@ button {
 }
 
 /* =========================================================
-   08. FILTROS / TABELAS
-   ========================================================= */
+     09. FILTROS / TABELAS
+     ========================================================= */
 .filter-th {
   position: relative;
   min-width: 120px;
@@ -1642,12 +1535,12 @@ td {
 }
 
 th {
-  background: var(--color-surface-soft);
-  font-weight: 800;
-  color: #334155;
   position: sticky;
   top: 0;
   z-index: 1;
+  background: var(--color-surface-soft);
+  font-weight: 800;
+  color: #334155;
 }
 
 tbody tr {
@@ -1675,8 +1568,8 @@ tbody tr:hover {
 }
 
 /* =========================================================
-   09. POPUPS / MODAIS
-   ========================================================= */
+     10. POPUPS / MODAIS
+     ========================================================= */
 .popup-overlay {
   position: fixed;
   inset: 0;
@@ -1741,6 +1634,120 @@ tbody tr:hover {
   overflow: auto;
 }
 
+/* popup criar campanha */
+.popup-card-campanha {
+  width: min(900px, 96vw);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.campanha-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.campanha-sugestoes {
+  display: grid;
+  gap: 10px;
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.campanha-sugestao {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+  border: 1px solid #dbe2ea;
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.campanha-sugestao:hover {
+  border-color: #2563eb;
+  background: #f8fbff;
+}
+
+.campanha-sugestao.ativa {
+  border-color: #2563eb;
+  background: #eff6ff;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.08);
+}
+
+.campanha-sugestao strong {
+  color: #0f172a;
+}
+
+.campanha-sugestao span {
+  color: #334155;
+}
+
+.campanha-sugestao small {
+  color: #64748b;
+}
+
+.campanha-resumo {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.campanha-resumo-item {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.campanha-resumo-item-full {
+  grid-column: 1 / -1;
+}
+
+.campanha-resumo-item span,
+.campanha-desconto-box span {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.campanha-resumo-item strong,
+.campanha-desconto-box strong {
+  color: #0f172a;
+}
+
+.campanha-precos-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  align-items: end;
+}
+
+.campanha-desconto-box {
+  min-height: 72px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background: linear-gradient(135deg, #eff6ff, #f8fafc);
+  border: 1px solid #bfdbfe;
+  border-radius: 14px;
+  padding: 14px 16px;
+}
+
+.campanha-desconto-box strong {
+  font-size: 24px;
+  font-weight: 800;
+  color: #1d4ed8;
+}
+
+/* força alteração password */
 .force-password-overlay {
   position: fixed;
   inset: 0;
@@ -1800,9 +1807,9 @@ tbody tr:hover {
 }
 
 .force-password-rules {
+  margin-top: 2px;
   font-size: 13px;
   color: var(--color-text-muted);
-  margin-top: 2px;
 }
 
 .force-password-error {
@@ -1830,8 +1837,8 @@ tbody tr:hover {
 }
 
 /* =========================================================
-   10. ETIQUETAS / IMPRESSÃO
-   ========================================================= */
+     11. ETIQUETAS / IMPRESSÃO
+     ========================================================= */
 .print-area {
   width: 210mm;
   margin: 24px auto 0;
@@ -1927,7 +1934,7 @@ tbody tr:hover {
   width: 148.5mm;
   height: 210mm;
   padding: 10mm;
-  background: #fff;
+  background: #ffffff;
   overflow: hidden;
   position: relative;
 }
@@ -1938,7 +1945,7 @@ tbody tr:hover {
   transform: rotate(90deg) scale(0.998);
   transform-origin: center center;
   overflow: hidden;
-  background: #fff;
+  background: #ffffff;
   flex: 0 0 auto;
 }
 
@@ -1985,7 +1992,7 @@ tbody tr:hover {
 
 .codigo {
   font-size: 11px;
-  color: #666;
+  color: #666666;
   margin-bottom: 6px;
 }
 
@@ -1998,25 +2005,16 @@ tbody tr:hover {
 }
 
 .descricao {
+  min-height: 60px;
+  padding: 0 8px;
   font-weight: 800;
   line-height: 1.15;
   text-transform: uppercase;
-  min-height: 60px;
   text-align: center;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  padding: 0 8px;
-}
-
-.precos {
-  position: absolute;
-  top: 52%;
-  left: 16px;
-  right: 16px;
-  transform: translateY(-50%);
-  text-align: center;
 }
 
 .precos {
@@ -2049,7 +2047,7 @@ tbody tr:hover {
 .antes {
   font-weight: 800;
   text-decoration: line-through;
-  color: #111;
+  color: #111111;
   line-height: 1;
   opacity: 0.8;
 }
@@ -2064,7 +2062,7 @@ tbody tr:hover {
 
 .atual {
   font-weight: 900;
-  color: #111;
+  color: #111111;
   line-height: 1;
   letter-spacing: -1px;
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.15);
@@ -2096,11 +2094,11 @@ tbody tr:hover {
 
 .validade {
   width: 100%;
+  margin-top: 2px;
   text-align: center;
   font-size: 11px;
   font-weight: 700;
   line-height: 1.2;
-  margin-top: 2px;
   display: block;
   white-space: normal;
   word-break: break-word;
@@ -2108,11 +2106,11 @@ tbody tr:hover {
 
 .nota {
   width: 100%;
+  margin-top: 4px;
   text-align: center;
   font-size: 10px;
-  color: #444;
+  color: #444444;
   line-height: 1.15;
-  margin-top: 4px;
   display: block;
   white-space: normal;
 }
@@ -2122,19 +2120,11 @@ tbody tr:hover {
 }
 
 .label.label-a5 .content {
+  height: 100%;
+  box-sizing: border-box;
   padding: 20px 24px 18px;
   display: grid;
   grid-template-rows: auto 1fr auto;
-  height: 100%;
-  box-sizing: border-box;
-}
-
-.label.label-a5 .content {
-  padding: 20px 24px 18px;
-  display: grid;
-  grid-template-rows: auto 1fr auto;
-  height: 100%;
-  box-sizing: border-box;
 }
 
 .label.label-a5 .codigo {
@@ -2154,9 +2144,9 @@ tbody tr:hover {
 
 .label.label-a5 .topo {
   position: static;
+  top: auto;
   left: auto;
   right: auto;
-  top: auto;
 }
 
 .label.label-a5 .antes {
@@ -2177,11 +2167,8 @@ tbody tr:hover {
   left: 24px;
   right: 24px;
   bottom: 18px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
   gap: 6px;
-  background: #fff;
+  background: #ffffff;
 }
 
 .label.label-a5 .rodape svg {
@@ -2192,21 +2179,28 @@ tbody tr:hover {
 .label.label-a5 .validade {
   font-size: 14px;
   line-height: 1.2;
-  margin-top: 2px;
-  white-space: normal;
-  word-break: break-word;
 }
 
 .label.label-a5 .nota {
   font-size: 12px;
   line-height: 1.15;
-  margin-top: 4px;
-  white-space: normal;
 }
 
 /* =========================================================
-   11. RESPONSIVE
-   ========================================================= */
+     12. RESPONSIVE
+     ========================================================= */
+@media (max-width: 900px) {
+  .popup-grid-pro,
+  .tech-specs-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ai-popup-card-pro {
+    width: min(96vw, 96vw);
+    max-height: 92vh;
+  }
+}
+
 @media (max-width: 768px) {
   .login-card {
     width: min(420px, calc(100vw - 24px));
@@ -2233,9 +2227,31 @@ tbody tr:hover {
   .shape-pill-3 {
     opacity: 0.35;
   }
+
+  .campanha-resumo,
+  .campanha-precos-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 700px) {
+  .home-search-wrap {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .home-search-btn {
+    width: 100%;
+  }
+
+  .home-actions-row {
+    flex-direction: column;
+  }
+
+  .home-actions-row .btn {
+    width: 100%;
+  }
+
   .page-content {
     padding: 0 12px 12px;
   }
@@ -2324,8 +2340,8 @@ tbody tr:hover {
 }
 
 /* =========================================================
-   12. PRINT
-   ========================================================= */
+     13. PRINT
+     ========================================================= */
 @page {
   size: A4;
   margin: 0;

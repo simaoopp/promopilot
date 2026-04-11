@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import Barcode from "../components/Barcode";
 import FilterMenu from "../components/FilterMenu";
 import logo from "../logo.png";
+import artigosData from "../data/artigos.json";
 import "../styles/styles.css";
 
 import { formatarEuro } from "../utils/formatters";
@@ -76,15 +77,43 @@ function PrecoAtualAuto({ valor, formatoEtiqueta }) {
   );
 }
 
+function normalizarTexto(texto) {
+  return String(texto || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function converterPreco(valor) {
+  const texto = String(valor || "")
+    .replace(/\s/g, "")
+    .replace(",", ".")
+    .trim();
+
+  const numero = Number(texto);
+  return Number.isFinite(numero) ? numero : 0;
+}
+
 export default function EtiquetasPage() {
   const [titulo, setTitulo] = useState("PROMO");
   const [textoColado, setTextoColado] = useState("");
   const [anoValidade, setAnoValidade] = useState(new Date().getFullYear());
   const [dados, setDados] = useState([]);
   const [formatoEtiqueta, setFormatoEtiqueta] = useState("a6");
+
   const [popupArtigosInvalidosAberto, setPopupArtigosInvalidosAberto] =
     useState(false);
   const [artigosInvalidosPopup, setArtigosInvalidosPopup] = useState([]);
+
+  const [popupCriarCampanhaAberto, setPopupCriarCampanhaAberto] =
+    useState(false);
+  const [pesquisaCampanha, setPesquisaCampanha] = useState("");
+  const [artigoCampanhaSelecionado, setArtigoCampanhaSelecionado] =
+    useState(null);
+  const [campanhaAntes, setCampanhaAntes] = useState("");
+  const [campanhaAtual, setCampanhaAtual] = useState("");
+
   const [filtroAberto, setFiltroAberto] = useState(null);
   const [ordenacao, setOrdenacao] = useState({
     coluna: "",
@@ -104,6 +133,8 @@ export default function EtiquetasPage() {
     a1e: { op: "", valor: "" },
   });
 
+  const artigosJson = artigosData?.artigos || [];
+
   useEffect(() => {
     function handleClickOutside(event) {
       const clicouDentroDeFiltro = event.target.closest(".filter-th");
@@ -118,13 +149,96 @@ export default function EtiquetasPage() {
     };
   }, []);
 
+  const sugestoesCampanha = useMemo(() => {
+    const termo = normalizarTexto(pesquisaCampanha);
+
+    if (termo.length < 2) return [];
+
+    return artigosJson
+      .filter((item) => {
+        const artigo = normalizarTexto(item.artigo);
+        const descricao = normalizarTexto(item.descricao);
+        const ean = normalizarTexto(item.codigoBarras);
+
+        return (
+          artigo.includes(termo) ||
+          descricao.includes(termo) ||
+          ean.includes(termo)
+        );
+      })
+      .slice(0, 10);
+  }, [pesquisaCampanha, artigosJson]);
+
+  const descontoCampanha = useMemo(() => {
+    const antes = converterPreco(campanhaAntes);
+    const atual = converterPreco(campanhaAtual);
+    return Math.max(0, antes - atual);
+  }, [campanhaAntes, campanhaAtual]);
+
+  function abrirPopupCriarCampanha() {
+    setPopupCriarCampanhaAberto(true);
+    setPesquisaCampanha("");
+    setArtigoCampanhaSelecionado(null);
+    setCampanhaAntes("");
+    setCampanhaAtual("");
+  }
+
+  function fecharPopupCriarCampanha() {
+    setPopupCriarCampanhaAberto(false);
+    setPesquisaCampanha("");
+    setArtigoCampanhaSelecionado(null);
+    setCampanhaAntes("");
+    setCampanhaAtual("");
+  }
+
+  function adicionarArtigoCampanha() {
+    if (!artigoCampanhaSelecionado) {
+      alert("Seleciona um artigo.");
+      return;
+    }
+
+    const antes = converterPreco(campanhaAntes);
+    const atual = converterPreco(campanhaAtual);
+
+    if (antes <= 0 || atual <= 0) {
+      alert("Preenche os valores de PVP2 antes e PVP2 atual.");
+      return;
+    }
+
+    const novoItem = {
+      id: `${artigoCampanhaSelecionado.artigo}-${Date.now()}`,
+      codigo: artigoCampanhaSelecionado.artigo || "",
+      descricao: artigoCampanhaSelecionado.descricao || "",
+      pn: "",
+      ean: artigoCampanhaSelecionado.codigoBarras || "",
+      antes,
+      atual,
+      pv3: "",
+      estado: "",
+      ae: artigoCampanhaSelecionado.stock || "",
+      aea: "",
+      aev: "",
+      a10: "",
+      a1e: "",
+      data: "",
+      dataInicio: "",
+      dataFim: "",
+      alterado: "CAMPANHA",
+      info: `Desconto ${formatarEuro(descontoCampanha)}€`,
+      selecionado: true,
+    };
+
+    setDados((prev) => [novoItem, ...prev]);
+    fecharPopupCriarCampanha();
+  }
+
   function removerInvalidosDaSelecao() {
     const idsInvalidos = new Set(artigosInvalidosPopup.map((item) => item.id));
 
     setDados((prev) =>
       prev.map((item) =>
-        idsInvalidos.has(item.id) ? { ...item, selecionado: false } : item,
-      ),
+        idsInvalidos.has(item.id) ? { ...item, selecionado: false } : item
+      )
     );
   }
 
@@ -221,7 +335,7 @@ export default function EtiquetasPage() {
       }
 
       setDados(linhas);
-    } catch (error) {
+    } catch {
       alert("Verifique se os dados inseridos estão corretos.");
     }
   }
@@ -264,8 +378,8 @@ export default function EtiquetasPage() {
   function alternarSelecionado(id) {
     setDados((prev) =>
       prev.map((item) =>
-        item.id === id ? { ...item, selecionado: !item.selecionado } : item,
-      ),
+        item.id === id ? { ...item, selecionado: !item.selecionado } : item
+      )
     );
   }
 
@@ -274,8 +388,8 @@ export default function EtiquetasPage() {
 
     setDados((prev) =>
       prev.map((item) =>
-        ids.has(item.id) ? { ...item, selecionado: true } : item,
-      ),
+        ids.has(item.id) ? { ...item, selecionado: true } : item
+      )
     );
   }
 
@@ -284,8 +398,8 @@ export default function EtiquetasPage() {
 
     setDados((prev) =>
       prev.map((item) =>
-        ids.has(item.id) ? { ...item, selecionado: false } : item,
-      ),
+        ids.has(item.id) ? { ...item, selecionado: false } : item
+      )
     );
   }
 
@@ -309,7 +423,7 @@ export default function EtiquetasPage() {
 
     const idsInvalidos = new Set(artigosInvalidosPopup.map((item) => item.id));
     const restantesValidos = selecionados.filter(
-      (item) => !idsInvalidos.has(item.id),
+      (item) => !idsInvalidos.has(item.id)
     );
 
     removerInvalidosDaSelecao();
@@ -328,7 +442,7 @@ export default function EtiquetasPage() {
   function fecharPopupEProsseguir() {
     const idsInvalidos = new Set(artigosInvalidosPopup.map((item) => item.id));
     const restantesValidos = selecionados.filter(
-      (item) => !idsInvalidos.has(item.id),
+      (item) => !idsInvalidos.has(item.id)
     );
 
     removerInvalidosDaSelecao();
@@ -351,7 +465,7 @@ export default function EtiquetasPage() {
     }
 
     const invalidos = selecionados.filter(
-      (item) => Number(item.antes) <= Number(item.atual),
+      (item) => Number(item.antes) <= Number(item.atual)
     );
 
     if (invalidos.length > 0) {
@@ -369,7 +483,7 @@ export default function EtiquetasPage() {
     return `${dia}/${mes}`;
   }
 
-  function obterTextoValidade(item, anoValidade) {
+  function obterTextoValidade(item, anoValidadeAtual) {
     const normalizarData = (valor) => {
       const texto = String(valor || "").trim();
       return texto && texto !== "-" ? texto : "";
@@ -383,12 +497,16 @@ export default function EtiquetasPage() {
       const fim = new Date();
       fim.setDate(hoje.getDate() + 30);
 
-      return `VÁLIDO DE ${formatarDataDiaMes(hoje)}/${hoje.getFullYear()} A ${formatarDataDiaMes(fim)}/${fim.getFullYear()}`;
+      return `VÁLIDO DE ${formatarDataDiaMes(
+        hoje
+      )}/${hoje.getFullYear()} A ${formatarDataDiaMes(
+        fim
+      )}/${fim.getFullYear()}`;
     }
 
     return `VÁLIDO DE ${dataInicio || "-"}${
-      dataInicio ? `/${anoValidade}` : ""
-    } A ${dataFim || "-"}${dataFim ? `/${anoValidade}` : ""}`;
+      dataInicio ? `/${anoValidadeAtual}` : ""
+    } A ${dataFim || "-"}${dataFim ? `/${anoValidadeAtual}` : ""}`;
   }
 
   return (
@@ -454,6 +572,14 @@ export default function EtiquetasPage() {
               onClick={carregarTextoColado}
             >
               Carregar tabela
+            </button>
+
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={abrirPopupCriarCampanha}
+            >
+              Criar campanha
             </button>
 
             <button
@@ -530,7 +656,7 @@ export default function EtiquetasPage() {
                             className="filter-button"
                             onClick={() =>
                               setFiltroAberto(
-                                filtroAberto === col.key ? null : col.key,
+                                filtroAberto === col.key ? null : col.key
                               )
                             }
                           >
@@ -611,6 +737,137 @@ export default function EtiquetasPage() {
           </div>
         </div>
       </div>
+
+      {popupCriarCampanhaAberto && (
+        <div className="popup-overlay">
+          <div className="popup-card popup-card-campanha">
+            <div className="popup-header">
+              <h2>Criar campanha</h2>
+
+              <button
+                type="button"
+                className="popup-close"
+                onClick={fecharPopupCriarCampanha}
+              >
+                ×
+              </button>
+            </div>
+
+            <p className="popup-text">
+              Pesquisa um artigo do catálogo, define o PVP2 antes e o PVP2
+              atual, e adiciona-o diretamente à campanha.
+            </p>
+
+            <div className="campanha-form">
+              <div className="input-group">
+                <span>Pesquisar artigo</span>
+                <input
+                  type="text"
+                  value={pesquisaCampanha}
+                  onChange={(e) => setPesquisaCampanha(e.target.value)}
+                  placeholder="Pesquisar por código interno, descrição ou EAN"
+                />
+              </div>
+
+              {sugestoesCampanha.length > 0 && (
+                <div className="campanha-sugestoes">
+                  {sugestoesCampanha.map((item, index) => (
+                    <button
+                      key={`${item.artigo}-${index}`}
+                      type="button"
+                      className={`campanha-sugestao ${
+                        artigoCampanhaSelecionado?.artigo === item.artigo
+                          ? "ativa"
+                          : ""
+                      }`}
+                      onClick={() => {
+                        setArtigoCampanhaSelecionado(item);
+                        setCampanhaAntes(item.pvp2 || "");
+                        setCampanhaAtual(item.pvp2 || "");
+                      }}
+                    >
+                      <strong>{item.artigo}</strong>
+                      <span>{item.descricao}</span>
+                      <small>EAN: {item.codigoBarras || "-"}</small>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {artigoCampanhaSelecionado && (
+                <div className="campanha-resumo">
+                  <div className="campanha-resumo-item">
+                    <span>Artigo</span>
+                    <strong>{artigoCampanhaSelecionado.artigo}</strong>
+                  </div>
+
+                  <div className="campanha-resumo-item campanha-resumo-item-full">
+                    <span>Descrição</span>
+                    <strong>{artigoCampanhaSelecionado.descricao}</strong>
+                  </div>
+
+                  <div className="campanha-resumo-item">
+                    <span>EAN</span>
+                    <strong>
+                      {artigoCampanhaSelecionado.codigoBarras || "-"}
+                    </strong>
+                  </div>
+
+                  <div className="campanha-resumo-item">
+                    <span>PVP2 base</span>
+                    <strong>{artigoCampanhaSelecionado.pvp2 || "-"}</strong>
+                  </div>
+                </div>
+              )}
+
+              <div className="campanha-precos-grid">
+                <label className="input-group">
+                  <span>PVP2 antes</span>
+                  <input
+                    type="text"
+                    value={campanhaAntes}
+                    onChange={(e) => setCampanhaAntes(e.target.value)}
+                    placeholder="Ex: 799,99"
+                  />
+                </label>
+
+                <label className="input-group">
+                  <span>PVP2 atual</span>
+                  <input
+                    type="text"
+                    value={campanhaAtual}
+                    onChange={(e) => setCampanhaAtual(e.target.value)}
+                    placeholder="Ex: 699,99"
+                  />
+                </label>
+
+                <div className="campanha-desconto-box">
+                  <span>Desconto calculado</span>
+                  <strong>{formatarEuro(descontoCampanha)}€</strong>
+                </div>
+              </div>
+            </div>
+
+            <div className="popup-actions">
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={adicionarArtigoCampanha}
+              >
+                Adicionar à campanha
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={fecharPopupCriarCampanha}
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {popupArtigosInvalidosAberto && (
         <div className="popup-overlay">
