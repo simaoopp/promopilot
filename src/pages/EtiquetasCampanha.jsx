@@ -96,6 +96,7 @@ function converterPreco(valor) {
 }
 
 export default function EtiquetasPage() {
+  const [erroCampanha, setErroCampanha] = useState("");
   const [titulo, setTitulo] = useState("PROMO");
   const [textoColado, setTextoColado] = useState("");
   const [anoValidade, setAnoValidade] = useState(new Date().getFullYear());
@@ -149,6 +150,23 @@ export default function EtiquetasPage() {
     };
   }, []);
 
+  useEffect(() => {
+    const antes = converterPreco(campanhaAntes);
+    const atual = converterPreco(campanhaAtual);
+
+    if (!campanhaAntes || !campanhaAtual) {
+      setErroCampanha("");
+      return;
+    }
+
+    if (atual > antes) {
+      setErroCampanha("Valor maior que PVP2 antes.");
+      return;
+    }
+
+    setErroCampanha("");
+  }, [campanhaAntes, campanhaAtual]);
+
   const sugestoesCampanha = useMemo(() => {
     const termo = normalizarTexto(pesquisaCampanha);
 
@@ -181,6 +199,7 @@ export default function EtiquetasPage() {
     setArtigoCampanhaSelecionado(null);
     setCampanhaAntes("");
     setCampanhaAtual("");
+    setErroCampanha("");
   }
 
   function fecharPopupCriarCampanha() {
@@ -189,6 +208,7 @@ export default function EtiquetasPage() {
     setArtigoCampanhaSelecionado(null);
     setCampanhaAntes("");
     setCampanhaAtual("");
+    setErroCampanha("");
   }
 
   function adicionarArtigoCampanha() {
@@ -201,9 +221,16 @@ export default function EtiquetasPage() {
     const atual = converterPreco(campanhaAtual);
 
     if (antes <= 0 || atual <= 0) {
-      alert("Preenche os valores de PVP2 antes e PVP2 atual.");
+      setErroCampanha("Preenche os valores de PVP2 antes e PVP2 atual.");
       return;
     }
+
+    if (atual > antes) {
+      setErroCampanha("Valor maior que PVP2 antes.");
+      return;
+    }
+
+    setErroCampanha("");
 
     const novoItem = {
       id: `${artigoCampanhaSelecionado.artigo}-${Date.now()}`,
@@ -846,6 +873,8 @@ export default function EtiquetasPage() {
                   <strong>{formatarEuro(descontoCampanha)}€</strong>
                 </div>
               </div>
+
+              {erroCampanha && <p className="campanha-erro">{erroCampanha}</p>}
             </div>
 
             <div className="popup-actions">
@@ -853,6 +882,7 @@ export default function EtiquetasPage() {
                 type="button"
                 className="btn btn-primary"
                 onClick={adicionarArtigoCampanha}
+                disabled={!!erroCampanha}
               >
                 Adicionar à campanha
               </button>
