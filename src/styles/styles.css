@@ -1723,6 +1723,17 @@ tbody tr:hover {
   color: #0f172a;
 }
 
+.campanha-erro {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fff1f1;
+  border: 1px solid #fecaca;
+  color: #b42318;
+  font-size: 14px;
+  font-weight: 700;
+}
+
 .campanha-precos-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
