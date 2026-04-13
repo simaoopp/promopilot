@@ -1,19 +1,41 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
+
 import Barcode from "../components/Barcode";
 import FilterMenu from "../components/FilterMenu";
-import logo from "../logo.png";
 import artigosData from "../data/artigos.json";
+import { TABLE_COLUMNS } from "../data/tableColumns";
+import logo from "../logo.png";
 import "../styles/styles.css";
-
-import { formatarEuro } from "../utils/formatters";
-import { useAutoFontSize } from "../utils/useAutoFontSize";
-import { parseTabelaColada } from "../utils/parsers";
+import {
+  addCampaignToHistory,
+  createCampaignSnapshot,
+} from "../utils/campaignHistory";
 import {
   aplicarFiltroTexto,
   compararNumero,
   dividirEmPaginas,
 } from "../utils/filters";
-import { TABLE_COLUMNS } from "../data/tableColumns";
+import { formatarEuro } from "../utils/formatters";
+import { parseTabelaColada } from "../utils/parsers";
+import { useAutoFontSize } from "../utils/useAutoFontSize";
+
+const CAMPANHA_TITULO_DEFAULT = "PROMO";
+const NOTA_PROMOCAO =
+  "VÁLIDO ENQUANTO DURAR O STOCK. Limitado ao stock existente e não acumulável com outras promoções.";
+
+const FILTROS_INICIAIS = {
+  codigo: { contains: "", equals: "" },
+  descricao: { contains: "", equals: "" },
+  pn: { contains: "", equals: "" },
+  estado: { contains: "", equals: "" },
+  info: { contains: "", equals: "" },
+  ae: { op: "", valor: "" },
+  aea: { op: "", valor: "" },
+  aev: { op: "", valor: "" },
+  a10: { op: "", valor: "" },
+  a1e: { op: "", valor: "" },
+};
 
 function AutoText({ texto, className, min, max, style = {} }) {
   const autoFont = useAutoFontSize(texto, min, max);
@@ -24,8 +46,8 @@ function AutoText({ texto, className, min, max, style = {} }) {
       className={className}
       style={{
         width: "100%",
-        ...style,
         fontSize: `${autoFont.fontSize}px`,
+        ...style,
       }}
     >
       {texto}
@@ -77,6 +99,90 @@ function PrecoAtualAuto({ valor, formatoEtiqueta }) {
   );
 }
 
+function ResumoCard({ label, value }) {
+  return (
+    <div className="resumo-card">
+      <span className="resumo-label">{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function EtiquetaConteudo({ item, formatoAtual, titulo, textoValidade }) {
+  const desconto = Math.max(0, Number(item.antes) - Number(item.atual));
+
+  return (
+    <div className="label-inner">
+      <div className="topbar">
+        <img src={logo} alt="Expert" className="print-logo" />
+      </div>
+
+      <div className="content">
+        <div className="topo">
+          <div className="codigo">{item.codigo}</div>
+          <div className="titulo">{titulo}</div>
+          <DescricaoAuto
+            texto={item.descricao}
+            formatoEtiqueta={formatoAtual}
+          />
+        </div>
+
+        <div className="precos">
+          <div className="linha-preco">
+            <PrecoAntesAuto valor={item.antes} formatoEtiqueta={formatoAtual} />
+          </div>
+
+          <div className="linha-preco desconto-linha">
+            <DescontoAuto valor={desconto} formatoEtiqueta={formatoAtual} />
+          </div>
+
+          <div className="linha-preco">
+            <PrecoAtualAuto valor={item.atual} formatoEtiqueta={formatoAtual} />
+          </div>
+        </div>
+
+        <div className="rodape">
+          <Barcode value={item.ean} />
+          <div className="validade">{textoValidade}</div>
+          <div className="nota">{NOTA_PROMOCAO}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function renderEtiqueta(item, formatoAtual, titulo, textoValidade) {
+  const etiquetaClassName = `label ${
+    formatoAtual === "a5" ? "label-a5" : "label-a6"
+  }`;
+
+  if (formatoAtual === "a5") {
+    return (
+      <div key={item.id} className={etiquetaClassName}>
+        <div className="label-a5-rotator">
+          <EtiquetaConteudo
+            item={item}
+            formatoAtual={formatoAtual}
+            titulo={titulo}
+            textoValidade={textoValidade}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div key={item.id} className={etiquetaClassName}>
+      <EtiquetaConteudo
+        item={item}
+        formatoAtual={formatoAtual}
+        titulo={titulo}
+        textoValidade={textoValidade}
+      />
+    </div>
+  );
+}
+
 function normalizarTexto(texto) {
   return String(texto || "")
     .normalize("NFD")
@@ -90,18 +196,191 @@ function converterPreco(valor) {
     .replace(/\s/g, "")
     .replace(",", ".")
     .trim();
-
   const numero = Number(texto);
+
   return Number.isFinite(numero) ? numero : 0;
 }
 
+function formatarDataInputParaDiaMes(dataIso = "") {
+  if (!dataIso) return "";
+
+  const [ano, mes, dia] = String(dataIso).split("-");
+  if (!ano || !mes || !dia) return "";
+
+  return `${dia}/${mes}`;
+}
+
+function somarDias(data, dias) {
+  const novaData = new Date(data);
+  novaData.setDate(novaData.getDate() + dias);
+  return novaData;
+}
+
+function formatarDataDiaMes(data) {
+  const dia = String(data.getDate()).padStart(2, "0");
+  const mes = String(data.getMonth() + 1).padStart(2, "0");
+  return `${dia}/${mes}`;
+}
+
+function obterTextoValidade(item, anoValidadeAtual) {
+  const normalizarData = (valor) => {
+    const texto = String(valor || "").trim();
+    return texto && texto !== "-" ? texto : "";
+  };
+
+  const dataInicio = normalizarData(item.dataInicio);
+  const dataFim = normalizarData(item.dataFim);
+
+  if (!dataInicio && !dataFim) {
+    const hoje = new Date();
+    const fim = somarDias(hoje, 30);
+
+    return `VÁLIDO DE ${formatarDataDiaMes(
+      hoje
+    )}/${hoje.getFullYear()} A ${formatarDataDiaMes(fim)}/${fim.getFullYear()}`;
+  }
+
+  return `VÁLIDO DE ${dataInicio || "-"}${
+    dataInicio ? `/${anoValidadeAtual}` : ""
+  } A ${dataFim || "-"}${dataFim ? `/${anoValidadeAtual}` : ""}`;
+}
+
+function obterFormatoAutomaticoEtiqueta(descricao = "") {
+  const texto = normalizarTexto(descricao);
+
+  const categoriasA5 = [
+    "maquina de lavar",
+    "maquinas de lavar",
+    "máquina de lavar",
+    "máquinas de lavar",
+    "maquina de secar",
+    "maquinas de secar",
+    "máquina de secar",
+    "máquinas de secar",
+    "lavar e secar",
+    "maquina de lavar e secar",
+    "maquinas de lavar e secar",
+    "máquina de lavar e secar",
+    "máquinas de lavar e secar",
+    "maquina de lavar loica",
+    "maquinas de lavar loica",
+    "máquina de lavar loiça",
+    "máquinas de lavar loiça",
+    "lava loica",
+    "lava loiça",
+    "televisao",
+    "televisoes",
+    "televisão",
+    "televisões",
+    "tv",
+    "smart tv",
+    "qled",
+    "oled",
+    "monitor",
+    "monitores",
+    "frigorifico",
+    "frigorificos",
+    "frigorífico",
+    "frigoríficos",
+    "combinado",
+    "combinados",
+    "cadeira",
+    "cadeiras",
+    "mesa",
+    "mesas",
+    "fogao",
+    "fogoes",
+    "fogão",
+    "fogões",
+    "arca",
+    "arcas",
+    "chamine",
+    "chamines",
+    "chaminé",
+    "chaminés",
+    "exaustor",
+    "exaustores",
+    "cave de vinho",
+    "caves de vinho",
+    "cave vinho",
+    "garrafeira",
+    "garrafeiras",
+  ];
+
+  return categoriasA5.some((palavra) =>
+    texto.includes(normalizarTexto(palavra))
+  )
+    ? "a5"
+    : "a6";
+}
+
+function obterFormatoEtiquetaItem(item, modoAutomatico, formatoManual) {
+  if (!modoAutomatico) return formatoManual;
+  return obterFormatoAutomaticoEtiqueta(item?.descricao || "");
+}
+
+function construirPaginasImpressao(itens, modoAutomatico, formatoManual) {
+  if (!modoAutomatico) {
+    const etiquetasPorPagina = formatoManual === "a5" ? 2 : 4;
+
+    return dividirEmPaginas(itens, etiquetasPorPagina).map((items) => ({
+      layout: formatoManual,
+      items,
+    }));
+  }
+
+  const itensA5 = itens.filter((item) => item._formato === "a5");
+  const itensA6 = itens.filter((item) => item._formato !== "a5");
+
+  return [
+    ...dividirEmPaginas(itensA5, 2).map((items) => ({
+      layout: "a5",
+      items,
+    })),
+    ...dividirEmPaginas(itensA6, 4).map((items) => ({
+      layout: "a6",
+      items,
+    })),
+  ];
+}
+
+function dataCampanhaInvalida(data) {
+  const texto = String(data || "").trim();
+
+  if (!texto || texto === "-") return false;
+
+  const formatoMesTexto = /^\d{1,2}\/[a-z]{3}\.?$/i;
+  const formatoMesNumero = /^\d{1,2}\/\d{2}$/;
+
+  return !formatoMesTexto.test(texto) && !formatoMesNumero.test(texto);
+}
+
+function itemTabelaInvalido(item) {
+  const nomeInvalido = !item.descricao || item.descricao.length < 3;
+  const precoAntesInvalido = !item.antes || Number(item.antes) <= 0;
+  const precoAtualInvalido = !item.atual || Number(item.atual) <= 0;
+  const eanInvalido =
+    !item.ean || String(item.ean).replace(/\D/g, "").length < 8;
+
+  return (
+    nomeInvalido ||
+    precoAntesInvalido ||
+    precoAtualInvalido ||
+    eanInvalido ||
+    dataCampanhaInvalida(item.dataInicio) ||
+    dataCampanhaInvalida(item.dataFim)
+  );
+}
+
 export default function EtiquetasPage() {
-  const [erroCampanha, setErroCampanha] = useState("");
-  const [titulo, setTitulo] = useState("PROMO");
+  const location = useLocation();
+
+  const [titulo, setTitulo] = useState(CAMPANHA_TITULO_DEFAULT);
   const [textoColado, setTextoColado] = useState("");
   const [anoValidade, setAnoValidade] = useState(new Date().getFullYear());
   const [dados, setDados] = useState([]);
   const [formatoEtiqueta, setFormatoEtiqueta] = useState("a6");
+  const [modoFormatoAutomatico, setModoFormatoAutomatico] = useState(true);
 
   const [popupArtigosInvalidosAberto, setPopupArtigosInvalidosAberto] =
     useState(false);
@@ -114,37 +393,45 @@ export default function EtiquetasPage() {
     useState(null);
   const [campanhaAntes, setCampanhaAntes] = useState("");
   const [campanhaAtual, setCampanhaAtual] = useState("");
+  const [campanhaValida30Dias, setCampanhaValida30Dias] = useState(true);
+  const [campanhaDataInicio, setCampanhaDataInicio] = useState("");
+  const [campanhaDataFim, setCampanhaDataFim] = useState("");
+  const [erroCampanha, setErroCampanha] = useState("");
 
   const [filtroAberto, setFiltroAberto] = useState(null);
-  const [ordenacao, setOrdenacao] = useState({
-    coluna: "",
-    direcao: "",
-  });
-
-  const [filtros, setFiltros] = useState({
-    codigo: { contains: "", equals: "" },
-    descricao: { contains: "", equals: "" },
-    pn: { contains: "", equals: "" },
-    estado: { contains: "", equals: "" },
-    info: { contains: "", equals: "" },
-    ae: { op: "", valor: "" },
-    aea: { op: "", valor: "" },
-    aev: { op: "", valor: "" },
-    a10: { op: "", valor: "" },
-    a1e: { op: "", valor: "" },
-  });
+  const [ordenacao, setOrdenacao] = useState({ coluna: "", direcao: "" });
+  const [filtros, setFiltros] = useState(FILTROS_INICIAIS);
 
   const artigosJson = artigosData?.artigos || [];
 
   useEffect(() => {
-    function handleClickOutside(event) {
+    const campanhaDuplicada = location.state?.campanhaDuplicada;
+    if (!campanhaDuplicada) return;
+
+    setTitulo(campanhaDuplicada.titulo || CAMPANHA_TITULO_DEFAULT);
+    setAnoValidade(campanhaDuplicada.anoValidade || new Date().getFullYear());
+    setFormatoEtiqueta(campanhaDuplicada.formatoEtiqueta || "a6");
+    setDados(
+      Array.isArray(campanhaDuplicada.dados)
+        ? campanhaDuplicada.dados.map((item, index) => ({
+            ...item,
+            id: `${item.codigo || "item"}-${Date.now()}-${index}`,
+            selecionado: true,
+          }))
+        : []
+    );
+  }, [location.state]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
       const clicouDentroDeFiltro = event.target.closest(".filter-th");
       if (!clicouDentroDeFiltro) {
         setFiltroAberto(null);
       }
-    }
+    };
 
     document.addEventListener("mousedown", handleClickOutside);
+
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
@@ -169,7 +456,6 @@ export default function EtiquetasPage() {
 
   const sugestoesCampanha = useMemo(() => {
     const termo = normalizarTexto(pesquisaCampanha);
-
     if (termo.length < 2) return [];
 
     return artigosJson
@@ -193,179 +479,10 @@ export default function EtiquetasPage() {
     return Math.max(0, antes - atual);
   }, [campanhaAntes, campanhaAtual]);
 
-  function abrirPopupCriarCampanha() {
-    setPopupCriarCampanhaAberto(true);
-    setPesquisaCampanha("");
-    setArtigoCampanhaSelecionado(null);
-    setCampanhaAntes("");
-    setCampanhaAtual("");
-    setErroCampanha("");
-  }
-
-  function fecharPopupCriarCampanha() {
-    setPopupCriarCampanhaAberto(false);
-    setPesquisaCampanha("");
-    setArtigoCampanhaSelecionado(null);
-    setCampanhaAntes("");
-    setCampanhaAtual("");
-    setErroCampanha("");
-  }
-
-  function adicionarArtigoCampanha() {
-    if (!artigoCampanhaSelecionado) {
-      alert("Seleciona um artigo.");
-      return;
-    }
-
-    const antes = converterPreco(campanhaAntes);
-    const atual = converterPreco(campanhaAtual);
-
-    if (antes <= 0 || atual <= 0) {
-      setErroCampanha("Preenche os valores de PVP2 antes e PVP2 atual.");
-      return;
-    }
-
-    if (atual > antes) {
-      setErroCampanha("Valor maior que PVP2 antes.");
-      return;
-    }
-
-    setErroCampanha("");
-
-    const novoItem = {
-      id: `${artigoCampanhaSelecionado.artigo}-${Date.now()}`,
-      codigo: artigoCampanhaSelecionado.artigo || "",
-      descricao: artigoCampanhaSelecionado.descricao || "",
-      pn: "",
-      ean: artigoCampanhaSelecionado.codigoBarras || "",
-      antes,
-      atual,
-      pv3: "",
-      estado: "",
-      ae: artigoCampanhaSelecionado.stock || "",
-      aea: "",
-      aev: "",
-      a10: "",
-      a1e: "",
-      data: "",
-      dataInicio: "",
-      dataFim: "",
-      alterado: "CAMPANHA",
-      info: `Desconto ${formatarEuro(descontoCampanha)}€`,
-      selecionado: true,
-    };
-
-    setDados((prev) => [novoItem, ...prev]);
-    fecharPopupCriarCampanha();
-  }
-
-  function removerInvalidosDaSelecao() {
-    const idsInvalidos = new Set(artigosInvalidosPopup.map((item) => item.id));
-
-    setDados((prev) =>
-      prev.map((item) =>
-        idsInvalidos.has(item.id) ? { ...item, selecionado: false } : item
-      )
-    );
-  }
-
-  function atualizarFiltroPopup(campo, chave, valor) {
-    setFiltros((prev) => ({
-      ...prev,
-      [campo]: {
-        ...prev[campo],
-        [chave]: valor,
-      },
-    }));
-  }
-
-  function limparFiltro(campo, tipo = "text") {
-    setFiltros((prev) => ({
-      ...prev,
-      [campo]:
-        tipo === "text" ? { contains: "", equals: "" } : { op: "", valor: "" },
-    }));
-  }
-
-  function ordenarLista(lista) {
-    if (!ordenacao.coluna || !ordenacao.direcao) return lista;
-
-    const copia = [...lista];
-
-    copia.sort((a, b) => {
-      const va = a[ordenacao.coluna];
-      const vb = b[ordenacao.coluna];
-
-      const aNum = Number(va);
-      const bNum = Number(vb);
-      const ambosNumeros = !Number.isNaN(aNum) && !Number.isNaN(bNum);
-
-      if (ambosNumeros) {
-        return ordenacao.direcao === "asc" ? aNum - bNum : bNum - aNum;
-      }
-
-      const aText = String(va || "").toLowerCase();
-      const bText = String(vb || "").toLowerCase();
-
-      return ordenacao.direcao === "asc"
-        ? aText.localeCompare(bText, "pt")
-        : bText.localeCompare(aText, "pt");
-    });
-
-    return copia;
-  }
-
-  function carregarTextoColado() {
-    try {
-      if (!textoColado.trim()) {
-        throw new Error("Sem conteúdo");
-      }
-
-      const linhas = parseTabelaColada(textoColado);
-
-      if (!linhas.length) {
-        throw new Error("Sem linhas válidas");
-      }
-
-      const erro = linhas.some((item) => {
-        const nomeInvalido = !item.descricao || item.descricao.length < 3;
-        const precoAntesInvalido = !item.antes || Number(item.antes) <= 0;
-        const precoAtualInvalido = !item.atual || Number(item.atual) <= 0;
-        const eanInvalido =
-          !item.ean || String(item.ean).replace(/\D/g, "").length < 8;
-
-        const dataInvalida = (data) => {
-          const texto = String(data || "").trim();
-
-          if (!texto || texto === "-") return false;
-
-          const formatoMesTexto = /^\d{1,2}\/[a-z]{3}\.?$/i;
-          const formatoMesNumero = /^\d{1,2}\/\d{2}$/;
-
-          return !formatoMesTexto.test(texto) && !formatoMesNumero.test(texto);
-        };
-
-        const datasInvalidas =
-          dataInvalida(item.dataInicio) || dataInvalida(item.dataFim);
-
-        return (
-          nomeInvalido ||
-          precoAntesInvalido ||
-          precoAtualInvalido ||
-          eanInvalido ||
-          datasInvalidas
-        );
-      });
-
-      if (erro) {
-        throw new Error("Dados inválidos");
-      }
-
-      setDados(linhas);
-    } catch {
-      alert("Verifique se os dados inseridos estão corretos.");
-    }
-  }
+  const pvpBaseCampanha = useMemo(
+    () => converterPreco(artigoCampanhaSelecionado?.pvp2 || ""),
+    [artigoCampanhaSelecionado]
+  );
 
   const dadosFiltrados = useMemo(() => {
     const filtrados = dados.filter((item) => {
@@ -395,12 +512,130 @@ export default function EtiquetasPage() {
       );
     });
 
-    return ordenarLista(filtrados);
+    return ordenarLista(filtrados, ordenacao);
   }, [dados, filtros, ordenacao]);
 
-  const selecionados = dados.filter((item) => item.selecionado);
-  const etiquetasPorPagina = formatoEtiqueta === "a5" ? 2 : 4;
-  const paginas = dividirEmPaginas(selecionados, etiquetasPorPagina);
+  const selecionados = useMemo(
+    () => dados.filter((item) => item.selecionado),
+    [dados]
+  );
+
+  const itensParaImpressao = useMemo(
+    () =>
+      selecionados.map((item) => ({
+        ...item,
+        _formato: obterFormatoEtiquetaItem(
+          item,
+          modoFormatoAutomatico,
+          formatoEtiqueta
+        ),
+      })),
+    [selecionados, modoFormatoAutomatico, formatoEtiqueta]
+  );
+
+  const paginasImpressao = useMemo(
+    () =>
+      construirPaginasImpressao(
+        itensParaImpressao,
+        modoFormatoAutomatico,
+        formatoEtiqueta
+      ),
+    [itensParaImpressao, modoFormatoAutomatico, formatoEtiqueta]
+  );
+
+  const modoImpressaoTexto = modoFormatoAutomatico
+    ? "Automático A5/A6"
+    : `Manual ${formatoEtiqueta.toUpperCase()}`;
+
+  const estadoValidacaoCampanha = useMemo(() => {
+    if (
+      converterPreco(campanhaAtual) > pvpBaseCampanha &&
+      pvpBaseCampanha > 0
+    ) {
+      return "Preço atual acima do PVP2 base";
+    }
+
+    if (erroCampanha) {
+      return "Verificar valores";
+    }
+
+    return "Pronto para adicionar";
+  }, [campanhaAtual, erroCampanha, pvpBaseCampanha]);
+
+  function resetFormularioCampanha() {
+    setPesquisaCampanha("");
+    setArtigoCampanhaSelecionado(null);
+    setCampanhaAntes("");
+    setCampanhaAtual("");
+    setErroCampanha("");
+    setCampanhaValida30Dias(true);
+    setCampanhaDataInicio("");
+    setCampanhaDataFim("");
+  }
+
+  function abrirPopupCriarCampanha() {
+    resetFormularioCampanha();
+    setPopupCriarCampanhaAberto(true);
+  }
+
+  function fecharPopupCriarCampanha() {
+    setPopupCriarCampanhaAberto(false);
+    resetFormularioCampanha();
+  }
+
+  function atualizarFiltroPopup(campo, chave, valor) {
+    setFiltros((prev) => ({
+      ...prev,
+      [campo]: {
+        ...prev[campo],
+        [chave]: valor,
+      },
+    }));
+  }
+
+  function limparFiltro(campo, tipo = "text") {
+    setFiltros((prev) => ({
+      ...prev,
+      [campo]:
+        tipo === "text" ? { contains: "", equals: "" } : { op: "", valor: "" },
+    }));
+  }
+
+  function carregarTextoColado() {
+    try {
+      if (!textoColado.trim()) {
+        throw new Error("Sem conteúdo");
+      }
+
+      const linhas = parseTabelaColada(textoColado);
+      if (!linhas.length) {
+        throw new Error("Sem linhas válidas");
+      }
+
+      if (linhas.some(itemTabelaInvalido)) {
+        throw new Error("Dados inválidos");
+      }
+
+      setDados(linhas);
+    } catch {
+      alert("Verifique se os dados inseridos estão corretos.");
+    }
+  }
+
+  function guardarCampanhaNoHistorico(origem = "manual") {
+    const itensSelecionados = dados.filter((item) => item.selecionado);
+    if (!itensSelecionados.length) return;
+
+    const snapshot = createCampaignSnapshot({
+      titulo,
+      dados: itensSelecionados,
+      anoValidade,
+      formatoEtiqueta,
+      origem,
+    });
+
+    addCampaignToHistory(snapshot);
+  }
 
   function alternarSelecionado(id) {
     setDados((prev) =>
@@ -412,7 +647,6 @@ export default function EtiquetasPage() {
 
   function selecionarTodosFiltrados() {
     const ids = new Set(dadosFiltrados.map((item) => item.id));
-
     setDados((prev) =>
       prev.map((item) =>
         ids.has(item.id) ? { ...item, selecionado: true } : item
@@ -422,7 +656,6 @@ export default function EtiquetasPage() {
 
   function desmarcarTodosFiltrados() {
     const ids = new Set(dadosFiltrados.map((item) => item.id));
-
     setDados((prev) =>
       prev.map((item) =>
         ids.has(item.id) ? { ...item, selecionado: false } : item
@@ -432,6 +665,31 @@ export default function EtiquetasPage() {
 
   function limparSelecao() {
     setDados((prev) => prev.map((item) => ({ ...item, selecionado: false })));
+  }
+
+  function removerInvalidosDaSelecao() {
+    const idsInvalidos = new Set(artigosInvalidosPopup.map((item) => item.id));
+
+    setDados((prev) =>
+      prev.map((item) =>
+        idsInvalidos.has(item.id) ? { ...item, selecionado: false } : item
+      )
+    );
+  }
+
+  function imprimirComValidosRestantes(restantesValidos) {
+    removerInvalidosDaSelecao();
+    setPopupArtigosInvalidosAberto(false);
+
+    if (restantesValidos.length === 0) {
+      alert("Não existem etiquetas válidas para imprimir.");
+      return;
+    }
+
+    guardarCampanhaNoHistorico("impressao");
+    setTimeout(() => {
+      window.print();
+    }, 150);
   }
 
   async function copiarCodigosInvalidosEProsseguir() {
@@ -453,17 +711,7 @@ export default function EtiquetasPage() {
       (item) => !idsInvalidos.has(item.id)
     );
 
-    removerInvalidosDaSelecao();
-    setPopupArtigosInvalidosAberto(false);
-
-    if (restantesValidos.length === 0) {
-      alert("Não existem etiquetas válidas para imprimir.");
-      return;
-    }
-
-    setTimeout(() => {
-      window.print();
-    }, 150);
+    imprimirComValidosRestantes(restantesValidos);
   }
 
   function fecharPopupEProsseguir() {
@@ -472,21 +720,11 @@ export default function EtiquetasPage() {
       (item) => !idsInvalidos.has(item.id)
     );
 
-    removerInvalidosDaSelecao();
-    setPopupArtigosInvalidosAberto(false);
-
-    if (restantesValidos.length === 0) {
-      alert("Não existem etiquetas válidas para imprimir.");
-      return;
-    }
-
-    setTimeout(() => {
-      window.print();
-    }, 150);
+    imprimirComValidosRestantes(restantesValidos);
   }
 
   function imprimirSelecionados() {
-    if (selecionados.length === 0) {
+    if (!selecionados.length) {
       alert("Seleciona pelo menos um artigo.");
       return;
     }
@@ -501,39 +739,113 @@ export default function EtiquetasPage() {
       return;
     }
 
+    guardarCampanhaNoHistorico("impressao");
     window.print();
   }
 
-  function formatarDataDiaMes(data) {
-    const dia = String(data.getDate()).padStart(2, "0");
-    const mes = String(data.getMonth() + 1).padStart(2, "0");
-    return `${dia}/${mes}`;
-  }
-
-  function obterTextoValidade(item, anoValidadeAtual) {
-    const normalizarData = (valor) => {
-      const texto = String(valor || "").trim();
-      return texto && texto !== "-" ? texto : "";
-    };
-
-    const dataInicio = normalizarData(item.dataInicio);
-    const dataFim = normalizarData(item.dataFim);
-
-    if (!dataInicio && !dataFim) {
-      const hoje = new Date();
-      const fim = new Date();
-      fim.setDate(hoje.getDate() + 30);
-
-      return `VÁLIDO DE ${formatarDataDiaMes(
-        hoje
-      )}/${hoje.getFullYear()} A ${formatarDataDiaMes(
-        fim
-      )}/${fim.getFullYear()}`;
+  function adicionarArtigoCampanha() {
+    if (!artigoCampanhaSelecionado) {
+      alert("Seleciona um artigo.");
+      return;
     }
 
-    return `VÁLIDO DE ${dataInicio || "-"}${
-      dataInicio ? `/${anoValidadeAtual}` : ""
-    } A ${dataFim || "-"}${dataFim ? `/${anoValidadeAtual}` : ""}`;
+    const antes = converterPreco(campanhaAntes);
+    const atual = converterPreco(campanhaAtual);
+
+    if (antes <= 0 || atual <= 0) {
+      setErroCampanha("Preenche os valores de PVP2 antes e PVP2 atual.");
+      return;
+    }
+
+    if (atual > antes) {
+      setErroCampanha("Valor maior que PVP2 antes.");
+      return;
+    }
+
+    if (!campanhaValida30Dias && (!campanhaDataInicio || !campanhaDataFim)) {
+      setErroCampanha("Preenche a data de início e a data de fim da campanha.");
+      return;
+    }
+
+    if (!campanhaValida30Dias && campanhaDataInicio > campanhaDataFim) {
+      setErroCampanha("A data de início não pode ser superior à data de fim.");
+      return;
+    }
+
+    setErroCampanha("");
+
+    const descricao = artigoCampanhaSelecionado.descricao || "";
+    const formatoAuto = obterFormatoAutomaticoEtiqueta(descricao);
+
+    let dataInicioFinal = "";
+    let dataFimFinal = "";
+
+    if (campanhaValida30Dias) {
+      const hoje = new Date();
+      const fim = somarDias(hoje, 30);
+      dataInicioFinal = formatarDataDiaMes(hoje);
+      dataFimFinal = formatarDataDiaMes(fim);
+    } else {
+      dataInicioFinal = formatarDataInputParaDiaMes(campanhaDataInicio);
+      dataFimFinal = formatarDataInputParaDiaMes(campanhaDataFim);
+    }
+
+    const novoItem = {
+      id: `${artigoCampanhaSelecionado.artigo}-${Date.now()}`,
+      codigo: artigoCampanhaSelecionado.artigo || "",
+      descricao,
+      pn: "",
+      ean: artigoCampanhaSelecionado.codigoBarras || "",
+      antes,
+      atual,
+      pv3: "",
+      estado: "",
+      ae: artigoCampanhaSelecionado.stock || "",
+      aea: "",
+      aev: "",
+      a10: "",
+      a1e: "",
+      data: "",
+      dataInicio: dataInicioFinal,
+      dataFim: dataFimFinal,
+      alterado: "CAMPANHA",
+      info: `Desconto ${formatarEuro(descontoCampanha)}€`,
+      selecionado: true,
+      formato_auto: formatoAuto,
+    };
+
+    setDados((prev) => [novoItem, ...prev]);
+    fecharPopupCriarCampanha();
+  }
+
+  function selecionarSugestaoCampanha(item) {
+    setArtigoCampanhaSelecionado(item);
+    setCampanhaAntes(item.pvp2 || "");
+    setCampanhaAtual(item.pvp2 || "");
+  }
+
+  function renderPagina(pagina, pageIndex) {
+    return (
+      <div
+        key={pageIndex}
+        className={`sheet ${pagina.layout === "a5" ? "sheet-a5" : "sheet-a6"}`}
+      >
+        {pagina.items.map((item) =>
+          renderEtiqueta(
+            item,
+            pagina.layout,
+            titulo,
+            obterTextoValidade(item, anoValidade)
+          )
+        )}
+
+        {pagina.layout === "a5" && pagina.items.length === 1 ? (
+          <div className="label label-a5 label-vazia">
+            <div className="label-inner" />
+          </div>
+        ) : null}
+      </div>
+    );
   }
 
   return (
@@ -560,8 +872,9 @@ export default function EtiquetasPage() {
             </label>
 
             <div className="input-group">
-              <span>Ano de validade</span>
-              <div className="ano-formato-row">
+              <span>Ano de validade / formato</span>
+
+              <div className="ano-formato-row ano-formato-row-advanced">
                 <input
                   type="number"
                   value={anoValidade}
@@ -575,8 +888,24 @@ export default function EtiquetasPage() {
                   onClick={() =>
                     setFormatoEtiqueta((prev) => (prev === "a6" ? "a5" : "a6"))
                   }
+                  disabled={modoFormatoAutomatico}
+                  title={
+                    modoFormatoAutomatico
+                      ? "Desativa o formato automático para alterar manualmente"
+                      : "Alternar formato manual"
+                  }
                 >
-                  Formato: {formatoEtiqueta.toUpperCase()}
+                  Manual: {formatoEtiqueta.toUpperCase()}
+                </button>
+
+                <button
+                  type="button"
+                  className={`btn ${
+                    modoFormatoAutomatico ? "btn-primary" : "btn-secondary"
+                  } formato-btn`}
+                  onClick={() => setModoFormatoAutomatico((prev) => !prev)}
+                >
+                  Auto formato: {modoFormatoAutomatico ? "Ligado" : "Desligado"}
                 </button>
               </div>
             </div>
@@ -643,20 +972,10 @@ export default function EtiquetasPage() {
           </div>
 
           <div className="resumo-cards">
-            <div className="resumo-card">
-              <span className="resumo-label">Total artigos</span>
-              <strong>{dados.length}</strong>
-            </div>
-
-            <div className="resumo-card">
-              <span className="resumo-label">Filtrados</span>
-              <strong>{dadosFiltrados.length}</strong>
-            </div>
-
-            <div className="resumo-card">
-              <span className="resumo-label">Selecionados</span>
-              <strong>{selecionados.length}</strong>
-            </div>
+            <ResumoCard label="Total artigos" value={dados.length} />
+            <ResumoCard label="Filtrados" value={dadosFiltrados.length} />
+            <ResumoCard label="Selecionados" value={selecionados.length} />
+            <ResumoCard label="Modo de impressão" value={modoImpressaoTexto} />
           </div>
         </div>
 
@@ -716,7 +1035,10 @@ export default function EtiquetasPage() {
               <tbody>
                 {dadosFiltrados.length === 0 ? (
                   <tr>
-                    <td colSpan="19" className="empty-cell">
+                    <td
+                      colSpan={TABLE_COLUMNS.length + 1}
+                      className="empty-cell"
+                    >
                       Cola a tabela do email e carrega em “Carregar tabela”.
                     </td>
                   </tr>
@@ -734,7 +1056,7 @@ export default function EtiquetasPage() {
                         <input
                           type="checkbox"
                           checked={!!item.selecionado}
-                          readOnly
+                          onChange={() => alternarSelecionado(item.id)}
                         />
                       </td>
 
@@ -767,9 +1089,16 @@ export default function EtiquetasPage() {
 
       {popupCriarCampanhaAberto && (
         <div className="popup-overlay">
-          <div className="popup-card popup-card-campanha">
-            <div className="popup-header">
-              <h2>Criar campanha</h2>
+          <div className="popup-card popup-card-campanha popup-card-campanha-pro">
+            <div className="popup-header popup-header-campanha">
+              <div>
+                <div className="popup-eyebrow">Campanha manual</div>
+                <h2>Criar campanha</h2>
+                <p className="popup-subtitle">
+                  Pesquisa um artigo do catálogo, define os preços e adiciona-o
+                  diretamente à campanha.
+                </p>
+              </div>
 
               <button
                 type="button"
@@ -780,109 +1109,223 @@ export default function EtiquetasPage() {
               </button>
             </div>
 
-            <p className="popup-text">
-              Pesquisa um artigo do catálogo, define o PVP2 antes e o PVP2
-              atual, e adiciona-o diretamente à campanha.
-            </p>
+            <div className="popup-campanha-scroll">
+              <div className="popup-status-row">
+                <span className="popup-chip">
+                  {artigoCampanhaSelecionado
+                    ? "Artigo selecionado"
+                    : "Sem artigo selecionado"}
+                </span>
 
-            <div className="campanha-form">
-              <div className="input-group">
-                <span>Pesquisar artigo</span>
-                <input
-                  type="text"
-                  value={pesquisaCampanha}
-                  onChange={(e) => setPesquisaCampanha(e.target.value)}
-                  placeholder="Pesquisar por código interno, descrição ou EAN"
-                />
+                <span className="popup-chip popup-chip-ai">
+                  Desconto: {formatarEuro(descontoCampanha)}€
+                </span>
               </div>
 
-              {sugestoesCampanha.length > 0 && (
-                <div className="campanha-sugestoes">
-                  {sugestoesCampanha.map((item, index) => (
-                    <button
-                      key={`${item.artigo}-${index}`}
-                      type="button"
-                      className={`campanha-sugestao ${
-                        artigoCampanhaSelecionado?.artigo === item.artigo
-                          ? "ativa"
-                          : ""
-                      }`}
-                      onClick={() => {
-                        setArtigoCampanhaSelecionado(item);
-                        setCampanhaAntes(item.pvp2 || "");
-                        setCampanhaAtual(item.pvp2 || "");
-                      }}
-                    >
-                      <strong>{item.artigo}</strong>
-                      <span>{item.descricao}</span>
-                      <small>EAN: {item.codigoBarras || "-"}</small>
-                    </button>
-                  ))}
+              <div className="campanha-layout">
+                <div className="campanha-col-main">
+                  <div className="ai-card-panel">
+                    <div className="section-title-row">
+                      <h3>Pesquisar artigo</h3>
+                    </div>
+
+                    <div className="input-group">
+                      <span>
+                        Pesquisar por código interno, descrição ou EAN
+                      </span>
+                      <input
+                        type="text"
+                        value={pesquisaCampanha}
+                        onChange={(e) => setPesquisaCampanha(e.target.value)}
+                        placeholder="Ex: frigorífico aeg, 5601234567890..."
+                      />
+                    </div>
+
+                    {sugestoesCampanha.length > 0 ? (
+                      <div className="campanha-sugestoes">
+                        {sugestoesCampanha.map((item, index) => {
+                          const ativo =
+                            artigoCampanhaSelecionado?.artigo === item.artigo;
+
+                          return (
+                            <button
+                              key={`${item.artigo}-${index}`}
+                              type="button"
+                              className={`campanha-sugestao ${
+                                ativo ? "ativa" : ""
+                              }`}
+                              onClick={() => selecionarSugestaoCampanha(item)}
+                            >
+                              <div className="campanha-sugestao-top">
+                                <strong>{item.artigo}</strong>
+                                <span className="campanha-tag">
+                                  PVP2: {item.pvp2 || "-"}
+                                </span>
+                              </div>
+
+                              <span>{item.descricao}</span>
+                              <small>EAN: {item.codigoBarras || "-"}</small>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="empty-state-text">
+                        Escreve pelo menos 2 caracteres para pesquisar artigos.
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="campanha-stack">
+                    <div className="ai-card-panel">
+                      <div className="section-title-row">
+                        <h3>Preços da campanha</h3>
+                      </div>
+
+                      <div className="campanha-precos-grid">
+                        <label className="input-group">
+                          <span>PVP2 antes</span>
+                          <input
+                            type="text"
+                            value={campanhaAntes}
+                            onChange={(e) => setCampanhaAntes(e.target.value)}
+                            placeholder="Ex: 799,99"
+                          />
+                        </label>
+
+                        <label className="input-group">
+                          <span>PVP2 atual</span>
+                          <input
+                            type="text"
+                            value={campanhaAtual}
+                            onChange={(e) => setCampanhaAtual(e.target.value)}
+                            placeholder="Ex: 699,99"
+                          />
+                        </label>
+
+                        <div className="campanha-desconto-box">
+                          <span>Desconto calculado</span>
+                          <strong>{formatarEuro(descontoCampanha)}€</strong>
+                        </div>
+                      </div>
+
+                      {erroCampanha && (
+                        <p className="campanha-erro">{erroCampanha}</p>
+                      )}
+                    </div>
+
+                    <div className="ai-card-panel">
+                      <div className="section-title-row">
+                        <h3>Validade da campanha</h3>
+                      </div>
+
+                      <label className="campanha-check-row">
+                        <input
+                          type="checkbox"
+                          checked={campanhaValida30Dias}
+                          onChange={(e) =>
+                            setCampanhaValida30Dias(e.target.checked)
+                          }
+                        />
+                        <span>Campanha válida para 30 dias</span>
+                      </label>
+
+                      {!campanhaValida30Dias && (
+                        <div className="campanha-datas-grid">
+                          <label className="input-group">
+                            <span>Data de início</span>
+                            <input
+                              type="date"
+                              value={campanhaDataInicio}
+                              onChange={(e) =>
+                                setCampanhaDataInicio(e.target.value)
+                              }
+                            />
+                          </label>
+
+                          <label className="input-group">
+                            <span>Data de fim</span>
+                            <input
+                              type="date"
+                              value={campanhaDataFim}
+                              onChange={(e) =>
+                                setCampanhaDataFim(e.target.value)
+                              }
+                            />
+                          </label>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              )}
 
-              {artigoCampanhaSelecionado && (
-                <div className="campanha-resumo">
-                  <div className="campanha-resumo-item">
-                    <span>Artigo</span>
-                    <strong>{artigoCampanhaSelecionado.artigo}</strong>
+                <div className="campanha-col-side">
+                  <div className="ai-card-panel campanha-resumo-panel">
+                    <div className="section-title-row">
+                      <h3>Resumo do artigo</h3>
+                    </div>
+
+                    {artigoCampanhaSelecionado ? (
+                      <>
+                        <div className="campanha-resumo">
+                          <div className="campanha-resumo-item">
+                            <span>Artigo</span>
+                            <strong>{artigoCampanhaSelecionado.artigo}</strong>
+                          </div>
+
+                          <div className="campanha-resumo-item">
+                            <span>EAN</span>
+                            <strong>
+                              {artigoCampanhaSelecionado.codigoBarras || "-"}
+                            </strong>
+                          </div>
+
+                          <div className="campanha-resumo-item campanha-resumo-item-full">
+                            <span>Descrição</span>
+                            <strong>
+                              {artigoCampanhaSelecionado.descricao}
+                            </strong>
+                          </div>
+
+                          <div className="campanha-resumo-item">
+                            <span>PVP2 base</span>
+                            <strong>
+                              {artigoCampanhaSelecionado.pvp2 || "-"}
+                            </strong>
+                          </div>
+
+                          <div className="campanha-resumo-item">
+                            <span>Formato auto</span>
+                            <strong>
+                              {obterFormatoAutomaticoEtiqueta(
+                                artigoCampanhaSelecionado.descricao
+                              ).toUpperCase()}
+                            </strong>
+                          </div>
+                        </div>
+
+                        <div className="campanha-highlight-box">
+                          <span>Validação</span>
+                          <strong>{estadoValidacaoCampanha}</strong>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="empty-state-text">
+                        Seleciona um artigo à esquerda para veres o resumo antes
+                        de o adicionares à campanha.
+                      </p>
+                    )}
                   </div>
-
-                  <div className="campanha-resumo-item campanha-resumo-item-full">
-                    <span>Descrição</span>
-                    <strong>{artigoCampanhaSelecionado.descricao}</strong>
-                  </div>
-
-                  <div className="campanha-resumo-item">
-                    <span>EAN</span>
-                    <strong>
-                      {artigoCampanhaSelecionado.codigoBarras || "-"}
-                    </strong>
-                  </div>
-
-                  <div className="campanha-resumo-item">
-                    <span>PVP2 base</span>
-                    <strong>{artigoCampanhaSelecionado.pvp2 || "-"}</strong>
-                  </div>
-                </div>
-              )}
-
-              <div className="campanha-precos-grid">
-                <label className="input-group">
-                  <span>PVP2 antes</span>
-                  <input
-                    type="text"
-                    value={campanhaAntes}
-                    onChange={(e) => setCampanhaAntes(e.target.value)}
-                    placeholder="Ex: 799,99"
-                  />
-                </label>
-
-                <label className="input-group">
-                  <span>PVP2 atual</span>
-                  <input
-                    type="text"
-                    value={campanhaAtual}
-                    onChange={(e) => setCampanhaAtual(e.target.value)}
-                    placeholder="Ex: 699,99"
-                  />
-                </label>
-
-                <div className="campanha-desconto-box">
-                  <span>Desconto calculado</span>
-                  <strong>{formatarEuro(descontoCampanha)}€</strong>
                 </div>
               </div>
-
-              {erroCampanha && <p className="campanha-erro">{erroCampanha}</p>}
             </div>
 
-            <div className="popup-actions">
+            <div className="popup-actions popup-actions-pro popup-actions-campanha">
               <button
                 type="button"
                 className="btn btn-primary"
                 onClick={adicionarArtigoCampanha}
-                disabled={!!erroCampanha}
+                disabled={!artigoCampanhaSelecionado || !!erroCampanha}
               >
                 Adicionar à campanha
               </button>
@@ -956,142 +1399,41 @@ export default function EtiquetasPage() {
         </div>
       )}
 
-      <div className={`print-area formato-${formatoEtiqueta}`}>
-        {paginas.map((pagina, pageIndex) => (
-          <div
-            key={pageIndex}
-            className={`sheet ${
-              formatoEtiqueta === "a5" ? "sheet-a5" : "sheet-a6"
-            }`}
-          >
-            {pagina.map((item) => {
-              const desconto = Math.max(0, item.antes - item.atual);
-              const textoValidade = obterTextoValidade(item, anoValidade);
-
-              return (
-                <div
-                  key={item.id}
-                  className={`label ${
-                    formatoEtiqueta === "a5" ? "label-a5" : "label-a6"
-                  }`}
-                >
-                  {formatoEtiqueta === "a5" ? (
-                    <div className="label-a5-rotator">
-                      <div className="label-inner">
-                        <div className="topbar">
-                          <img src={logo} alt="Expert" className="print-logo" />
-                        </div>
-
-                        <div className="content">
-                          <div className="topo">
-                            <div className="codigo">{item.codigo}</div>
-                            <div className="titulo">{titulo}</div>
-                            <DescricaoAuto
-                              texto={item.descricao}
-                              formatoEtiqueta={formatoEtiqueta}
-                            />
-                          </div>
-
-                          <div className="precos">
-                            <div className="linha-preco">
-                              <PrecoAntesAuto
-                                valor={item.antes}
-                                formatoEtiqueta={formatoEtiqueta}
-                              />
-                            </div>
-
-                            <div className="linha-preco desconto-linha">
-                              <DescontoAuto
-                                valor={desconto}
-                                formatoEtiqueta={formatoEtiqueta}
-                              />
-                            </div>
-
-                            <div className="linha-preco">
-                              <PrecoAtualAuto
-                                valor={item.atual}
-                                formatoEtiqueta={formatoEtiqueta}
-                              />
-                            </div>
-                          </div>
-
-                          <div className="rodape">
-                            <Barcode value={item.ean} />
-
-                            <div className="validade">{textoValidade}</div>
-
-                            <div className="nota">
-                              VÁLIDO ENQUANTO DURAR O STOCK. Limitado ao stock
-                              existente e não acumulável com outras promoções.
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="label-inner">
-                      <div className="topbar">
-                        <img src={logo} alt="Expert" className="print-logo" />
-                      </div>
-
-                      <div className="content">
-                        <div className="topo">
-                          <div className="codigo">{item.codigo}</div>
-                          <div className="titulo">{titulo}</div>
-                          <DescricaoAuto
-                            texto={item.descricao}
-                            formatoEtiqueta={formatoEtiqueta}
-                          />
-                        </div>
-
-                        <div className="precos">
-                          <div className="linha-preco">
-                            <PrecoAntesAuto
-                              valor={item.antes}
-                              formatoEtiqueta={formatoEtiqueta}
-                            />
-                          </div>
-
-                          <div className="linha-preco desconto-linha">
-                            <DescontoAuto
-                              valor={desconto}
-                              formatoEtiqueta={formatoEtiqueta}
-                            />
-                          </div>
-
-                          <div className="linha-preco">
-                            <PrecoAtualAuto
-                              valor={item.atual}
-                              formatoEtiqueta={formatoEtiqueta}
-                            />
-                          </div>
-                        </div>
-
-                        <div className="rodape">
-                          <Barcode value={item.ean} />
-
-                          <div className="validade">{textoValidade}</div>
-
-                          <div className="nota">
-                            VÁLIDO ENQUANTO DURAR O STOCK. Limitado ao stock
-                            existente e não acumulável com outras promoções.
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-
-            {formatoEtiqueta === "a5" && pagina.length === 1 ? (
-              <div className="label label-a5 label-vazia">
-                <div className="label-inner"></div>
-              </div>
-            ) : null}
-          </div>
-        ))}
+      <div
+        className={`print-area ${
+          modoFormatoAutomatico ? "formato-auto" : `formato-${formatoEtiqueta}`
+        }`}
+      >
+        {paginasImpressao.map(renderPagina)}
       </div>
     </>
   );
+}
+
+function ordenarLista(lista, ordenacao) {
+  if (!ordenacao.coluna || !ordenacao.direcao) return lista;
+
+  const copia = [...lista];
+
+  copia.sort((a, b) => {
+    const valorA = a[ordenacao.coluna];
+    const valorB = b[ordenacao.coluna];
+
+    const aNum = Number(valorA);
+    const bNum = Number(valorB);
+    const ambosNumeros = !Number.isNaN(aNum) && !Number.isNaN(bNum);
+
+    if (ambosNumeros) {
+      return ordenacao.direcao === "asc" ? aNum - bNum : bNum - aNum;
+    }
+
+    const aText = String(valorA || "").toLowerCase();
+    const bText = String(valorB || "").toLowerCase();
+
+    return ordenacao.direcao === "asc"
+      ? aText.localeCompare(bText, "pt")
+      : bText.localeCompare(aText, "pt");
+  });
+
+  return copia;
 }
