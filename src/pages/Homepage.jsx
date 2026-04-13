@@ -1,6 +1,10 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import artigosData from "../data/artigos.json";
+import {
+  loadCampaignHistory,
+  removeCampaignFromHistory,
+} from "../utils/campaignHistory";
 import "../styles/styles.css";
 
 function normalizarTexto(texto) {
@@ -19,6 +23,141 @@ function hasUsefulTechData(item) {
   );
 }
 
+function parseGroundingText(texto = "") {
+  const textoBase = String(texto || "").trim();
+
+  if (!textoBase) return [];
+
+  const normalized = textoBase
+    .replace(/\s*(Título confirmado:)/gi, "\n$1")
+    .replace(/\s*(Descrição confirmada:)/gi, "\n$1")
+    .replace(/\s*(Características técnicas encontradas:)/gi, "\n$1")
+    .replace(/\s*(Resumo para vendedor:)/gi, "\n$1")
+    .replace(/\s*(Observações relevantes:)/gi, "\n$1")
+    .replace(/\s*(Observações:)/gi, "\n$1")
+    .replace(/\s*\*\s+/g, "\n• ")
+    .replace(/\n{2,}/g, "\n")
+    .trim();
+
+  const lines = normalized
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const sections = [];
+  let current = null;
+
+  function pushCurrent() {
+    if (current) sections.push(current);
+  }
+
+  for (const line of lines) {
+    if (/^Título confirmado:/i.test(line)) {
+      pushCurrent();
+      current = {
+        title: "Título confirmado",
+        type: "text",
+        content: line.replace(/^Título confirmado:/i, "").trim(),
+      };
+      continue;
+    }
+
+    if (/^Descrição confirmada:/i.test(line)) {
+      pushCurrent();
+      current = {
+        title: "Descrição confirmada",
+        type: "text",
+        content: line.replace(/^Descrição confirmada:/i, "").trim(),
+      };
+      continue;
+    }
+
+    if (/^Características técnicas encontradas:/i.test(line)) {
+      pushCurrent();
+      current = {
+        title: "Características técnicas",
+        type: "list",
+        items: [],
+      };
+
+      const resto = line
+        .replace(/^Características técnicas encontradas:/i, "")
+        .trim();
+
+      if (resto) {
+        current.items.push(resto.replace(/^•\s*/, "").trim());
+      }
+      continue;
+    }
+
+    if (/^Resumo para vendedor:/i.test(line)) {
+      pushCurrent();
+      current = {
+        title: "Resumo para vendedor",
+        type: "text",
+        content: line.replace(/^Resumo para vendedor:/i, "").trim(),
+      };
+      continue;
+    }
+
+    if (/^Observações relevantes:/i.test(line) || /^Observações:/i.test(line)) {
+      pushCurrent();
+      current = {
+        title: "Observações",
+        type: "text",
+        content: line
+          .replace(/^Observações relevantes:/i, "")
+          .replace(/^Observações:/i, "")
+          .trim(),
+      };
+      continue;
+    }
+
+    if (!current) {
+      current = {
+        title: "Informação encontrada",
+        type: "text",
+        content: line,
+      };
+      continue;
+    }
+
+    if (current.type === "list") {
+      current.items.push(line.replace(/^•\s*/, "").trim());
+    } else {
+      current.content = `${current.content} ${line}`.trim();
+    }
+  }
+
+  pushCurrent();
+  return sections;
+}
+
+function renderGroundingSections(texto = "") {
+  const sections = parseGroundingText(texto);
+  if (!sections.length) return null;
+
+  return (
+    <div className="ai-grounding-sections">
+      {sections.map((section, index) => (
+        <div key={`${section.title}-${index}`} className="ai-grounding-card">
+          <h4>{section.title}</h4>
+
+          {section.type === "list" ? (
+            <ul className="ai-list">
+              {section.items.map((item, itemIndex) => (
+                <li key={itemIndex}>{item}</li>
+              ))}
+            </ul>
+          ) : (
+            <p>{section.content || "-"}</p>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function mapArtigoToAiResultado(item) {
   return {
     titulo: item.titulo_oficial || item.descricao || item.artigo || "",
@@ -28,8 +167,22 @@ function mapArtigoToAiResultado(item) {
     caracteristicas_tecnicas: item.caracteristicas_tecnicas || {},
     resumo_vendedor: item.resumo_vendedor || "",
     observacoes: item.observacoes_ia || "",
-    fontes: item.fonte_oficial ? [item.fonte_oficial] : [],
+    fontes: Array.isArray(item.documentos_oficiais)
+      ? item.documentos_oficiais
+      : item.fonte_oficial
+        ? [item.fonte_oficial]
+        : [],
+    texto_grounding: item.texto_grounding || "",
+    modo_resposta: item.texto_grounding ? "texto" : "estruturado",
   };
+}
+
+function formatarDataHistorico(iso) {
+  try {
+    return new Date(iso).toLocaleString("pt-PT");
+  } catch {
+    return iso || "-";
+  }
 }
 
 export default function HomePage() {
@@ -42,7 +195,14 @@ export default function HomePage() {
   const [aiErro, setAiErro] = useState("");
   const [aiResultado, setAiResultado] = useState(null);
 
+  const [historicoCampanhas, setHistoricoCampanhas] = useState([]);
+  const [campanhaSelecionada, setCampanhaSelecionada] = useState(null);
+
   const artigos = artigosData?.artigos || [];
+
+  useEffect(() => {
+    setHistoricoCampanhas(loadCampaignHistory());
+  }, []);
 
   const sugestoes = useMemo(() => {
     const termo = normalizarTexto(pesquisa);
@@ -62,6 +222,10 @@ export default function HomePage() {
       })
       .slice(0, 5);
   }, [pesquisa, artigos]);
+
+  const historicoPreview = useMemo(() => {
+    return historicoCampanhas.slice(0, 4);
+  }, [historicoCampanhas]);
 
   function abrirPesquisaCompleta() {
     if (!pesquisa.trim()) {
@@ -88,6 +252,31 @@ export default function HomePage() {
     setAiLoading(false);
   }
 
+  function abrirPopupCampanha(campanha) {
+    setCampanhaSelecionada(campanha);
+  }
+
+  function fecharPopupCampanha() {
+    setCampanhaSelecionada(null);
+  }
+
+  function apagarCampanha(id) {
+    const atualizado = removeCampaignFromHistory(id);
+    setHistoricoCampanhas(atualizado);
+
+    if (campanhaSelecionada?.id === id) {
+      setCampanhaSelecionada(null);
+    }
+  }
+
+  function duplicarCampanha(campanha) {
+    navigate("/EtiquetasCampanha", {
+      state: {
+        campanhaDuplicada: campanha,
+      },
+    });
+  }
+
   async function abrirPopupAI() {
     if (!artigoSelecionado) return;
 
@@ -95,7 +284,6 @@ export default function HomePage() {
     setAiErro("");
     setAiResultado(null);
 
-    // Se já existem características no JSON, mostrar logo sem chamar backend
     if (hasUsefulTechData(artigoSelecionado)) {
       setAiResultado(mapArtigoToAiResultado(artigoSelecionado));
       return;
@@ -128,7 +316,6 @@ export default function HomePage() {
 
       setAiResultado(data.resultado || null);
 
-      // Atualiza o artigo em memória para evitar nova chamada nesta sessão
       setArtigoSelecionado((prev) =>
         prev
           ? {
@@ -151,32 +338,16 @@ export default function HomePage() {
                 data?.artigoAtualizado?.resumo_vendedor || prev.resumo_vendedor,
               observacoes_ia:
                 data?.artigoAtualizado?.observacoes_ia || prev.observacoes_ia,
+              texto_grounding:
+                data?.artigoAtualizado?.texto_grounding || prev.texto_grounding,
+              documentos_oficiais:
+                data?.artigoAtualizado?.documentos_oficiais ||
+                prev.documentos_oficiais,
             }
           : prev,
       );
     } catch (error) {
-      console.error("Erro completo AI:");
-      console.error("message:", error?.message);
-      console.error("name:", error?.name);
-      console.error("status:", error?.status);
-      console.error("code:", error?.code);
-      console.error("stack:", error?.stack);
-
-      if (error?.cause) {
-        console.error("cause:", error.cause);
-      }
-
-      if (error?.response) {
-        console.error("response:", JSON.stringify(error.response, null, 2));
-      }
-
-      if (error?.errorDetails) {
-        console.error(
-          "errorDetails:",
-          JSON.stringify(error.errorDetails, null, 2),
-        );
-      }
-
+      console.error("Erro completo AI:", error);
       setAiErro(error?.message || "Erro ao obter dados do artigo.");
     } finally {
       setAiLoading(false);
@@ -271,6 +442,56 @@ export default function HomePage() {
 
       <div className="home-section">
         <div className="table-card-header">
+          <h2>Histórico de campanhas</h2>
+        </div>
+
+        <div className="home-history-wrap">
+          {historicoPreview.length === 0 ? (
+            <div className="home-history-empty">
+              Ainda não existem campanhas guardadas.
+            </div>
+          ) : (
+            <div className="home-history-grid">
+              {historicoPreview.map((campanha) => (
+                <button
+                  key={campanha.id}
+                  type="button"
+                  className="home-history-card"
+                  onClick={() => abrirPopupCampanha(campanha)}
+                >
+                  <div className="home-history-top">
+                    <div>
+                      <strong>{campanha.titulo || "PROMO"}</strong>
+                      <span>{formatarDataHistorico(campanha.criadoEm)}</span>
+                    </div>
+
+                    <span className="home-history-format">
+                      {String(campanha.formatoEtiqueta || "a6").toUpperCase()}
+                    </span>
+                  </div>
+
+                  <div className="home-history-meta">
+                    <span>{campanha.totalArtigos || 0} artigos</span>
+                    <span>Validade: {campanha.anoValidade || "-"}</span>
+                  </div>
+
+                  <div className="home-history-preview">
+                    {Array.isArray(campanha.dados) &&
+                      campanha.dados.slice(0, 2).map((item) => (
+                        <p key={item.id || `${campanha.id}-${item.codigo}`}>
+                          {item.codigo} — {item.descricao}
+                        </p>
+                      ))}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="home-section">
+        <div className="table-card-header">
           <h2>Resumo</h2>
         </div>
 
@@ -294,9 +515,17 @@ export default function HomePage() {
 
       {artigoSelecionado && (
         <div className="popup-overlay">
-          <div className="popup-card ai-popup-card">
-            <div className="popup-header">
-              <h2>Detalhes do artigo</h2>
+          <div className="popup-card ai-popup-card-pro">
+            <div className="popup-header popup-header-pro">
+              <div>
+                <div className="popup-eyebrow">Artigo selecionado</div>
+                <h2>Detalhes do artigo</h2>
+                <p className="popup-subtitle">
+                  Consulta dados base e usa AI apenas quando faltar informação
+                  técnica.
+                </p>
+              </div>
+
               <button
                 type="button"
                 className="popup-close"
@@ -306,132 +535,275 @@ export default function HomePage() {
               </button>
             </div>
 
-            <div className="ai-popup-body">
-              <div className="ai-popup-section">
-                <h3>Dados do artigo</h3>
-                <p>
-                  <strong>Artigo:</strong> {artigoSelecionado.artigo}
-                </p>
-                <p>
-                  <strong>Descrição:</strong> {artigoSelecionado.descricao}
-                </p>
-                <p>
-                  <strong>PVP2:</strong> {artigoSelecionado.pvp2}
-                </p>
-                <p>
-                  <strong>Código de barras:</strong>{" "}
-                  {artigoSelecionado.codigoBarras}
-                </p>
-                <p>
-                  <strong>Armazém:</strong> {artigoSelecionado.armazem}
-                </p>
-                <p>
-                  <strong>Stock:</strong> {artigoSelecionado.stock}
-                </p>
+            <div className="ai-popup-scroll">
+              <div className="popup-status-row">
+                <span className="popup-chip">
+                  Artigo: {artigoSelecionado.artigo || "N/D"}
+                </span>
+
+                <span className="popup-chip">
+                  EAN: {artigoSelecionado.codigoBarras || "N/D"}
+                </span>
+
+                <span className="popup-chip popup-chip-ai">
+                  {hasUsefulTechData(artigoSelecionado)
+                    ? "Dados técnicos já disponíveis"
+                    : "Dados técnicos incompletos"}
+                </span>
               </div>
 
-              <div className="popup-actions">
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={abrirPopupAI}
-                  disabled={aiLoading}
-                >
-                  {aiLoading ? "A analisar..." : "Ver com AI (incompleto)"}
-                </button>
+              <div className="popup-grid-pro">
+                <div className="ai-card-panel">
+                  <div className="section-title-row">
+                    <h3>Dados do artigo</h3>
+                  </div>
 
+                  <div className="popup-info-grid">
+                    <p>
+                      <strong>Artigo:</strong> {artigoSelecionado.artigo || "-"}
+                    </p>
+                    <p>
+                      <strong>Descrição:</strong>{" "}
+                      {artigoSelecionado.descricao || "-"}
+                    </p>
+                    <p>
+                      <strong>PVP2:</strong> {artigoSelecionado.pvp2 || "-"}
+                    </p>
+                    <p>
+                      <strong>Código de barras:</strong>{" "}
+                      {artigoSelecionado.codigoBarras || "-"}
+                    </p>
+                    <p>
+                      <strong>Armazém:</strong>{" "}
+                      {artigoSelecionado.armazem || "-"}
+                    </p>
+                    <p>
+                      <strong>Stock:</strong> {artigoSelecionado.stock || "-"}
+                    </p>
+                  </div>
+                </div>
 
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={fecharPopupArtigo}
-                >
-                  Fechar
-                </button>
-              </div>
+                <div className="ai-card-panel">
+                  <div className="section-title-row">
+                    <h3>Estado da análise</h3>
+                  </div>
 
-              {aiAberta && (
-                <div className="ai-popup-section ai-summary-box">
-                  <h3>Resposta AI</h3>
-
-                  {aiLoading && (
-                    <p>A AI está a procurar características reais na web...</p>
+                  {!aiAberta && (
+                    <p className="empty-state-text">
+                      Abre a AI para consultar características reais do produto.
+                    </p>
                   )}
 
-                  {!aiLoading && aiErro && <p className="ai-error">{aiErro}</p>}
+                  {aiAberta && aiLoading && (
+                    <p className="empty-state-text">
+                      A AI está a procurar características reais na web...
+                    </p>
+                  )}
 
-                  {!aiLoading && !aiErro && aiResultado && (
-                    <div className="ai-result-grid">
+                  {aiAberta && !aiLoading && aiErro && (
+                    <p className="ai-error">{aiErro}</p>
+                  )}
+
+                  {aiAberta && !aiLoading && !aiErro && aiResultado && (
+                    <div className="popup-info-grid">
                       <p>
                         <strong>Título:</strong>{" "}
                         {aiResultado.titulo || "Não confirmado"}
                       </p>
-
                       <p>
                         <strong>Categoria:</strong>{" "}
                         {aiResultado.categoria || "Não confirmado"}
                       </p>
-
                       <p>
                         <strong>Marca:</strong>{" "}
                         {aiResultado.marca || "Não confirmado"}
                       </p>
-
                       <p>
                         <strong>Modelo:</strong>{" "}
                         {aiResultado.modelo || "Não confirmado"}
                       </p>
-
-                      {aiResultado?.caracteristicas_tecnicas &&
-                        Object.keys(aiResultado.caracteristicas_tecnicas)
-                          .length > 0 && (
-                          <div>
-                            <strong>Características técnicas:</strong>
-                            <ul className="ai-list">
-                              {Object.entries(
-                                aiResultado.caracteristicas_tecnicas,
-                              ).map(([key, value]) => (
-                                <li key={key}>
-                                  <strong>{key}:</strong> {value}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-
-                      <p>
-                        <strong>Resumo vendedor:</strong>{" "}
-                        {aiResultado.resumo_vendedor || "Não disponível"}
-                      </p>
-
-                      <p>
-                        <strong>Observações:</strong>{" "}
-                        {aiResultado.observacoes || "Sem observações"}
-                      </p>
-
-                      {Array.isArray(aiResultado.fontes) &&
-                        aiResultado.fontes.length > 0 && (
-                          <div>
-                            <strong>Fontes:</strong>
-                            <ul className="ai-list">
-                              {aiResultado.fontes.map((fonte, index) => (
-                                <li key={index}>
-                                  <a
-                                    href={fonte}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                  >
-                                    {fonte}
-                                  </a>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
                     </div>
                   )}
                 </div>
+              </div>
+
+              {aiAberta && !aiLoading && !aiErro && aiResultado && (
+                <div className="ai-card-panel">
+                  <div className="section-title-row">
+                    <h3>Resposta AI</h3>
+                    <span className="section-count">
+                      {aiResultado?.caracteristicas_tecnicas
+                        ? Object.keys(aiResultado.caracteristicas_tecnicas)
+                            .length
+                        : 0}
+                    </span>
+                  </div>
+
+                  {aiResultado?.modo_resposta === "texto" &&
+                  aiResultado?.texto_grounding ? (
+                    renderGroundingSections(aiResultado.texto_grounding)
+                  ) : (
+                    <>
+                      {aiResultado?.caracteristicas_tecnicas &&
+                        Object.keys(aiResultado.caracteristicas_tecnicas)
+                          .length > 0 && (
+                          <div className="tech-specs-grid">
+                            {Object.entries(
+                              aiResultado.caracteristicas_tecnicas,
+                            ).map(([key, value]) => (
+                              <div key={key} className="tech-spec-item">
+                                <span className="tech-spec-label">{key}</span>
+                                <strong className="tech-spec-value">
+                                  {value || "-"}
+                                </strong>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                      <div className="popup-info-grid ai-extra-info">
+                        <p>
+                          <strong>Resumo vendedor:</strong>{" "}
+                          {aiResultado.resumo_vendedor || "Não disponível"}
+                        </p>
+
+                        <p>
+                          <strong>Observações:</strong>{" "}
+                          {aiResultado.observacoes || "Sem observações"}
+                        </p>
+                      </div>
+                    </>
+                  )}
+
+                  {Array.isArray(aiResultado.fontes) &&
+                    aiResultado.fontes.length > 0 && (
+                      <div className="ai-fontes-box">
+                        <strong>Fontes:</strong>
+                        <ul className="ai-list">
+                          {aiResultado.fontes.map((fonte, index) => (
+                            <li key={index}>
+                              <a
+                                className="popup-link"
+                                href={fonte}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                {fonte}
+                              </a>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                </div>
               )}
+            </div>
+
+            <div className="popup-actions popup-actions-pro">
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={abrirPopupAI}
+                disabled={aiLoading}
+              >
+                {aiLoading ? "A analisar..." : "Ver com AI"}
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={fecharPopupArtigo}
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {campanhaSelecionada && (
+        <div className="popup-overlay">
+          <div className="popup-card popup-card-historico-pro">
+            <div className="popup-header popup-header-pro">
+              <div>
+                <div className="popup-eyebrow">Histórico de campanhas</div>
+                <h2>{campanhaSelecionada.titulo || "Campanha"}</h2>
+                <p className="popup-subtitle">
+                  Consulta os detalhes e duplica a campanha para voltar a editar.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className="popup-close"
+                onClick={fecharPopupCampanha}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="ai-popup-scroll">
+              <div className="popup-status-row">
+                <span className="popup-chip">
+                  Criada em: {formatarDataHistorico(campanhaSelecionada.criadoEm)}
+                </span>
+                <span className="popup-chip">
+                  Artigos: {campanhaSelecionada.totalArtigos || 0}
+                </span>
+                <span className="popup-chip">
+                  Formato base:{" "}
+                  {String(campanhaSelecionada.formatoEtiqueta || "a6").toUpperCase()}
+                </span>
+                <span className="popup-chip">
+                  Validade: {campanhaSelecionada.anoValidade || "-"}
+                </span>
+              </div>
+
+              <div className="historico-popup-list">
+                {Array.isArray(campanhaSelecionada.dados) &&
+                  campanhaSelecionada.dados.map((item) => (
+                    <div
+                      key={item.id || `${campanhaSelecionada.id}-${item.codigo}`}
+                      className="historico-popup-item"
+                    >
+                      <div className="historico-popup-main">
+                        <strong>{item.codigo || "-"}</strong>
+                        <span>{item.descricao || "-"}</span>
+                      </div>
+
+                      <div className="historico-popup-prices">
+                        <span>Antes: {item.antes ?? "-"}</span>
+                        <span>Atual: {item.atual ?? "-"}</span>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+
+            <div className="popup-actions popup-actions-pro">
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => duplicarCampanha(campanhaSelecionada)}
+              >
+                Duplicar campanha
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => apagarCampanha(campanhaSelecionada.id)}
+              >
+                Apagar
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={fecharPopupCampanha}
+              >
+                Fechar
+              </button>
             </div>
           </div>
         </div>
