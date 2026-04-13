@@ -573,13 +573,7 @@ export default function HomePage() {
                       <strong>Código de barras:</strong>{" "}
                       {artigoSelecionado.codigoBarras || "-"}
                     </p>
-                    <p>
-                      <strong>Armazém:</strong>{" "}
-                      {artigoSelecionado.armazem || "-"}
-                    </p>
-                    <p>
-                      <strong>Stock:</strong> {artigoSelecionado.stock || "-"}
-                    </p>
+
                   </div>
                 </div>
 
