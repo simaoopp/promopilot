@@ -4,8 +4,7 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "postinstall": "PLAYWRIGHT_BROWSERS_PATH=0 playwright install --only-shell chromium"
+    "start": "node index.js"
   },
   "dependencies": {
     "@google/genai": "^0.14.1",
