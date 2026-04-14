@@ -285,7 +285,10 @@ function extractStructuredFieldsFromText(rawText = "") {
     return buildEmptyStructuredResult("");
   }
 
-  const normalized = text.replace(/\r/g, "").replace(/\n{2,}/g, "\n").trim();
+  const normalized = text
+    .replace(/\r/g, "")
+    .replace(/\n{2,}/g, "\n")
+    .trim();
 
   const lines = normalized
     .split("\n")
@@ -404,11 +407,7 @@ function isRetryableGeminiError(error) {
 
 async function generateContentWithRetry(
   request,
-  {
-    maxRetries = 4,
-    initialDelayMs = 1500,
-    maxDelayMs = 10000,
-  } = {},
+  { maxRetries = 4, initialDelayMs = 1500, maxDelayMs = 10000 } = {},
 ) {
   let attempt = 0;
   let delay = initialDelayMs;
@@ -1048,7 +1047,10 @@ async function enrichSingleArticle({ artigoInterno, codigoBarras, descricao }) {
     return applyGroundingFallback();
   }
 
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({
+    headless: true,
+    channel: "chromium",
+  });
   const searchPage = await browser.newPage({
     userAgent:
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
