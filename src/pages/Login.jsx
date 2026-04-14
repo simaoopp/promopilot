@@ -1,11 +1,19 @@
 import React, { useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import ForcePasswordChangeModal from "../components/ForcePasswordChangeModal";
 import logo from "../favicon.png";
 import "../styles/styles.css";
 
 export default function Login() {
-  const { user, loadingAuth, signIn } = useAuth();
+  const {
+    user,
+    loadingAuth,
+    loadingProfile,
+    signIn,
+    onboardingRequired,
+    requiresPasswordChange,
+  } = useAuth();
 
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
@@ -13,7 +21,7 @@ export default function Login() {
   const [carregando, setCarregando] = useState(false);
   const [mostrarSenha, setMostrarSenha] = useState(false);
 
-  if (loadingAuth) {
+  if (loadingAuth || (user && loadingProfile)) {
     return (
       <div className="login-page">
         <div className="login-stage">
@@ -28,8 +36,8 @@ export default function Login() {
     );
   }
 
-  if (user) {
-    return <Navigate to="/EtiquetasCampanha" replace />;
+  if (user && !onboardingRequired) {
+    return <Navigate to="/Homepage" replace />;
   }
 
   async function handleSubmit(e) {
@@ -40,12 +48,6 @@ export default function Login() {
     try {
       const emailLimpo = String(email || "").trim();
       await signIn(emailLimpo, senha);
-
-      if (senha === "123") {
-        sessionStorage.setItem("force_password_change", "true");
-      } else {
-        sessionStorage.removeItem("force_password_change");
-      }
     } catch (err) {
       setErro("Email ou palavra-passe inválidos.");
     } finally {
@@ -69,68 +71,85 @@ export default function Login() {
         <div className="login-shape shape-ring-1" />
         <div className="login-shape shape-ring-2" />
 
-        <div className="login-card glass">
-          <div className="login-card-glow" />
+        {!user && (
+          <div className="login-card glass">
+            <div className="login-card-glow" />
 
-          <div className="login-brand">
-            <img src={logo} alt="Expert" className="login-logo" />
-            <div className="login-brand-text">
-              <p className="login-brand-mini">Expert Administração</p>
-              <h1>Login</h1>
-              <p className="login-subtitle">
-                Entre com o seu email e palavra-passe para aceder ao sistema.
-              </p>
+            <div className="login-brand">
+              <img src={logo} alt="Expert" className="login-logo" />
+              <div className="login-brand-text">
+                <p className="login-brand-mini">Expert Administração</p>
+                <h1>Login</h1>
+                <p className="login-subtitle">
+                  Entre com o seu email e palavra-passe para aceder ao sistema.
+                </p>
+              </div>
             </div>
-          </div>
 
-          <form onSubmit={handleSubmit} className="login-form">
-            <label htmlFor="email">Email</label>
-            <input
-              id="email"
-              type="email"
-              placeholder="seu.email@susiarte.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoComplete="email"
-              disabled={carregando}
-              required
-            />
-
-            <label htmlFor="senha">Palavra-passe</label>
-            <div className="login-password-wrap">
+            <form onSubmit={handleSubmit} className="login-form">
+              <label htmlFor="email">Email</label>
               <input
-                id="senha"
-                type={mostrarSenha ? "text" : "password"}
-                placeholder="A sua palavra-passe"
-                value={senha}
-                onChange={(e) => setSenha(e.target.value)}
-                autoComplete="current-password"
+                id="email"
+                type="email"
+                placeholder="seu.email@susiarte.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
                 disabled={carregando}
                 required
               />
+
+              <label htmlFor="senha">Palavra-passe</label>
+              <div className="login-password-wrap">
+                <input
+                  id="senha"
+                  type={mostrarSenha ? "text" : "password"}
+                  placeholder="A sua palavra-passe"
+                  value={senha}
+                  onChange={(e) => setSenha(e.target.value)}
+                  autoComplete="current-password"
+                  disabled={carregando}
+                  required
+                />
+                <button
+                  type="button"
+                  className="login-password-toggle"
+                  onClick={() => setMostrarSenha((prev) => !prev)}
+                  aria-label={
+                    mostrarSenha
+                      ? "Ocultar palavra-passe"
+                      : "Mostrar palavra-passe"
+                  }
+                  aria-pressed={mostrarSenha}
+                  disabled={carregando}
+                >
+                  {mostrarSenha ? "Ocultar" : "Mostrar"}
+                </button>
+              </div>
+
               <button
-                type="button"
-                className="login-password-toggle"
-                onClick={() => setMostrarSenha((prev) => !prev)}
-                aria-label={mostrarSenha ? "Ocultar palavra-passe" : "Mostrar palavra-passe"}
-                aria-pressed={mostrarSenha}
+                type="submit"
+                className="login-submit"
                 disabled={carregando}
               >
-                {mostrarSenha ? "Ocultar" : "Mostrar"}
+                <span>{carregando ? "A entrar..." : "Entrar"}</span>
               </button>
-            </div>
-            <button
-              type="submit"
-              className="login-submit"
-              disabled={carregando}
-            >
-              <span>{carregando ? "A entrar..." : "Entrar"}</span>
-            </button>
 
-            {erro && <p className="login-erro">{erro}</p>}
-          </form>
-        </div>
+              {erro && <p className="login-erro">{erro}</p>}
+            </form>
+          </div>
+        )}
       </div>
+
+      {user && onboardingRequired && (
+        <ForcePasswordChangeModal
+          open={true}
+          requirePassword={requiresPasswordChange}
+          onSuccess={() => {
+            window.location.replace("/Homepage");
+          }}
+        />
+      )}
     </div>
   );
 }

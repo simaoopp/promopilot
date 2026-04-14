@@ -357,6 +357,14 @@ function formatarDataHistorico(iso) {
   }
 }
 
+function formatarAutorCampanha(campanha) {
+  return (
+    String(campanha?.createdBy || "").trim() ||
+    String(campanha?.createdByEmail || "").trim() ||
+    "Utilizador"
+  );
+}
+
 export default function HomePage() {
   const navigate = useNavigate();
   const { profile } = useAuth();
@@ -442,7 +450,9 @@ export default function HomePage() {
   }, [pesquisa, artigos]);
 
   const historicoPreview = useMemo(() => {
-    return historicoCampanhas.slice(0, 4);
+    return (Array.isArray(historicoCampanhas) ? historicoCampanhas : [])
+      .filter(Boolean)
+      .slice(0, 4);
   }, [historicoCampanhas]);
 
   function abrirPesquisaCompleta() {
@@ -663,7 +673,7 @@ export default function HomePage() {
             </div>
           ) : (
             <div className="home-history-grid">
-              {historicoPreview.map((campanha) => (
+              {historicoPreview.filter((campanha) => campanha && campanha.id).map((campanha) => (
                 <button
                   key={campanha.id}
                   type="button"
@@ -684,12 +694,7 @@ export default function HomePage() {
                   <div className="home-history-meta">
                     <span>{campanha.totalArtigos || 0} artigos</span>
                     <span>Validade: {campanha.anoValidade || "-"}</span>
-                    <span>
-                      Criado por:{" "}
-                      {String(campanha.createdBy || "").trim() ||
-                        String(campanha.createdByEmail || "").trim() ||
-                        "Utilizador"}
-                    </span>
+                    <span>Criado por: {formatarAutorCampanha(campanha)}</span>
                   </div>
 
                   <div className="home-history-preview">
@@ -755,10 +760,7 @@ export default function HomePage() {
             <div className="ai-popup-scroll">
               <div className="popup-status-row">
                 <span className="popup-chip">
-                  Criado por:{" "}
-                  {String(campanhaSelecionada.createdBy || "").trim() ||
-                    String(campanhaSelecionada.createdByEmail || "").trim() ||
-                    "Utilizador"}
+                  Criado por: {formatarAutorCampanha(campanhaSelecionada)}
                 </span>
                 <span className="popup-chip">
                   Artigo: {artigoSelecionado.artigo || "N/D"}
