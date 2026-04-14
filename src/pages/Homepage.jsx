@@ -8,10 +8,12 @@ import {
 } from "../utils/campaignHistory";
 import "../styles/styles.css";
 
-const API_BASE_URL =
-  typeof window !== "undefined" && window.location.hostname === "localhost"
-    ? "http://localhost:3001"
-    : "";
+const PORT = process.env.PORT || 3001;
+
+app.listen(PORT, "0.0.0.0", () => {
+  logRuntimeInfo("LISTEN");
+  console.log(`API ativa na porta ${PORT}`);
+});
 
 function buildApiUrl(path) {
   return `${API_BASE_URL}${path}`;

@@ -1,18 +1,20 @@
-import React, { useState } from "react";
-import { Navigate } from "react-router-dom";
+import React, { useMemo, useState } from "react";
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import ForcePasswordChangeModal from "../components/ForcePasswordChangeModal";
 import logo from "../favicon.png";
 import "../styles/styles.css";
 
 export default function Login() {
+  const location = useLocation();
+
   const {
     user,
     loadingAuth,
     loadingProfile,
     signIn,
-    onboardingRequired,
     requiresPasswordChange,
+    missingProfileFields,
   } = useAuth();
 
   const [email, setEmail] = useState("");
@@ -20,6 +22,17 @@ export default function Login() {
   const [erro, setErro] = useState("");
   const [carregando, setCarregando] = useState(false);
   const [mostrarSenha, setMostrarSenha] = useState(false);
+
+  const isInviteFlow = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get("invite") === "1";
+  }, [location.search]);
+
+  const mostrarModalConvite =
+    !!user &&
+    isInviteFlow &&
+    !loadingProfile &&
+    (requiresPasswordChange || missingProfileFields);
 
   if (loadingAuth || (user && loadingProfile)) {
     return (
@@ -36,7 +49,7 @@ export default function Login() {
     );
   }
 
-  if (user && !onboardingRequired) {
+  if (user && !mostrarModalConvite) {
     return <Navigate to="/Homepage" replace />;
   }
 
@@ -141,10 +154,10 @@ export default function Login() {
         )}
       </div>
 
-      {user && onboardingRequired && (
+      {mostrarModalConvite && (
         <ForcePasswordChangeModal
           open={true}
-          requirePassword={requiresPasswordChange}
+          requirePassword={true}
           onSuccess={() => {
             window.location.replace("/Homepage");
           }}
