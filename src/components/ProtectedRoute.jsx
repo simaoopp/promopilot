@@ -1,6 +1,7 @@
 import React from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import ForcePasswordChangeModal from "./ForcePasswordChangeModal";
 
 function LoadingScreen() {
   return (
@@ -12,9 +13,15 @@ function LoadingScreen() {
 }
 
 export default function ProtectedRoute({ children }) {
-  const { user, loadingAuth } = useAuth();
+  const {
+    user,
+    loadingAuth,
+    loadingProfile,
+    onboardingRequired,
+    requiresPasswordChange,
+  } = useAuth();
 
-  if (loadingAuth) {
+  if (loadingAuth || loadingProfile) {
     return <LoadingScreen />;
   }
 
@@ -22,5 +29,13 @@ export default function ProtectedRoute({ children }) {
     return <Navigate to="/login" replace />;
   }
 
-  return children;
+  return (
+    <>
+      {children}
+      <ForcePasswordChangeModal
+        open={onboardingRequired}
+        requirePassword={requiresPasswordChange}
+      />
+    </>
+  );
 }

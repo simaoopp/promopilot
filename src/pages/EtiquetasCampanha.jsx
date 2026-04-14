@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 import Barcode from "../components/Barcode";
 import FilterMenu from "../components/FilterMenu";
@@ -236,7 +237,7 @@ function obterTextoValidade(item, anoValidadeAtual) {
     const fim = somarDias(hoje, 30);
 
     return `VÁLIDO DE ${formatarDataDiaMes(
-      hoje
+      hoje,
     )}/${hoje.getFullYear()} A ${formatarDataDiaMes(fim)}/${fim.getFullYear()}`;
   }
 
@@ -308,7 +309,7 @@ function obterFormatoAutomaticoEtiqueta(descricao = "") {
   ];
 
   return categoriasA5.some((palavra) =>
-    texto.includes(normalizarTexto(palavra))
+    texto.includes(normalizarTexto(palavra)),
   )
     ? "a5"
     : "a6";
@@ -374,6 +375,7 @@ function itemTabelaInvalido(item) {
 
 export default function EtiquetasPage() {
   const location = useLocation();
+  const { user, profile } = useAuth();
 
   const [titulo, setTitulo] = useState(CAMPANHA_TITULO_DEFAULT);
   const [textoColado, setTextoColado] = useState("");
@@ -418,7 +420,7 @@ export default function EtiquetasPage() {
             id: `${item.codigo || "item"}-${Date.now()}-${index}`,
             selecionado: true,
           }))
-        : []
+        : [],
     );
   }, [location.state]);
 
@@ -481,7 +483,7 @@ export default function EtiquetasPage() {
 
   const pvpBaseCampanha = useMemo(
     () => converterPreco(artigoCampanhaSelecionado?.pvp2 || ""),
-    [artigoCampanhaSelecionado]
+    [artigoCampanhaSelecionado],
   );
 
   const dadosFiltrados = useMemo(() => {
@@ -517,7 +519,7 @@ export default function EtiquetasPage() {
 
   const selecionados = useMemo(
     () => dados.filter((item) => item.selecionado),
-    [dados]
+    [dados],
   );
 
   const itensParaImpressao = useMemo(
@@ -527,10 +529,10 @@ export default function EtiquetasPage() {
         _formato: obterFormatoEtiquetaItem(
           item,
           modoFormatoAutomatico,
-          formatoEtiqueta
+          formatoEtiqueta,
         ),
       })),
-    [selecionados, modoFormatoAutomatico, formatoEtiqueta]
+    [selecionados, modoFormatoAutomatico, formatoEtiqueta],
   );
 
   const paginasImpressao = useMemo(
@@ -538,9 +540,9 @@ export default function EtiquetasPage() {
       construirPaginasImpressao(
         itensParaImpressao,
         modoFormatoAutomatico,
-        formatoEtiqueta
+        formatoEtiqueta,
       ),
-    [itensParaImpressao, modoFormatoAutomatico, formatoEtiqueta]
+    [itensParaImpressao, modoFormatoAutomatico, formatoEtiqueta],
   );
 
   const modoImpressaoTexto = modoFormatoAutomatico
@@ -622,9 +624,21 @@ export default function EtiquetasPage() {
     }
   }
 
-  function guardarCampanhaNoHistorico(origem = "manual") {
+  async function guardarCampanhaNoHistorico(origem = "manual") {
     const itensSelecionados = dados.filter((item) => item.selecionado);
-    if (!itensSelecionados.length) return;
+    if (!itensSelecionados.length) return false;
+
+    const store = String(profile?.store || "").trim();
+
+    if (!store || !user?.id) {
+      console.warn(
+        "Sem utilizador autenticado ou loja associada; campanha não foi guardada.",
+      );
+      return false;
+    }
+
+    const nomeCompleto =
+      `${profile?.first_name || ""} ${profile?.last_name || ""}`.trim();
 
     const snapshot = createCampaignSnapshot({
       titulo,
@@ -632,16 +646,27 @@ export default function EtiquetasPage() {
       anoValidade,
       formatoEtiqueta,
       origem,
+      createdBy: nomeCompleto || "Utilizador",
+      createdByEmail: user?.email || "",
+      store,
+      userId: user.id,
     });
 
-    addCampaignToHistory(snapshot);
+    try {
+      await addCampaignToHistory(snapshot);
+      return true;
+    } catch (error) {
+      console.error("Não foi possível guardar a campanha no histórico.", error);
+      alert("Não foi possível guardar a campanha no histórico.");
+      return false;
+    }
   }
 
   function alternarSelecionado(id) {
     setDados((prev) =>
       prev.map((item) =>
-        item.id === id ? { ...item, selecionado: !item.selecionado } : item
-      )
+        item.id === id ? { ...item, selecionado: !item.selecionado } : item,
+      ),
     );
   }
 
@@ -649,8 +674,8 @@ export default function EtiquetasPage() {
     const ids = new Set(dadosFiltrados.map((item) => item.id));
     setDados((prev) =>
       prev.map((item) =>
-        ids.has(item.id) ? { ...item, selecionado: true } : item
-      )
+        ids.has(item.id) ? { ...item, selecionado: true } : item,
+      ),
     );
   }
 
@@ -658,8 +683,8 @@ export default function EtiquetasPage() {
     const ids = new Set(dadosFiltrados.map((item) => item.id));
     setDados((prev) =>
       prev.map((item) =>
-        ids.has(item.id) ? { ...item, selecionado: false } : item
-      )
+        ids.has(item.id) ? { ...item, selecionado: false } : item,
+      ),
     );
   }
 
@@ -672,12 +697,12 @@ export default function EtiquetasPage() {
 
     setDados((prev) =>
       prev.map((item) =>
-        idsInvalidos.has(item.id) ? { ...item, selecionado: false } : item
-      )
+        idsInvalidos.has(item.id) ? { ...item, selecionado: false } : item,
+      ),
     );
   }
 
-  function imprimirComValidosRestantes(restantesValidos) {
+  async function imprimirComValidosRestantes(restantesValidos) {
     removerInvalidosDaSelecao();
     setPopupArtigosInvalidosAberto(false);
 
@@ -686,7 +711,8 @@ export default function EtiquetasPage() {
       return;
     }
 
-    guardarCampanhaNoHistorico("impressao");
+    await guardarCampanhaNoHistorico("impressao");
+
     setTimeout(() => {
       window.print();
     }, 150);
@@ -708,29 +734,29 @@ export default function EtiquetasPage() {
 
     const idsInvalidos = new Set(artigosInvalidosPopup.map((item) => item.id));
     const restantesValidos = selecionados.filter(
-      (item) => !idsInvalidos.has(item.id)
+      (item) => !idsInvalidos.has(item.id),
     );
 
-    imprimirComValidosRestantes(restantesValidos);
+    await imprimirComValidosRestantes(restantesValidos);
   }
 
-  function fecharPopupEProsseguir() {
+  async function fecharPopupEProsseguir() {
     const idsInvalidos = new Set(artigosInvalidosPopup.map((item) => item.id));
     const restantesValidos = selecionados.filter(
-      (item) => !idsInvalidos.has(item.id)
+      (item) => !idsInvalidos.has(item.id),
     );
 
-    imprimirComValidosRestantes(restantesValidos);
+    await imprimirComValidosRestantes(restantesValidos);
   }
 
-  function imprimirSelecionados() {
+  async function imprimirSelecionados() {
     if (!selecionados.length) {
       alert("Seleciona pelo menos um artigo.");
       return;
     }
 
     const invalidos = selecionados.filter(
-      (item) => Number(item.antes) <= Number(item.atual)
+      (item) => Number(item.antes) <= Number(item.atual),
     );
 
     if (invalidos.length > 0) {
@@ -739,7 +765,7 @@ export default function EtiquetasPage() {
       return;
     }
 
-    guardarCampanhaNoHistorico("impressao");
+    await guardarCampanhaNoHistorico("impressao");
     window.print();
   }
 
@@ -835,8 +861,8 @@ export default function EtiquetasPage() {
             item,
             pagina.layout,
             titulo,
-            obterTextoValidade(item, anoValidade)
-          )
+            obterTextoValidade(item, anoValidade),
+          ),
         )}
 
         {pagina.layout === "a5" && pagina.items.length === 1 ? (
@@ -1002,7 +1028,7 @@ export default function EtiquetasPage() {
                             className="filter-button"
                             onClick={() =>
                               setFiltroAberto(
-                                filtroAberto === col.key ? null : col.key
+                                filtroAberto === col.key ? null : col.key,
                               )
                             }
                           >
@@ -1298,7 +1324,7 @@ export default function EtiquetasPage() {
                             <span>Formato auto</span>
                             <strong>
                               {obterFormatoAutomaticoEtiqueta(
-                                artigoCampanhaSelecionado.descricao
+                                artigoCampanhaSelecionado.descricao,
                               ).toUpperCase()}
                             </strong>
                           </div>

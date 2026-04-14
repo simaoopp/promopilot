@@ -1,0 +1,203 @@
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+@media (max-width: 1100px) {
+  .campanha-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .campanha-resumo-panel {
+    position: static;
+  }
+}
+
+@media (max-width: 900px) {
+  .popup-grid-pro,
+  .tech-specs-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ai-popup-card-pro {
+    width: 96vw;
+    max-height: 94vh;
+  }
+
+  .ai-popup-scroll {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 768px) {
+  .login-card {
+    width: min(420px, calc(100vw - 24px));
+    padding: 28px 20px 22px;
+    border-radius: 24px;
+  }
+
+  .login-card h1 {
+    font-size: 36px;
+  }
+
+  .login-logo {
+    width: 60px;
+    height: 60px;
+  }
+
+  .shape-ring-1,
+  .shape-ring-2,
+  .shape-blob-1,
+  .shape-blob-2,
+  .shape-blob-3,
+  .shape-pill-1,
+  .shape-pill-2,
+  .shape-pill-3 {
+    opacity: 0.35;
+  }
+
+  .campanha-resumo,
+  .campanha-precos-grid,
+  .campanha-datas-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .popup-card-campanha,
+  .popup-card-campanha-pro {
+    width: 96vw;
+    max-height: 94vh;
+  }
+
+  .popup-campanha-scroll {
+    padding: 16px 16px 18px;
+  }
+
+  .campanha-precos-grid,
+  .campanha-precos-grid-pro,
+  .campanha-datas-grid,
+  .campanha-resumo {
+    grid-template-columns: 1fr;
+  }
+
+  .campanha-sugestao-top {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .popup-actions-campanha {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 700px) {
+  .home-search-wrap {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .home-search-btn {
+    width: 100%;
+  }
+
+  .home-actions-row {
+    flex-direction: column;
+  }
+
+  .home-actions-row .btn {
+    width: 100%;
+  }
+
+  .page-content {
+    padding: 0 12px 12px;
+  }
+
+  .toolbar-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .topbar-title {
+    font-size: 18px;
+  }
+
+  .page-title {
+    font-size: 24px;
+  }
+
+  .control-card,
+  .toolbar {
+    padding: 16px;
+  }
+
+  .toolbar-actions {
+    flex-direction: column;
+  }
+
+  .toolbar-actions button,
+  .btn {
+    width: 100%;
+  }
+
+  .ano-formato-row,
+  .ano-formato-row-advanced {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .formato-btn {
+    width: 100%;
+  }
+
+  .popup-actions {
+    flex-direction: column;
+  }
+
+  .popup-actions .btn {
+    width: 100%;
+  }
+
+  .home-history-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .historico-popup-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .historico-popup-prices {
+    text-align: left;
+  }
+}
+
+@media (max-width: 600px) {
+  .splash-logo {
+    height: 20vh;
+    max-height: 150px;
+  }
+
+  .splash-loader {
+    width: 80%;
+    height: 6px;
+  }
+}
+
+@media (max-width: 560px) {
+  .login-brand {
+    gap: 12px;
+  }
+
+  .login-card h1 {
+    font-size: 32px;
+  }
+
+  .login-subtitle {
+    font-size: 13px;
+  }
+
+  .login-form input,
+  .login-submit {
+    height: 48px;
+  }
+
+  .login-shape {
+    display: none;
+  }
+}

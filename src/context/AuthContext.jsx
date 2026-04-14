@@ -1,54 +1,111 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { supabase } from "../lib/supabase";
+import { getProfile, upsertProfile } from "../services/profileService";
 
 const AuthContext = createContext(null);
 
+function isBlank(value) {
+  return !String(value || "").trim();
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
+  const [loadingProfile, setLoadingProfile] = useState(false);
+
+  const loadProfile = useCallback(async (userId) => {
+    if (!userId) {
+      setProfile(null);
+      setLoadingProfile(false);
+      return null;
+    }
+
+    try {
+      setLoadingProfile(true);
+      const profileData = await getProfile(userId);
+      setProfile(profileData);
+      return profileData;
+    } catch (error) {
+      console.error("Erro ao carregar perfil:", error?.message || error);
+      setProfile(null);
+      return null;
+    } finally {
+      setLoadingProfile(false);
+    }
+  }, []);
 
   useEffect(() => {
-    let ativo = true;
+    let active = true;
 
-    async function carregarSessao() {
+    async function loadSession() {
       try {
         const { data, error } = await supabase.auth.getSession();
 
-        if (!ativo) return;
+        if (!active) return;
 
         if (error) {
           console.error("Erro ao buscar sessão:", error.message);
           setUser(null);
+          setProfile(null);
+          setLoadingAuth(false);
           return;
         }
 
-        setUser(data?.session?.user ?? null);
+        const currentUser = data?.session?.user ?? null;
+        setUser(currentUser);
+
+        // Auth fica resolvido aqui
+        setLoadingAuth(false);
+
+        // Perfil carrega em separado
+        if (currentUser?.id) {
+          loadProfile(currentUser.id);
+        } else {
+          setProfile(null);
+          setLoadingProfile(false);
+        }
       } catch (error) {
-        if (!ativo) return;
+        if (!active) return;
         console.error("Erro inesperado ao carregar sessão:", error);
         setUser(null);
-      } finally {
-        if (ativo) {
-          setLoadingAuth(false);
-        }
+        setProfile(null);
+        setLoadingProfile(false);
+        setLoadingAuth(false);
       }
     }
 
-    carregarSessao();
+    loadSession();
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!ativo) return;
-      setUser(session?.user ?? null);
+      if (!active) return;
+
+      const currentUser = session?.user ?? null;
+      setUser(currentUser);
       setLoadingAuth(false);
+
+      if (currentUser?.id) {
+        loadProfile(currentUser.id);
+      } else {
+        setProfile(null);
+        setLoadingProfile(false);
+      }
     });
 
     return () => {
-      ativo = false;
+      active = false;
       subscription?.unsubscribe();
     };
-  }, []);
+  }, [loadProfile]);
 
   async function signIn(email, password) {
     const { error } = await supabase.auth.signInWithPassword({
@@ -64,8 +121,9 @@ export function AuthProvider({ children }) {
 
     if (error) throw error;
 
-    sessionStorage.removeItem("force_password_change");
     setUser(null);
+    setProfile(null);
+    setLoadingProfile(false);
   }
 
   async function updatePassword(newPassword) {
@@ -76,19 +134,72 @@ export function AuthProvider({ children }) {
     if (error) throw error;
   }
 
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        loadingAuth,
-        signIn,
-        signOut,
-        updatePassword,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
+  async function completeOnboarding({
+    password,
+    first_name,
+    last_name,
+    store,
+    requirePassword,
+  }) {
+    if (!user?.id) {
+      throw new Error("Utilizador não autenticado.");
+    }
+
+    if (requirePassword) {
+      await updatePassword(password);
+    }
+
+    const updatedProfile = await upsertProfile(user.id, {
+      first_name,
+      last_name,
+      store,
+      must_change_password: false,
+    });
+
+    setProfile(updatedProfile);
+    return updatedProfile;
+  }
+
+  const requiresPasswordChange = profile?.must_change_password === true;
+
+  const missingProfileFields =
+    !!user &&
+    (!profile ||
+      isBlank(profile.first_name) ||
+      isBlank(profile.last_name) ||
+      isBlank(profile.store));
+
+  const onboardingRequired =
+    !!user && !loadingProfile && (requiresPasswordChange || missingProfileFields);
+
+  const value = useMemo(
+    () => ({
+      user,
+      profile,
+      loadingAuth,
+      loadingProfile,
+      onboardingRequired,
+      requiresPasswordChange,
+      missingProfileFields,
+      signIn,
+      signOut,
+      updatePassword,
+      completeOnboarding,
+      refreshProfile: () => loadProfile(user?.id),
+    }),
+    [
+      user,
+      profile,
+      loadingAuth,
+      loadingProfile,
+      onboardingRequired,
+      requiresPasswordChange,
+      missingProfileFields,
+      loadProfile,
+    ]
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

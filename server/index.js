@@ -34,6 +34,8 @@ const MAX_TEXT_LENGTH = 12000;
 const MAX_CANDIDATE_LINKS = 8;
 const MAX_SCRAPE_ATTEMPTS = 5;
 const SEARCH_DEBUG = true;
+const STRUCTURED_OUTPUT_MAX_TOKENS = 1400;
+const GROUNDING_OUTPUT_MAX_TOKENS = 2200;
 
 const KUANTOKUSTA_PRODUCT_URL_REGEX =
   /^https:\/\/www\.kuantokusta\.pt\/p\/\d+\/.+/i;
@@ -69,18 +71,29 @@ const PRODUCT_RESPONSE_SCHEMA = {
 /* =========================================================
    HELPERS
    ========================================================= */
+function logRuntimeInfo(tag = "BOOT") {
+  console.log(`[${tag}] cwd=`, process.cwd());
+  console.log(`[${tag}] DB_FILE=`, DB_FILE);
+  console.log(`[${tag}] GEMINI_API_KEY exists=`, !!process.env.GEMINI_API_KEY);
+  console.log(`[${tag}] NODE_ENV=`, process.env.NODE_ENV || "");
+  console.log(`[${tag}] NETLIFY=`, process.env.NETLIFY || "");
+}
+
 function debug(...args) {
   if (SEARCH_DEBUG) {
     console.log(...args);
   }
 }
 
-function clean(v = "") {
-  return String(v).replace(/\s+/g, " ").trim();
+function clean(value = "") {
+  return String(value).replace(/\s+/g, " ").trim();
 }
 
-function hash(obj) {
-  return crypto.createHash("sha256").update(JSON.stringify(obj)).digest("hex");
+function hash(value) {
+  return crypto
+    .createHash("sha256")
+    .update(JSON.stringify(value))
+    .digest("hex");
 }
 
 function normalizeCompare(text = "") {
@@ -93,8 +106,8 @@ function normalizeCompare(text = "") {
     .trim();
 }
 
-function uniqueStrings(arr) {
-  return [...new Set(arr.filter(Boolean).map((v) => clean(v)))];
+function uniqueStrings(values) {
+  return [...new Set(values.filter(Boolean).map((value) => clean(value)))];
 }
 
 function tokenizeSearch(text = "") {
@@ -131,18 +144,32 @@ function tokenizeSearch(text = "") {
   return uniqueStrings(
     normalizeCompare(text)
       .split(" ")
-      .map((t) => t.trim())
-      .filter((t) => t.length >= 2)
-      .filter((t) => !stopwords.has(t)),
+      .map((token) => token.trim())
+      .filter((token) => token.length >= 2)
+      .filter((token) => !stopwords.has(token)),
   );
 }
 
-function hasUsefulTechData(art) {
-  return !!(
-    art?.caracteristicas_tecnicas &&
-    typeof art.caracteristicas_tecnicas === "object" &&
-    Object.keys(art.caracteristicas_tecnicas).length > 0
-  );
+function hasUsefulTechData(item) {
+  if (
+    !item?.caracteristicas_tecnicas ||
+    typeof item.caracteristicas_tecnicas !== "object"
+  ) {
+    return false;
+  }
+
+  const blacklist = new Set(["estado", "info", "alterado"]);
+
+  const validEntries = Object.entries(item.caracteristicas_tecnicas)
+    .filter(([key, value]) => clean(key) && clean(value))
+    .filter(([key]) => !blacklist.has(normalizeCompare(key)));
+
+  const hasResumo = !!clean(item?.resumo_vendedor || "");
+  const hasFontes = Array.isArray(item?.documentos_oficiais)
+    ? item.documentos_oficiais.some(Boolean)
+    : !!clean(item?.fonte_oficial || "");
+
+  return validEntries.length >= 2 || hasResumo || hasFontes;
 }
 
 function extractBrandAndModel(descricao = "") {
@@ -154,6 +181,7 @@ function extractBrandAndModel(descricao = "") {
 
   if (text.includes(" - ")) {
     const [marca, resto] = text.split(" - ", 2);
+
     return {
       marca: clean(marca),
       modelo: clean(resto),
@@ -168,18 +196,18 @@ function extractBrandAndModel(descricao = "") {
 
 function normalizeTechSpecs(value) {
   if (Array.isArray(value)) {
-    const out = {};
+    const output = {};
 
     for (const item of value) {
       const chave = clean(item?.chave || "");
       const valor = clean(item?.valor || "");
 
       if (chave && valor) {
-        out[chave] = valor;
+        output[chave] = valor;
       }
     }
 
-    return out;
+    return output;
   }
 
   if (value && typeof value === "object") {
@@ -201,22 +229,21 @@ function safeParseJson(text) {
   }
 
   const attempts = [];
-
   attempts.push(raw);
 
-  const semFences = raw
+  const withoutFences = raw
     .replace(/^```json\s*/i, "")
     .replace(/^```\s*/i, "")
     .replace(/\s*```$/i, "")
     .trim();
 
-  attempts.push(semFences);
+  attempts.push(withoutFences);
 
-  const firstBrace = semFences.indexOf("{");
-  const lastBrace = semFences.lastIndexOf("}");
+  const firstBrace = withoutFences.indexOf("{");
+  const lastBrace = withoutFences.lastIndexOf("}");
 
   if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-    attempts.push(semFences.slice(firstBrace, lastBrace + 1));
+    attempts.push(withoutFences.slice(firstBrace, lastBrace + 1));
   }
 
   for (const candidate of attempts) {
@@ -241,6 +268,176 @@ function safeParseJson(text) {
   throw new Error("A Gemini não devolveu JSON válido.");
 }
 
+function buildEmptyStructuredResult(rawText = "") {
+  return {
+    titulo_oficial: "",
+    descricao_oficial: "",
+    caracteristicas_tecnicas: {},
+    resumo_vendedor: "",
+    observacoes_ia: clean(rawText || ""),
+  };
+}
+
+function extractStructuredFieldsFromText(rawText = "") {
+  const text = String(rawText || "").trim();
+
+  if (!text) {
+    return buildEmptyStructuredResult("");
+  }
+
+  const normalized = text.replace(/\r/g, "").replace(/\n{2,}/g, "\n").trim();
+
+  const lines = normalized
+    .split("\n")
+    .map((line) => clean(line))
+    .filter(Boolean);
+
+  const result = {
+    titulo_oficial: "",
+    descricao_oficial: "",
+    caracteristicas_tecnicas: {},
+    resumo_vendedor: "",
+    observacoes_ia: "",
+  };
+
+  let specsMode = false;
+
+  for (const line of lines) {
+    if (/^t[ií]tulo confirmado:/i.test(line)) {
+      result.titulo_oficial = clean(
+        line.replace(/^t[ií]tulo confirmado:/i, ""),
+      );
+      specsMode = false;
+      continue;
+    }
+
+    if (/^descri[cç][aã]o confirmada:/i.test(line)) {
+      result.descricao_oficial = clean(
+        line.replace(/^descri[cç][aã]o confirmada:/i, ""),
+      );
+      specsMode = false;
+      continue;
+    }
+
+    if (/^resumo para vendedor:/i.test(line)) {
+      result.resumo_vendedor = clean(
+        line.replace(/^resumo para vendedor:/i, ""),
+      );
+      specsMode = false;
+      continue;
+    }
+
+    if (
+      /^observa[cç][õo]es relevantes:/i.test(line) ||
+      /^observa[cç][õo]es:/i.test(line)
+    ) {
+      result.observacoes_ia = clean(
+        line
+          .replace(/^observa[cç][õo]es relevantes:/i, "")
+          .replace(/^observa[cç][õo]es:/i, ""),
+      );
+      specsMode = false;
+      continue;
+    }
+
+    if (/^caracter[ií]sticas t[eé]cnicas encontradas:/i.test(line)) {
+      const afterHeader = clean(
+        line.replace(/^caracter[ií]sticas t[eé]cnicas encontradas:/i, ""),
+      );
+
+      if (afterHeader) {
+        const idx = afterHeader.indexOf(":");
+        if (idx > 0) {
+          const key = clean(afterHeader.slice(0, idx));
+          const value = clean(afterHeader.slice(idx + 1));
+          if (key && value) {
+            result.caracteristicas_tecnicas[key] = value;
+          }
+        }
+      }
+
+      specsMode = true;
+      continue;
+    }
+
+    if (specsMode) {
+      const bulletLine = line.replace(/^[-•*]\s*/, "");
+      const idx = bulletLine.indexOf(":");
+
+      if (idx > 0) {
+        const key = clean(bulletLine.slice(0, idx));
+        const value = clean(bulletLine.slice(idx + 1));
+
+        if (key && value) {
+          result.caracteristicas_tecnicas[key] = value;
+          continue;
+        }
+      }
+    }
+
+    if (!result.observacoes_ia) {
+      result.observacoes_ia = line;
+    } else {
+      result.observacoes_ia = `${result.observacoes_ia} ${line}`.trim();
+    }
+  }
+
+  return result;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryableGeminiError(error) {
+  const message = String(error?.message || error || "").toLowerCase();
+
+  return (
+    message.includes("503") ||
+    message.includes("service unavailable") ||
+    message.includes("high demand") ||
+    message.includes("unavailable") ||
+    message.includes("deadline exceeded") ||
+    message.includes("overloaded")
+  );
+}
+
+async function generateContentWithRetry(
+  request,
+  {
+    maxRetries = 4,
+    initialDelayMs = 1500,
+    maxDelayMs = 10000,
+  } = {},
+) {
+  let attempt = 0;
+  let delay = initialDelayMs;
+
+  while (true) {
+    try {
+      return await ai.models.generateContent(request);
+    } catch (error) {
+      attempt += 1;
+
+      const retryable = isRetryableGeminiError(error);
+      const isLastAttempt = attempt > maxRetries;
+
+      console.error("[GEMINI] erro na chamada:", {
+        attempt,
+        retryable,
+        message: error?.message || String(error),
+      });
+
+      if (!retryable || isLastAttempt) {
+        throw error;
+      }
+
+      await sleep(delay);
+      delay = Math.min(delay * 2, maxDelayMs);
+    }
+  }
+}
+
 async function repairBrokenJsonToSchema(rawText) {
   const prompt = `
 Recebeste um texto que deveria ser JSON, mas está mal formado.
@@ -262,30 +459,47 @@ Texto a corrigir:
 ${String(rawText || "").trim()}
 `;
 
-  const r = await ai.models.generateContent({
-    model: AI_MODEL,
-    contents: prompt,
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: PRODUCT_RESPONSE_SCHEMA,
-      candidateCount: 1,
-      temperature: 0,
-      topP: 0.9,
-      maxOutputTokens: 1200,
-    },
-  });
+  try {
+    const response = await generateContentWithRetry({
+      model: AI_MODEL,
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: PRODUCT_RESPONSE_SCHEMA,
+        candidateCount: 1,
+        temperature: 0,
+        topP: 0.9,
+        maxOutputTokens: STRUCTURED_OUTPUT_MAX_TOKENS,
+      },
+    });
 
-  const text = String(r.text || "").trim();
-  debug("[JSON-REPAIR] resposta:", text);
+    const text = String(response.text || "").trim();
+    debug("[JSON-REPAIR] resposta:", text);
 
-  const parsed = safeParseJson(text);
+    const parsed = safeParseJson(text);
 
-  return {
-    ...parsed,
-    caracteristicas_tecnicas: normalizeTechSpecs(
-      parsed?.caracteristicas_tecnicas,
-    ),
-  };
+    return {
+      ...parsed,
+      caracteristicas_tecnicas: normalizeTechSpecs(
+        parsed?.caracteristicas_tecnicas,
+      ),
+    };
+  } catch (error) {
+    console.error("[JSON-REPAIR] falhou, a usar extração local:", {
+      error: error?.message || String(error),
+      rawPreview: String(rawText || "").slice(0, 1000),
+    });
+
+    const extracted = extractStructuredFieldsFromText(rawText);
+
+    return {
+      ...buildEmptyStructuredResult(rawText),
+      ...extracted,
+      caracteristicas_tecnicas: normalizeTechSpecs(
+        extracted?.caracteristicas_tecnicas,
+      ),
+    };
+  }
 }
 
 function extractGroundedSources(response) {
@@ -314,6 +528,28 @@ async function saveDB(db) {
   await fs.writeFile(DB_FILE, JSON.stringify(db, null, 2), "utf8");
 }
 
+function resolveArticle(artigos, { artigoInterno, codigoBarras }) {
+  if (artigoInterno) {
+    const byInternalCode = artigos.find(
+      (item) => item.artigo === artigoInterno,
+    );
+    if (byInternalCode) {
+      return byInternalCode;
+    }
+  }
+
+  if (codigoBarras) {
+    const byBarcode = artigos.find(
+      (item) => item.codigoBarras === codigoBarras,
+    );
+    if (byBarcode) {
+      return byBarcode;
+    }
+  }
+
+  return null;
+}
+
 /* =========================================================
    SEARCH
    ========================================================= */
@@ -335,28 +571,30 @@ async function searchProductCandidates(page, { descricao, ean }) {
 
   await page.goto(
     `https://www.bing.com/search?q=${encodeURIComponent(query)}`,
-    { waitUntil: "domcontentloaded", timeout: 60000 },
+    {
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
+    },
   );
 
   await page.waitForTimeout(2000);
 
-  debug("[KK+BING] final url:", page.url());
-  debug("[KK+BING] title:", await page.title());
-
-  const links = await page.$$eval("li.b_algo h2 a, a[href^='http']", (els) =>
-    els.map((a) => a.getAttribute("href") || a.href || "").filter(Boolean),
+  const links = await page.$$eval(
+    "li.b_algo h2 a, a[href^='http']",
+    (elements) =>
+      elements
+        .map((anchor) => anchor.getAttribute("href") || anchor.href || "")
+        .filter(Boolean),
   );
 
-  const normalized = [
+  return [
     ...new Set(
       links
         .map((href) => String(href || "").trim())
         .filter((href) => /^https?:\/\//i.test(href))
         .filter((href) => isKuantokustaProductUrl(href)),
     ),
-  ];
-
-  const ranked = normalized
+  ]
     .map((link, index) => ({
       link,
       source: "bing-site-kuantokusta",
@@ -364,16 +602,6 @@ async function searchProductCandidates(page, { descricao, ean }) {
       score: 1000 - index,
     }))
     .slice(0, MAX_CANDIDATE_LINKS);
-
-  debug(
-    "[KK+BING] candidatos:",
-    ranked.map((x) => ({
-      score: x.score,
-      link: x.link,
-    })),
-  );
-
-  return ranked;
 }
 
 function pageLooksLikeCorrectProduct(raw, { descricao, ean }) {
@@ -383,7 +611,7 @@ function pageLooksLikeCorrectProduct(raw, { descricao, ean }) {
       raw?.descricao || "",
       raw?.texto || "",
       Object.entries(raw?.caracteristicas || {})
-        .map(([k, v]) => `${k} ${v}`)
+        .map(([key, value]) => `${key} ${value}`)
         .join(" "),
     ].join(" "),
   );
@@ -391,26 +619,11 @@ function pageLooksLikeCorrectProduct(raw, { descricao, ean }) {
   const eanClean = normalizeCompare(ean);
 
   if (eanClean) {
-    const eanOk = haystack.includes(eanClean);
-
-    debug("Validação página:", {
-      titulo: raw?.titulo || "",
-      eanOk,
-      modo: "ean-first",
-    });
-
-    return eanOk;
+    return haystack.includes(eanClean);
   }
 
   const tokens = tokenizeSearch(descricao);
-  const tokenHits = tokens.filter((t) => haystack.includes(t));
-
-  debug("Validação página:", {
-    titulo: raw?.titulo || "",
-    tokenHits,
-    tokens,
-    modo: "descricao-fallback",
-  });
+  const tokenHits = tokens.filter((token) => haystack.includes(token));
 
   return tokenHits.length >= Math.min(3, tokens.length);
 }
@@ -422,10 +635,11 @@ function extractSpecs($) {
   const specs = {};
 
   $("table tr").each((_, tr) => {
-    const t = $(tr).find("th,td");
-    if (t.length >= 2) {
-      const key = clean($(t[0]).text());
-      const value = clean($(t[1]).text());
+    const cells = $(tr).find("th,td");
+
+    if (cells.length >= 2) {
+      const key = clean($(cells[0]).text());
+      const value = clean($(cells[1]).text());
 
       if (key && value && key.length <= 120) {
         specs[key] = value;
@@ -434,10 +648,11 @@ function extractSpecs($) {
   });
 
   $("dl").each((_, dl) => {
-    const dts = $(dl).find("dt");
-    dts.each((i, dt) => {
+    const terms = $(dl).find("dt");
+
+    terms.each((index, dt) => {
       const key = clean($(dt).text());
-      const value = clean($(dl).find("dd").eq(i).text());
+      const value = clean($(dl).find("dd").eq(index).text());
 
       if (key && value && key.length <= 120) {
         specs[key] = value;
@@ -447,11 +662,14 @@ function extractSpecs($) {
 
   $("li").each((_, li) => {
     const text = clean($(li).text());
-    if (!text.includes(":")) return;
 
-    const idx = text.indexOf(":");
-    const key = clean(text.slice(0, idx));
-    const value = clean(text.slice(idx + 1));
+    if (!text.includes(":")) {
+      return;
+    }
+
+    const index = text.indexOf(":");
+    const key = clean(text.slice(0, index));
+    const value = clean(text.slice(index + 1));
 
     if (key && value && key.length <= 120) {
       specs[key] = value;
@@ -471,7 +689,6 @@ async function scrape(page, url) {
 
   const html = await page.content();
   const $ = cheerio.load(html);
-
   const specs = extractSpecs($);
   const bodyText = clean($("body").text());
 
@@ -532,7 +749,7 @@ Dados:
 ${JSON.stringify(payload, null, 2)}
 `;
 
-  const r = await ai.models.generateContent({
+  const response = await generateContentWithRetry({
     model: AI_MODEL,
     contents: prompt,
     config: {
@@ -541,11 +758,11 @@ ${JSON.stringify(payload, null, 2)}
       candidateCount: 1,
       temperature: 0.1,
       topP: 0.9,
-      maxOutputTokens: 1200,
+      maxOutputTokens: STRUCTURED_OUTPUT_MAX_TOKENS,
     },
   });
 
-  const text = String(r.text || "").trim();
+  const text = String(response.text || "").trim();
   const parsed = safeParseJson(text);
 
   return {
@@ -577,19 +794,49 @@ Não mistures produtos parecidos.
 O campo "artigo_interno" é apenas um código interno.
 Dá prioridade à descrição_base e ao codigoBarras.
 
-Quero uma resposta curta mas útil em TEXTO, sem markdown, contendo:
-- título confirmado
-- descrição confirmada
-- características técnicas encontradas
-- resumo para vendedor
-- observações relevantes
-- se houver dúvida de correspondência, diz isso claramente
+Quero a resposta em TEXTO SIMPLES, organizada exatamente com estas secções e nesta ordem.
+Não uses markdown.
+Não uses [cite], [source], notas de rodapé, colchetes de citação nem referências inline.
+Cada secção deve começar numa nova linha.
+
+Formato obrigatório:
+
+Título confirmado:
+<texto>
+
+Descrição confirmada:
+<texto>
+
+Marca:
+<texto>
+
+Modelo:
+<texto>
+
+Série:
+<texto>
+
+Categoria:
+<texto>
+
+Características técnicas encontradas:
+- chave: valor
+- chave: valor
+- chave: valor
+
+Resumo para vendedor:
+<texto>
+
+Observações relevantes:
+<texto>
+
+Se houver dúvida de correspondência, diz isso claramente em "Observações relevantes".
 
 Produto:
 ${JSON.stringify(payload, null, 2)}
 `;
 
-  const r = await ai.models.generateContent({
+  const response = await generateContentWithRetry({
     model: AI_MODEL,
     contents: prompt,
     config: {
@@ -597,15 +844,12 @@ ${JSON.stringify(payload, null, 2)}
       candidateCount: 1,
       temperature: 0.1,
       topP: 0.9,
-      maxOutputTokens: 1200,
+      maxOutputTokens: GROUNDING_OUTPUT_MAX_TOKENS,
     },
   });
 
-  const text = String(r.text || "").trim();
-  const fontes = extractGroundedSources(r);
-
-  debug("[GROUNDING] texto bruto:", text);
-  debug("[GROUNDING] fontes:", fontes);
+  const text = String(response.text || "").trim();
+  const fontes = extractGroundedSources(response);
 
   if (!text) {
     throw new Error("A Gemini não devolveu texto no grounding.");
@@ -655,7 +899,7 @@ Dados:
 ${JSON.stringify(payload, null, 2)}
 `;
 
-  const r = await ai.models.generateContent({
+  const response = await generateContentWithRetry({
     model: AI_MODEL,
     contents: prompt,
     config: {
@@ -664,12 +908,11 @@ ${JSON.stringify(payload, null, 2)}
       candidateCount: 1,
       temperature: 0.1,
       topP: 0.9,
-      maxOutputTokens: 1200,
+      maxOutputTokens: STRUCTURED_OUTPUT_MAX_TOKENS,
     },
   });
 
-  const text = String(r.text || "").trim();
-  debug("[GROUNDING->JSON] resposta bruta:", text);
+  const text = String(response.text || "").trim();
 
   try {
     const parsed = safeParseJson(text);
@@ -681,7 +924,11 @@ ${JSON.stringify(payload, null, 2)}
       ),
     };
   } catch (error) {
-    debug("[GROUNDING->JSON] JSON inválido, a tentar reparar...");
+    console.error("[GROUNDING->JSON] JSON inválido, a tentar reparar...", {
+      error: error?.message || String(error),
+      rawPreview: text.slice(0, 1000),
+    });
+
     return await repairBrokenJsonToSchema(text);
   }
 }
@@ -689,27 +936,6 @@ ${JSON.stringify(payload, null, 2)}
 /* =========================================================
    MAPPERS
    ========================================================= */
-function buildGroundingTextResult(
-  art,
-  groundedText,
-  fontes = [],
-  marca = "",
-  modelo = "",
-) {
-  return {
-    titulo: art.titulo_oficial || art.descricao || art.artigo || "",
-    categoria: art.categoria || "",
-    marca: art.marca || marca || "",
-    modelo: art.modelo || modelo || "",
-    caracteristicas_tecnicas: art.caracteristicas_tecnicas || {},
-    resumo_vendedor: art.resumo_vendedor || "",
-    observacoes: art.observacoes_ia || "",
-    fontes,
-    texto_grounding: groundedText || "",
-    modo_resposta: "texto",
-  };
-}
-
 function mapArtigoToResultado(art, marca = "", modelo = "") {
   const fontes = Array.isArray(art.documentos_oficiais)
     ? art.documentos_oficiais.filter(Boolean)
@@ -717,17 +943,32 @@ function mapArtigoToResultado(art, marca = "", modelo = "") {
       ? [art.fonte_oficial]
       : [];
 
+  const caracteristicas = art.caracteristicas_tecnicas || {};
+  const temEstrutura =
+    Object.keys(caracteristicas).length > 0 ||
+    !!clean(art.resumo_vendedor || "") ||
+    !!clean(art.observacoes_ia || "");
+
   return {
-    titulo: art.titulo_oficial || art.descricao || art.artigo || "",
+    titulo:
+      art.titulo_oficial ||
+      art.descricao_oficial ||
+      art.descricao ||
+      art.artigo ||
+      "",
     categoria: art.categoria || "",
     marca: art.marca || marca || "",
     modelo: art.modelo || modelo || "",
-    caracteristicas_tecnicas: art.caracteristicas_tecnicas || {},
+    caracteristicas_tecnicas: caracteristicas,
     resumo_vendedor: art.resumo_vendedor || "",
     observacoes: art.observacoes_ia || "",
     fontes,
     texto_grounding: art.texto_grounding || "",
-    modo_resposta: art.texto_grounding ? "texto" : "estruturado",
+    modo_resposta: temEstrutura
+      ? "estruturado"
+      : art.texto_grounding
+        ? "texto"
+        : "estruturado",
   };
 }
 
@@ -741,24 +982,70 @@ async function enrichSingleArticle({ artigoInterno, codigoBarras, descricao }) {
     throw new Error('O JSON deve ter a estrutura { "artigos": [] }');
   }
 
-  const art = db.artigos.find(
-    (item) =>
-      (artigoInterno && item.artigo === artigoInterno) ||
-      (codigoBarras && item.codigoBarras === codigoBarras),
-  );
+  const art = resolveArticle(db.artigos, { artigoInterno, codigoBarras });
 
   if (!art) {
     throw new Error("Artigo não encontrado no JSON.");
   }
 
-  if (hasUsefulTechData(art)) {
-    const { marca, modelo } = extractBrandAndModel(art.descricao || descricao);
+  const descricaoPesquisa = clean(art.descricao || descricao || "");
+  const eanPesquisa = clean(art.codigoBarras || codigoBarras || "");
+  const { marca, modelo } = extractBrandAndModel(descricaoPesquisa);
 
+  if (hasUsefulTechData(art)) {
     return {
       fromCache: true,
       artigoAtualizado: art,
       resultado: mapArtigoToResultado(art, marca, modelo),
     };
+  }
+
+  const applyGroundingFallback = async () => {
+    const grounded = await searchWithGrounding(art);
+    const structured = await groundedTextToStructuredJson(
+      art,
+      grounded.texto,
+      grounded.fontes || [],
+    );
+
+    Object.assign(art, {
+      marca: art.marca || marca || "",
+      modelo: art.modelo || modelo || "",
+      fonte_oficial: grounded.fontes?.[0] || "",
+      raw_hash: hash({
+        grounded: true,
+        descricao: art.descricao || "",
+        codigoBarras: art.codigoBarras || "",
+        fontes: grounded.fontes || [],
+        texto_grounding: grounded.texto || "",
+      }),
+      ultima_atualizacao: new Date().toISOString(),
+      titulo_oficial: structured.titulo_oficial || art.titulo_oficial || "",
+      descricao_oficial:
+        structured.descricao_oficial || art.descricao_oficial || "",
+      caracteristicas_tecnicas: structured.caracteristicas_tecnicas || {},
+      resumo_vendedor: structured.resumo_vendedor || "",
+      observacoes_ia:
+        structured.observacoes_ia || grounded.texto || art.observacoes_ia || "",
+      documentos_oficiais: grounded.fontes || [],
+      texto_grounding: grounded.texto || "",
+    });
+
+    await saveDB(db);
+
+    return {
+      fromCache: false,
+      artigoAtualizado: art,
+      resultado: mapArtigoToResultado(art, marca, modelo),
+    };
+  };
+
+  if (!eanPesquisa) {
+    if (!USE_GROUNDING_FALLBACK) {
+      throw new Error("Este modo requer código EAN.");
+    }
+
+    return applyGroundingFallback();
   }
 
   const browser = await chromium.launch({ headless: true });
@@ -772,15 +1059,6 @@ async function enrichSingleArticle({ artigoInterno, codigoBarras, descricao }) {
   });
 
   try {
-    const descricaoPesquisa = clean(art.descricao || descricao || "");
-    const eanPesquisa = clean(art.codigoBarras || codigoBarras || "");
-
-    if (!eanPesquisa) {
-      throw new Error("Este modo requer código EAN.");
-    }
-
-    const { marca, modelo } = extractBrandAndModel(descricaoPesquisa);
-
     const candidates = await searchProductCandidates(searchPage, {
       descricao: descricaoPesquisa,
       ean: eanPesquisa,
@@ -788,17 +1066,9 @@ async function enrichSingleArticle({ artigoInterno, codigoBarras, descricao }) {
 
     let selectedUrl = "";
     let raw = null;
-    const candidateErrors = [];
 
     for (const candidate of candidates.slice(0, MAX_SCRAPE_ATTEMPTS)) {
       try {
-        debug("A testar candidato:", {
-          score: candidate.score,
-          source: candidate.source,
-          query: candidate.query,
-          link: candidate.link,
-        });
-
         const scraped = await scrape(scrapePage, candidate.link);
 
         if (
@@ -807,82 +1077,44 @@ async function enrichSingleArticle({ artigoInterno, codigoBarras, descricao }) {
             ean: eanPesquisa,
           })
         ) {
-          candidateErrors.push(
-            `Sem correspondência suficiente: ${candidate.link}`,
-          );
           continue;
         }
 
         selectedUrl = candidate.link;
         raw = scraped;
         break;
-      } catch (err) {
-        candidateErrors.push(
-          `[${candidate.link}] ${err?.message || String(err)}`,
+      } catch (error) {
+        debug(
+          "[SCRAPE] erro no candidato:",
+          candidate.link,
+          error?.message || error,
         );
       }
     }
 
-    let enriched;
-    let extraFontes = [];
-
     if (!selectedUrl || !raw) {
-      debug("Falhas candidatos:", candidateErrors);
-
       if (!USE_GROUNDING_FALLBACK) {
         throw new Error(
           "Não foi encontrada uma página credível no KuantoKusta para o artigo.",
         );
       }
 
-      debug("[GROUNDING] A usar fallback com Google Search...");
-      const grounded = await searchWithGrounding(art);
-
-      extraFontes = grounded.fontes || [];
-
-      Object.assign(art, {
-        fonte_oficial: extraFontes[0] || "",
-        raw_hash: hash({
-          grounded: true,
-          descricao: art.descricao || "",
-          codigoBarras: art.codigoBarras || "",
-          fontes: extraFontes,
-          texto_grounding: grounded.texto || "",
-        }),
-        ultima_atualizacao: new Date().toISOString(),
-        observacoes_ia: grounded.texto || "",
-        documentos_oficiais: extraFontes,
-        texto_grounding: grounded.texto || "",
-      });
-
-      await saveDB(db);
-
-      return {
-        fromCache: false,
-        artigoAtualizado: art,
-        resultado: buildGroundingTextResult(
-          art,
-          grounded.texto,
-          extraFontes,
-          marca,
-          modelo,
-        ),
-      };
+      return applyGroundingFallback();
     }
 
-    const h = hash({
-      fonte_oficial: raw.fonte_oficial,
-      titulo: raw.titulo,
-      descricao: raw.descricao,
-      caracteristicas: raw.caracteristicas,
-      texto: raw.texto,
-    });
-
-    enriched = await enrich(art, raw);
+    const enriched = await enrich(art, raw);
 
     Object.assign(art, {
+      marca: art.marca || marca || "",
+      modelo: art.modelo || modelo || "",
       fonte_oficial: selectedUrl,
-      raw_hash: h,
+      raw_hash: hash({
+        fonte_oficial: raw.fonte_oficial,
+        titulo: raw.titulo,
+        descricao: raw.descricao,
+        caracteristicas: raw.caracteristicas,
+        texto: raw.texto,
+      }),
       ultima_atualizacao: new Date().toISOString(),
       titulo_oficial: enriched.titulo_oficial || "",
       descricao_oficial: enriched.descricao_oficial || "",
@@ -890,6 +1122,7 @@ async function enrichSingleArticle({ artigoInterno, codigoBarras, descricao }) {
       resumo_vendedor: enriched.resumo_vendedor || "",
       observacoes_ia: enriched.observacoes_ia || "",
       documentos_oficiais: [selectedUrl],
+      texto_grounding: "",
     });
 
     await saveDB(db);
@@ -897,14 +1130,7 @@ async function enrichSingleArticle({ artigoInterno, codigoBarras, descricao }) {
     return {
       fromCache: false,
       artigoAtualizado: art,
-      resultado: {
-        ...mapArtigoToResultado(art, marca, modelo),
-        fontes: art.documentos_oficiais?.length
-          ? art.documentos_oficiais
-          : art.fonte_oficial
-            ? [art.fonte_oficial]
-            : [],
-      },
+      resultado: mapArtigoToResultado(art, marca, modelo),
     };
   } finally {
     await searchPage.close().catch(() => {});
@@ -952,6 +1178,14 @@ app.post("/api/ai-produto", async (req, res) => {
       artigoAtualizado: result.artigoAtualizado,
     });
   } catch (error) {
+    if (isRetryableGeminiError(error)) {
+      return res.status(503).json({
+        ok: false,
+        error:
+          "A Gemini está com elevada procura neste momento. Tenta novamente dentro de instantes.",
+      });
+    }
+
     console.error("Erro /api/ai-produto:", error);
 
     return res.status(500).json({
@@ -962,5 +1196,6 @@ app.post("/api/ai-produto", async (req, res) => {
 });
 
 app.listen(3001, () => {
+  logRuntimeInfo("LISTEN");
   console.log("API ativa em http://localhost:3001");
 });

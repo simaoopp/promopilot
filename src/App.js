@@ -1,13 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import Sidebar from "./components/Sidebar";
+import ProtectedRoute from "./components/ProtectedRoute";
 import EtiquetasPage from "./pages/EtiquetasCampanha";
 import EtiquetasExcelPage from "./pages/EtiquetasCampanhaExcel";
 import Etiquetas from "./pages/Etiquetas";
 import Homepage from "./pages/Homepage";
 import Login from "./pages/Login";
-import ProtectedRoute from "./components/ProtectedRoute";
-import ForcePasswordChangeModal from "./components/ForcePasswordChangeModal";
 import { useAuth } from "./context/AuthContext";
 import logo from "./logo.png";
 import "./styles/styles.css";
@@ -15,18 +14,11 @@ import "./styles/styles.css";
 export default function App() {
   const [menuAberto, setMenuAberto] = useState(false);
   const [loadingInicial, setLoadingInicial] = useState(true);
-  const [forcarTrocaPassword, setForcarTrocaPassword] = useState(false);
 
   const { user, loadingAuth } = useAuth();
 
   const rotaInicial = useMemo(() => {
     return user ? "/Homepage" : "/login";
-  }, [user]);
-
-  useEffect(() => {
-    setForcarTrocaPassword(
-      !!user && sessionStorage.getItem("force_password_change") === "true"
-    );
   }, [user]);
 
   useEffect(() => {
@@ -83,15 +75,6 @@ export default function App() {
         />
 
         <Route
-          path="/EtiquetasCampanha"
-          element={
-            <ProtectedRoute>
-              <EtiquetasPage />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
           path="/Etiquetas"
           element={
             <ProtectedRoute>
@@ -111,13 +94,6 @@ export default function App() {
 
         <Route path="*" element={<Navigate to={rotaInicial} replace />} />
       </Routes>
-
-      {user && (
-        <ForcePasswordChangeModal
-          open={forcarTrocaPassword}
-          onSuccess={() => setForcarTrocaPassword(false)}
-        />
-      )}
     </div>
   );
 }

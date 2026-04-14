@@ -1,11 +1,49 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import artigosData from "../data/artigos.json";
 import {
   loadCampaignHistory,
   removeCampaignFromHistory,
 } from "../utils/campaignHistory";
 import "../styles/styles.css";
+
+const API_BASE_URL =
+  typeof window !== "undefined" && window.location.hostname === "localhost"
+    ? "http://localhost:3001"
+    : "";
+
+function buildApiUrl(path) {
+  return `${API_BASE_URL}${path}`;
+}
+
+function mergeArtigoData(base = {}, updated = {}) {
+  return {
+    ...base,
+    ...updated,
+    caracteristicas_tecnicas:
+      updated?.caracteristicas_tecnicas ?? base?.caracteristicas_tecnicas ?? {},
+    documentos_oficiais:
+      updated?.documentos_oficiais ?? base?.documentos_oficiais ?? [],
+    texto_grounding: updated?.texto_grounding ?? base?.texto_grounding ?? "",
+    observacoes_ia: updated?.observacoes_ia ?? base?.observacoes_ia ?? "",
+    resumo_vendedor: updated?.resumo_vendedor ?? base?.resumo_vendedor ?? "",
+  };
+}
+
+async function readJsonResponse(response) {
+  const rawText = await response.text();
+
+  if (!rawText) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(rawText);
+  } catch {
+    throw new Error(`Resposta inválida do servidor: ${rawText.slice(0, 200)}`);
+  }
+}
 
 function normalizarTexto(texto) {
   return String(texto || "")
@@ -16,25 +54,54 @@ function normalizarTexto(texto) {
 }
 
 function hasUsefulTechData(item) {
-  return !!(
-    item?.caracteristicas_tecnicas &&
-    typeof item.caracteristicas_tecnicas === "object" &&
-    Object.keys(item.caracteristicas_tecnicas).length > 0
-  );
+  if (
+    !item?.caracteristicas_tecnicas ||
+    typeof item.caracteristicas_tecnicas !== "object"
+  ) {
+    return false;
+  }
+
+  const blacklist = new Set(["estado", "info", "alterado"]);
+
+  const entries = Object.entries(item.caracteristicas_tecnicas)
+    .filter(
+      ([key, value]) => String(key || "").trim() && String(value || "").trim(),
+    )
+    .filter(([key]) => !blacklist.has(normalizarTexto(key)));
+
+  const hasResumo = !!String(item?.resumo_vendedor || "").trim();
+  const hasFontes = Array.isArray(item?.documentos_oficiais)
+    ? item.documentos_oficiais.some(Boolean)
+    : !!String(item?.fonte_oficial || "").trim();
+
+  return entries.length >= 2 || hasResumo || hasFontes;
+}
+
+function cleanGroundingInlineNoise(texto = "") {
+  return String(texto || "")
+    .replace(/\[cite:[^\]]*\]/gi, "")
+    .replace(/\[[^\]]*cite[^\]]*\]/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
 }
 
 function parseGroundingText(texto = "") {
-  const textoBase = String(texto || "").trim();
+  const textoBase = cleanGroundingInlineNoise(texto);
 
   if (!textoBase) return [];
 
   const normalized = textoBase
     .replace(/\s*(Título confirmado:)/gi, "\n$1")
     .replace(/\s*(Descrição confirmada:)/gi, "\n$1")
+    .replace(/\s*(Marca:)/gi, "\n$1")
+    .replace(/\s*(Modelo:)/gi, "\n$1")
+    .replace(/\s*(Série:)/gi, "\n$1")
+    .replace(/\s*(Categoria:)/gi, "\n$1")
     .replace(/\s*(Características técnicas encontradas:)/gi, "\n$1")
     .replace(/\s*(Resumo para vendedor:)/gi, "\n$1")
     .replace(/\s*(Observações relevantes:)/gi, "\n$1")
     .replace(/\s*(Observações:)/gi, "\n$1")
+    .replace(/\s*-\s+/g, "\n• ")
     .replace(/\s*\*\s+/g, "\n• ")
     .replace(/\n{2,}/g, "\n")
     .trim();
@@ -48,84 +115,119 @@ function parseGroundingText(texto = "") {
   let current = null;
 
   function pushCurrent() {
-    if (current) sections.push(current);
+    if (!current) return;
+
+    if (current.type === "list") {
+      current.items = current.items.filter(Boolean);
+      if (!current.items.length) return;
+    }
+
+    if (current.type === "text") {
+      current.content = String(current.content || "").trim();
+      if (!current.content) return;
+    }
+
+    sections.push(current);
+  }
+
+  function startTextSection(title, content = "") {
+    pushCurrent();
+    current = {
+      title,
+      type: "text",
+      content: cleanGroundingInlineNoise(content),
+    };
+  }
+
+  function startListSection(title) {
+    pushCurrent();
+    current = {
+      title,
+      type: "list",
+      items: [],
+    };
   }
 
   for (const line of lines) {
     if (/^Título confirmado:/i.test(line)) {
-      pushCurrent();
-      current = {
-        title: "Título confirmado",
-        type: "text",
-        content: line.replace(/^Título confirmado:/i, "").trim(),
-      };
+      startTextSection(
+        "Título confirmado",
+        line.replace(/^Título confirmado:/i, ""),
+      );
       continue;
     }
 
     if (/^Descrição confirmada:/i.test(line)) {
-      pushCurrent();
-      current = {
-        title: "Descrição confirmada",
-        type: "text",
-        content: line.replace(/^Descrição confirmada:/i, "").trim(),
-      };
+      startTextSection(
+        "Descrição confirmada",
+        line.replace(/^Descrição confirmada:/i, ""),
+      );
+      continue;
+    }
+
+    if (/^Marca:/i.test(line)) {
+      startTextSection("Marca", line.replace(/^Marca:/i, ""));
+      continue;
+    }
+
+    if (/^Modelo:/i.test(line)) {
+      startTextSection("Modelo", line.replace(/^Modelo:/i, ""));
+      continue;
+    }
+
+    if (/^Série:/i.test(line)) {
+      startTextSection("Série", line.replace(/^Série:/i, ""));
+      continue;
+    }
+
+    if (/^Categoria:/i.test(line)) {
+      startTextSection("Categoria", line.replace(/^Categoria:/i, ""));
       continue;
     }
 
     if (/^Características técnicas encontradas:/i.test(line)) {
-      pushCurrent();
-      current = {
-        title: "Características técnicas",
-        type: "list",
-        items: [],
-      };
+      startListSection("Características técnicas");
 
       const resto = line
         .replace(/^Características técnicas encontradas:/i, "")
         .trim();
 
       if (resto) {
-        current.items.push(resto.replace(/^•\s*/, "").trim());
+        current.items.push(
+          cleanGroundingInlineNoise(resto.replace(/^•\s*/, "")),
+        );
       }
       continue;
     }
 
     if (/^Resumo para vendedor:/i.test(line)) {
-      pushCurrent();
-      current = {
-        title: "Resumo para vendedor",
-        type: "text",
-        content: line.replace(/^Resumo para vendedor:/i, "").trim(),
-      };
+      startTextSection(
+        "Resumo para vendedor",
+        line.replace(/^Resumo para vendedor:/i, ""),
+      );
       continue;
     }
 
     if (/^Observações relevantes:/i.test(line) || /^Observações:/i.test(line)) {
-      pushCurrent();
-      current = {
-        title: "Observações",
-        type: "text",
-        content: line
+      startTextSection(
+        "Observações",
+        line
           .replace(/^Observações relevantes:/i, "")
-          .replace(/^Observações:/i, "")
-          .trim(),
-      };
+          .replace(/^Observações:/i, ""),
+      );
       continue;
     }
 
     if (!current) {
-      current = {
-        title: "Informação encontrada",
-        type: "text",
-        content: line,
-      };
+      startTextSection("Informação encontrada", line);
       continue;
     }
 
     if (current.type === "list") {
-      current.items.push(line.replace(/^•\s*/, "").trim());
+      current.items.push(cleanGroundingInlineNoise(line.replace(/^•\s*/, "")));
     } else {
-      current.content = `${current.content} ${line}`.trim();
+      current.content =
+        `${current.content} ${cleanGroundingInlineNoise(line)}`.trim();
     }
   }
 
@@ -134,8 +236,21 @@ function parseGroundingText(texto = "") {
 }
 
 function renderGroundingSections(texto = "") {
-  const sections = parseGroundingText(texto);
-  if (!sections.length) return null;
+  const textoBase = String(texto || "").trim();
+  if (!textoBase) return null;
+
+  const sections = parseGroundingText(textoBase);
+
+  if (!sections.length) {
+    return (
+      <div className="ai-grounding-sections">
+        <div className="ai-grounding-card">
+          <h4>Informação encontrada</h4>
+          <p>{cleanGroundingInlineNoise(textoBase)}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="ai-grounding-sections">
@@ -146,7 +261,7 @@ function renderGroundingSections(texto = "") {
           {section.type === "list" ? (
             <ul className="ai-list">
               {section.items.map((item, itemIndex) => (
-                <li key={itemIndex}>{item}</li>
+                <li key={`${section.title}-${itemIndex}`}>{item}</li>
               ))}
             </ul>
           ) : (
@@ -159,21 +274,78 @@ function renderGroundingSections(texto = "") {
 }
 
 function mapArtigoToAiResultado(item) {
+  const fontes = Array.isArray(item?.documentos_oficiais)
+    ? item.documentos_oficiais.filter(Boolean)
+    : item?.fonte_oficial
+      ? [item.fonte_oficial]
+      : [];
+
+  const caracteristicas = item?.caracteristicas_tecnicas || {};
+  const temEstrutura =
+    Object.keys(caracteristicas).length > 0 ||
+    !!String(item?.resumo_vendedor || "").trim() ||
+    !!String(item?.observacoes_ia || "").trim();
+
   return {
-    titulo: item.titulo_oficial || item.descricao || item.artigo || "",
-    categoria: item.categoria || "",
-    marca: item.marca || "",
-    modelo: item.modelo || "",
-    caracteristicas_tecnicas: item.caracteristicas_tecnicas || {},
-    resumo_vendedor: item.resumo_vendedor || "",
-    observacoes: item.observacoes_ia || "",
-    fontes: Array.isArray(item.documentos_oficiais)
-      ? item.documentos_oficiais
-      : item.fonte_oficial
-        ? [item.fonte_oficial]
-        : [],
-    texto_grounding: item.texto_grounding || "",
-    modo_resposta: item.texto_grounding ? "texto" : "estruturado",
+    titulo:
+      item?.titulo_oficial ||
+      item?.descricao_oficial ||
+      item?.descricao ||
+      item?.artigo ||
+      "",
+    categoria: item?.categoria || "",
+    marca: item?.marca || "",
+    modelo: item?.modelo || "",
+    caracteristicas_tecnicas: caracteristicas,
+    resumo_vendedor: item?.resumo_vendedor || "",
+    observacoes: item?.observacoes_ia || "",
+    fontes,
+    texto_grounding: item?.texto_grounding || "",
+    modo_resposta: temEstrutura
+      ? "estruturado"
+      : item?.texto_grounding
+        ? "texto"
+        : "estruturado",
+  };
+}
+
+function normalizeAiResultado(resultado = {}, artigoFallback = null) {
+  const fallback = artigoFallback ? mapArtigoToAiResultado(artigoFallback) : {};
+  const caracteristicas =
+    resultado?.caracteristicas_tecnicas ||
+    fallback?.caracteristicas_tecnicas ||
+    {};
+  const fontes =
+    Array.isArray(resultado?.fontes) && resultado.fontes.length > 0
+      ? resultado.fontes
+      : fallback?.fontes || [];
+
+  const temEstrutura =
+    Object.keys(caracteristicas).length > 0 ||
+    !!String(
+      resultado?.resumo_vendedor || fallback?.resumo_vendedor || "",
+    ).trim() ||
+    !!String(resultado?.observacoes || fallback?.observacoes || "").trim();
+
+  return {
+    ...fallback,
+    ...resultado,
+    titulo: resultado?.titulo || fallback?.titulo || "",
+    categoria: resultado?.categoria || fallback?.categoria || "",
+    marca: resultado?.marca || fallback?.marca || "",
+    modelo: resultado?.modelo || fallback?.modelo || "",
+    caracteristicas_tecnicas: caracteristicas,
+    resumo_vendedor:
+      resultado?.resumo_vendedor || fallback?.resumo_vendedor || "",
+    observacoes: resultado?.observacoes || fallback?.observacoes || "",
+    fontes,
+    texto_grounding:
+      resultado?.texto_grounding || fallback?.texto_grounding || "",
+    modo_resposta: temEstrutura
+      ? "estruturado"
+      : resultado?.texto_grounding || fallback?.texto_grounding
+        ? "texto"
+        : "estruturado",
   };
 }
 
@@ -187,6 +359,7 @@ function formatarDataHistorico(iso) {
 
 export default function HomePage() {
   const navigate = useNavigate();
+  const { profile } = useAuth();
 
   const [pesquisa, setPesquisa] = useState("");
   const [artigoSelecionado, setArtigoSelecionado] = useState(null);
@@ -197,12 +370,53 @@ export default function HomePage() {
 
   const [historicoCampanhas, setHistoricoCampanhas] = useState([]);
   const [campanhaSelecionada, setCampanhaSelecionada] = useState(null);
-
-  const artigos = artigosData?.artigos || [];
+  const [artigos, setArtigos] = useState(() => artigosData?.artigos || []);
 
   useEffect(() => {
-    setHistoricoCampanhas(loadCampaignHistory());
-  }, []);
+    let isMounted = true;
+
+    async function syncHistoricoCampanhas() {
+      try {
+        const campanhas = await loadCampaignHistory(profile?.store);
+
+        if (isMounted) {
+          setHistoricoCampanhas(campanhas);
+        }
+      } catch (error) {
+        console.warn(
+          "Não foi possível carregar o histórico de campanhas.",
+          error,
+        );
+        if (isMounted) {
+          setHistoricoCampanhas([]);
+        }
+      }
+    }
+
+    async function syncArtigosFromApi() {
+      try {
+        const response = await fetch(buildApiUrl("/api/artigos"));
+        const data = await readJsonResponse(response);
+
+        if (!response.ok || !Array.isArray(data?.artigos)) {
+          return;
+        }
+
+        if (isMounted) {
+          setArtigos(data.artigos);
+        }
+      } catch (error) {
+        console.warn("Não foi possível sincronizar artigos pela API.", error);
+      }
+    }
+
+    syncHistoricoCampanhas();
+    syncArtigosFromApi();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [profile?.store]);
 
   const sugestoes = useMemo(() => {
     const termo = normalizarTexto(pesquisa);
@@ -213,11 +427,15 @@ export default function HomePage() {
         const artigo = normalizarTexto(item.artigo);
         const descricao = normalizarTexto(item.descricao);
         const codigoBarras = normalizarTexto(item.codigoBarras);
+        const tituloOficial = normalizarTexto(item.titulo_oficial);
+        const descricaoOficial = normalizarTexto(item.descricao_oficial);
 
         return (
           artigo.includes(termo) ||
           descricao.includes(termo) ||
-          codigoBarras.includes(termo)
+          codigoBarras.includes(termo) ||
+          tituloOficial.includes(termo) ||
+          descricaoOficial.includes(termo)
         );
       })
       .slice(0, 5);
@@ -260,12 +478,17 @@ export default function HomePage() {
     setCampanhaSelecionada(null);
   }
 
-  function apagarCampanha(id) {
-    const atualizado = removeCampaignFromHistory(id);
-    setHistoricoCampanhas(atualizado);
+  async function apagarCampanha(id) {
+    try {
+      const atualizado = await removeCampaignFromHistory(id, profile?.store);
+      setHistoricoCampanhas(atualizado);
 
-    if (campanhaSelecionada?.id === id) {
-      setCampanhaSelecionada(null);
+      if (campanhaSelecionada?.id === id) {
+        setCampanhaSelecionada(null);
+      }
+    } catch (error) {
+      console.error("Não foi possível apagar a campanha.", error);
+      alert("Não foi possível apagar a campanha.");
     }
   }
 
@@ -292,19 +515,21 @@ export default function HomePage() {
     setAiLoading(true);
 
     try {
-      const response = await fetch("http://localhost:3001/api/ai-produto", {
+      const payload = {
+        artigoInterno: artigoSelecionado.artigo || "",
+        descricao: artigoSelecionado.descricao || "",
+        codigoBarras: artigoSelecionado.codigoBarras || "",
+      };
+
+      const response = await fetch(buildApiUrl("/api/ai-produto"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          artigoInterno: artigoSelecionado.artigo || "",
-          descricao: artigoSelecionado.descricao || "",
-          codigoBarras: artigoSelecionado.codigoBarras || "",
-        }),
+        body: JSON.stringify(payload),
       });
 
-      const data = await response.json();
+      const data = await readJsonResponse(response);
 
       if (!response.ok) {
         throw new Error(data?.error || data?.detalhe || "Erro no servidor.");
@@ -314,37 +539,23 @@ export default function HomePage() {
         throw new Error(data?.error || "Resposta inválida da AI.");
       }
 
-      setAiResultado(data.resultado || null);
+      const artigoAtualizado = mergeArtigoData(
+        artigoSelecionado,
+        data?.artigoAtualizado,
+      );
+      const resultadoNormalizado = normalizeAiResultado(
+        data?.resultado,
+        artigoAtualizado,
+      );
 
-      setArtigoSelecionado((prev) =>
-        prev
-          ? {
-              ...prev,
-              fonte_oficial:
-                data?.artigoAtualizado?.fonte_oficial || prev.fonte_oficial,
-              raw_hash: data?.artigoAtualizado?.raw_hash || prev.raw_hash,
-              ultima_atualizacao:
-                data?.artigoAtualizado?.ultima_atualizacao ||
-                prev.ultima_atualizacao,
-              titulo_oficial:
-                data?.artigoAtualizado?.titulo_oficial || prev.titulo_oficial,
-              descricao_oficial:
-                data?.artigoAtualizado?.descricao_oficial ||
-                prev.descricao_oficial,
-              caracteristicas_tecnicas:
-                data?.artigoAtualizado?.caracteristicas_tecnicas ||
-                prev.caracteristicas_tecnicas,
-              resumo_vendedor:
-                data?.artigoAtualizado?.resumo_vendedor || prev.resumo_vendedor,
-              observacoes_ia:
-                data?.artigoAtualizado?.observacoes_ia || prev.observacoes_ia,
-              texto_grounding:
-                data?.artigoAtualizado?.texto_grounding || prev.texto_grounding,
-              documentos_oficiais:
-                data?.artigoAtualizado?.documentos_oficiais ||
-                prev.documentos_oficiais,
-            }
-          : prev,
+      setAiResultado(resultadoNormalizado);
+      setArtigoSelecionado(artigoAtualizado);
+      setArtigos((prev) =>
+        prev.map((item) =>
+          item.artigo === artigoAtualizado.artigo
+            ? mergeArtigoData(item, data?.artigoAtualizado)
+            : item,
+        ),
       );
     } catch (error) {
       console.error("Erro completo AI:", error);
@@ -473,6 +684,12 @@ export default function HomePage() {
                   <div className="home-history-meta">
                     <span>{campanha.totalArtigos || 0} artigos</span>
                     <span>Validade: {campanha.anoValidade || "-"}</span>
+                    <span>
+                      Criado por:{" "}
+                      {String(campanha.createdBy || "").trim() ||
+                        String(campanha.createdByEmail || "").trim() ||
+                        "Utilizador"}
+                    </span>
                   </div>
 
                   <div className="home-history-preview">
@@ -538,6 +755,12 @@ export default function HomePage() {
             <div className="ai-popup-scroll">
               <div className="popup-status-row">
                 <span className="popup-chip">
+                  Criado por:{" "}
+                  {String(campanhaSelecionada.createdBy || "").trim() ||
+                    String(campanhaSelecionada.createdByEmail || "").trim() ||
+                    "Utilizador"}
+                </span>
+                <span className="popup-chip">
                   Artigo: {artigoSelecionado.artigo || "N/D"}
                 </span>
 
@@ -573,7 +796,6 @@ export default function HomePage() {
                       <strong>Código de barras:</strong>{" "}
                       {artigoSelecionado.codigoBarras || "-"}
                     </p>
-
                   </div>
                 </div>
 
@@ -633,42 +855,41 @@ export default function HomePage() {
                     </span>
                   </div>
 
-                  {aiResultado?.modo_resposta === "texto" &&
-                  aiResultado?.texto_grounding ? (
-                    renderGroundingSections(aiResultado.texto_grounding)
-                  ) : (
-                    <>
-                      {aiResultado?.caracteristicas_tecnicas &&
-                        Object.keys(aiResultado.caracteristicas_tecnicas)
-                          .length > 0 && (
-                          <div className="tech-specs-grid">
-                            {Object.entries(
-                              aiResultado.caracteristicas_tecnicas,
-                            ).map(([key, value]) => (
-                              <div key={key} className="tech-spec-item">
-                                <span className="tech-spec-label">{key}</span>
-                                <strong className="tech-spec-value">
-                                  {value || "-"}
-                                </strong>
-                              </div>
-                            ))}
+                  {aiResultado?.texto_grounding
+                    ? renderGroundingSections(aiResultado.texto_grounding)
+                    : null}
+
+                  {!aiResultado?.texto_grounding &&
+                    aiResultado?.caracteristicas_tecnicas &&
+                    Object.keys(aiResultado.caracteristicas_tecnicas).length >
+                      0 && (
+                      <div className="tech-specs-grid">
+                        {Object.entries(
+                          aiResultado.caracteristicas_tecnicas,
+                        ).map(([key, value]) => (
+                          <div key={key} className="tech-spec-item">
+                            <span className="tech-spec-label">{key}</span>
+                            <strong className="tech-spec-value">
+                              {value || "-"}
+                            </strong>
                           </div>
-                        )}
-
-                      <div className="popup-info-grid ai-extra-info">
-                        <p>
-                          <strong>Resumo vendedor:</strong>{" "}
-                          {aiResultado.resumo_vendedor || "Não disponível"}
-                        </p>
-
-                        <p>
-                          <strong>Observações:</strong>{" "}
-                          {aiResultado.observacoes || "Sem observações"}
-                        </p>
+                        ))}
                       </div>
-                    </>
-                  )}
+                    )}
 
+                  {!aiResultado?.texto_grounding && (
+                    <div className="popup-info-grid ai-extra-info">
+                      <p>
+                        <strong>Resumo vendedor:</strong>{" "}
+                        {aiResultado.resumo_vendedor || "Não disponível"}
+                      </p>
+
+                      <p>
+                        <strong>Observações:</strong>{" "}
+                        {aiResultado.observacoes || "Sem observações"}
+                      </p>
+                    </div>
+                  )}
                   {Array.isArray(aiResultado.fontes) &&
                     aiResultado.fontes.length > 0 && (
                       <div className="ai-fontes-box">
@@ -723,7 +944,8 @@ export default function HomePage() {
                 <div className="popup-eyebrow">Histórico de campanhas</div>
                 <h2>{campanhaSelecionada.titulo || "Campanha"}</h2>
                 <p className="popup-subtitle">
-                  Consulta os detalhes e duplica a campanha para voltar a editar.
+                  Consulta os detalhes e duplica a campanha para voltar a
+                  editar.
                 </p>
               </div>
 
@@ -739,14 +961,17 @@ export default function HomePage() {
             <div className="ai-popup-scroll">
               <div className="popup-status-row">
                 <span className="popup-chip">
-                  Criada em: {formatarDataHistorico(campanhaSelecionada.criadoEm)}
+                  Criada em:{" "}
+                  {formatarDataHistorico(campanhaSelecionada.criadoEm)}
                 </span>
                 <span className="popup-chip">
                   Artigos: {campanhaSelecionada.totalArtigos || 0}
                 </span>
                 <span className="popup-chip">
                   Formato base:{" "}
-                  {String(campanhaSelecionada.formatoEtiqueta || "a6").toUpperCase()}
+                  {String(
+                    campanhaSelecionada.formatoEtiqueta || "a6",
+                  ).toUpperCase()}
                 </span>
                 <span className="popup-chip">
                   Validade: {campanhaSelecionada.anoValidade || "-"}
@@ -757,7 +982,9 @@ export default function HomePage() {
                 {Array.isArray(campanhaSelecionada.dados) &&
                   campanhaSelecionada.dados.map((item) => (
                     <div
-                      key={item.id || `${campanhaSelecionada.id}-${item.codigo}`}
+                      key={
+                        item.id || `${campanhaSelecionada.id}-${item.codigo}`
+                      }
                       className="historico-popup-item"
                     >
                       <div className="historico-popup-main">
