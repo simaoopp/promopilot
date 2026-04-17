@@ -2,10 +2,19 @@ import React from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
-export default function ProtectedRoute({ children }) {
-  const { user, loadingAuth, loadingProfile } = useAuth();
+function LoadingScreen() {
+  return (
+    <div className="auth-loading">
+      <div className="spinner" />
+      <p>A verificar acesso...</p>
+    </div>
+  );
+}
 
-  if (loadingAuth || loadingProfile) {
+export default function ProtectedRoute({ children }) {
+  const { user, loadingAuth } = useAuth();
+
+  if (loadingAuth) {
     return <LoadingScreen />;
   }
 
