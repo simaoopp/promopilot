@@ -4,6 +4,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { supabase } from "../lib/supabase";
@@ -21,26 +22,37 @@ export function AuthProvider({ children }) {
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [loadingProfile, setLoadingProfile] = useState(false);
 
-  const loadProfile = useCallback(async (userId) => {
+  const lastLoadedProfileUserId = useRef(null);
+
+  const loadProfile = useCallback(async (userId, options = {}) => {
+    const { force = false } = options;
+
     if (!userId) {
+      lastLoadedProfileUserId.current = null;
       setProfile(null);
       setLoadingProfile(false);
       return null;
+    }
+
+    if (!force && lastLoadedProfileUserId.current === userId) {
+      return profile;
     }
 
     try {
       setLoadingProfile(true);
       const profileData = await getProfile(userId);
       setProfile(profileData);
+      lastLoadedProfileUserId.current = userId;
       return profileData;
     } catch (error) {
       console.error("Erro ao carregar perfil:", error?.message || error);
       setProfile(null);
+      lastLoadedProfileUserId.current = null;
       return null;
     } finally {
       setLoadingProfile(false);
     }
-  }, []);
+  }, [profile]);
 
   useEffect(() => {
     let active = true;
@@ -55,21 +67,21 @@ export function AuthProvider({ children }) {
           console.error("Erro ao buscar sessão:", error.message);
           setUser(null);
           setProfile(null);
+          lastLoadedProfileUserId.current = null;
+          setLoadingProfile(false);
           setLoadingAuth(false);
           return;
         }
 
         const currentUser = data?.session?.user ?? null;
         setUser(currentUser);
-
-        // Auth fica resolvido aqui
         setLoadingAuth(false);
 
-        // Perfil carrega em separado
         if (currentUser?.id) {
-          loadProfile(currentUser.id);
+          await loadProfile(currentUser.id);
         } else {
           setProfile(null);
+          lastLoadedProfileUserId.current = null;
           setLoadingProfile(false);
         }
       } catch (error) {
@@ -77,6 +89,7 @@ export function AuthProvider({ children }) {
         console.error("Erro inesperado ao carregar sessão:", error);
         setUser(null);
         setProfile(null);
+        lastLoadedProfileUserId.current = null;
         setLoadingProfile(false);
         setLoadingAuth(false);
       }
@@ -93,11 +106,15 @@ export function AuthProvider({ children }) {
       setUser(currentUser);
       setLoadingAuth(false);
 
-      if (currentUser?.id) {
-        loadProfile(currentUser.id);
-      } else {
+      if (!currentUser?.id) {
         setProfile(null);
+        lastLoadedProfileUserId.current = null;
         setLoadingProfile(false);
+        return;
+      }
+
+      if (lastLoadedProfileUserId.current !== currentUser.id) {
+        loadProfile(currentUser.id);
       }
     });
 
@@ -123,6 +140,7 @@ export function AuthProvider({ children }) {
 
     setUser(null);
     setProfile(null);
+    lastLoadedProfileUserId.current = null;
     setLoadingProfile(false);
   }
 
@@ -157,6 +175,7 @@ export function AuthProvider({ children }) {
     });
 
     setProfile(updatedProfile);
+    lastLoadedProfileUserId.current = user.id;
     return updatedProfile;
   }
 
@@ -185,7 +204,7 @@ export function AuthProvider({ children }) {
       signOut,
       updatePassword,
       completeOnboarding,
-      refreshProfile: () => loadProfile(user?.id),
+      refreshProfile: () => loadProfile(user?.id, { force: true }),
     }),
     [
       user,
