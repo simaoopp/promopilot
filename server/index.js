@@ -7,20 +7,58 @@ import cors from "cors";
 import { chromium } from "playwright";
 import * as cheerio from "cheerio";
 import { GoogleGenAI } from "@google/genai";
+import { createClient } from "@supabase/supabase-js";
 
 dotenv.config();
 
-if (!process.env.GEMINI_API_KEY) {
-  console.error("Falta GEMINI_API_KEY no ficheiro .env");
-  process.exit(1);
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
+const SUPABASE_URL = process.env.SUPABASE_URL || "";
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || "";
+
+const ai = GEMINI_API_KEY
+  ? new GoogleGenAI({
+      apiKey: GEMINI_API_KEY,
+    })
+  : null;
+
+if (!ai) {
+  console.warn("[BOOT] GEMINI_API_KEY não configurada. Rotas de IA ficam desativadas.");
 }
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-});
+const supabaseServer =
+  SUPABASE_URL && SUPABASE_ANON_KEY
+    ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+    : null;
+
+if (!supabaseServer) {
+  console.warn(
+    "[BOOT] SUPABASE_URL / SUPABASE_ANON_KEY não configuradas. Rotas autenticadas ficam indisponíveis.",
+  );
+}
 
 const app = express();
-app.use(cors());
+
+const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS || "")
+  .split(",")
+  .map((value) => value.trim())
+  .filter(Boolean);
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      if (ALLOWED_ORIGINS.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error(`CORS bloqueado para origem: ${origin}`));
+    },
+    methods: ["GET", "POST", "OPTIONS"],
+  }),
+);
 app.use(express.json({ limit: "1mb" }));
 
 /* =========================================================
@@ -74,7 +112,10 @@ const PRODUCT_RESPONSE_SCHEMA = {
 function logRuntimeInfo(tag = "BOOT") {
   console.log(`[${tag}] cwd=`, process.cwd());
   console.log(`[${tag}] DB_FILE=`, DB_FILE);
-  console.log(`[${tag}] GEMINI_API_KEY exists=`, !!process.env.GEMINI_API_KEY);
+  console.log(`[${tag}] GEMINI_API_KEY exists=`, !!GEMINI_API_KEY);
+  console.log(`[${tag}] SUPABASE_URL exists=`, !!SUPABASE_URL);
+  console.log(`[${tag}] SUPABASE_ANON_KEY exists=`, !!SUPABASE_ANON_KEY);
+  console.log(`[${tag}] ALLOWED_ORIGINS=`, ALLOWED_ORIGINS);
   console.log(`[${tag}] NODE_ENV=`, process.env.NODE_ENV || "");
   console.log(`[${tag}] NETLIFY=`, process.env.NETLIFY || "");
 }
@@ -83,6 +124,170 @@ function debug(...args) {
   if (SEARCH_DEBUG) {
     console.log(...args);
   }
+}
+
+function ensureAiEnabled() {
+  if (!ai) {
+    const error = new Error("Funcionalidade de IA indisponível: falta GEMINI_API_KEY.");
+    error.statusCode = 503;
+    throw error;
+  }
+}
+
+function getBearerToken(req) {
+  const header = req.headers.authorization || "";
+
+  if (!header.startsWith("Bearer ")) {
+    return "";
+  }
+
+  return header.slice("Bearer ".length).trim();
+}
+
+async function requireAuth(req, res, next) {
+  try {
+    if (!supabaseServer) {
+      return res.status(503).json({
+        ok: false,
+        error: "Autenticação indisponível: Supabase não configurado no servidor.",
+      });
+    }
+
+    const token = getBearerToken(req);
+
+    if (!token) {
+      return res.status(401).json({
+        ok: false,
+        error: "Não autenticado. Token em falta.",
+      });
+    }
+
+    const { data, error } = await supabaseServer.auth.getUser(token);
+
+    if (error || !data?.user) {
+      return res.status(401).json({
+        ok: false,
+        error: "Sessão inválida ou expirada.",
+      });
+    }
+
+    req.authUser = data.user;
+    return next();
+  } catch (error) {
+    console.error("Erro no middleware requireAuth:", error);
+
+    return res.status(500).json({
+      ok: false,
+      error: "Erro ao validar autenticação.",
+    });
+  }
+}
+
+const AI_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+const AI_RATE_LIMIT_MAX_REQUESTS = 20;
+const aiRateLimitStore = new Map();
+
+function getClientIp(req) {
+  const forwardedFor = req.headers["x-forwarded-for"];
+
+  if (typeof forwardedFor === "string" && forwardedFor.trim()) {
+    return forwardedFor.split(",")[0].trim();
+  }
+
+  return req.ip || req.socket?.remoteAddress || "unknown";
+}
+
+function aiRateLimit(req, res, next) {
+  const now = Date.now();
+  const ip = getClientIp(req);
+  const entry = aiRateLimitStore.get(ip);
+
+  if (!entry || now > entry.resetAt) {
+    aiRateLimitStore.set(ip, {
+      count: 1,
+      resetAt: now + AI_RATE_LIMIT_WINDOW_MS,
+    });
+
+    return next();
+  }
+
+  if (entry.count >= AI_RATE_LIMIT_MAX_REQUESTS) {
+    const retryAfterSeconds = Math.ceil((entry.resetAt - now) / 1000);
+
+    res.setHeader("Retry-After", String(retryAfterSeconds));
+
+    return res.status(429).json({
+      ok: false,
+      error: "Demasiados pedidos. Tenta novamente mais tarde.",
+      retryAfterSeconds,
+    });
+  }
+
+  entry.count += 1;
+  aiRateLimitStore.set(ip, entry);
+
+  return next();
+}
+
+function normalizeOptionalString(value) {
+  if (typeof value !== "string") return "";
+  return value.trim();
+}
+
+function isValidBarcode(value) {
+  return /^\d{8,14}$/.test(value);
+}
+
+function isValidInternalCode(value) {
+  return /^[A-Za-z0-9\-_/.]{1,50}$/.test(value);
+}
+
+function validateAiProdutoPayload(body) {
+  const artigoInterno = normalizeOptionalString(body?.artigoInterno);
+  const codigoBarras = normalizeOptionalString(body?.codigoBarras);
+  const descricao = normalizeOptionalString(body?.descricao);
+
+  if (!artigoInterno && !codigoBarras && !descricao) {
+    return {
+      ok: false,
+      statusCode: 400,
+      error:
+        "É necessário indicar pelo menos um destes campos: artigoInterno, codigoBarras ou descricao.",
+    };
+  }
+
+  if (artigoInterno && !isValidInternalCode(artigoInterno)) {
+    return {
+      ok: false,
+      statusCode: 400,
+      error: "artigoInterno inválido.",
+    };
+  }
+
+  if (codigoBarras && !isValidBarcode(codigoBarras)) {
+    return {
+      ok: false,
+      statusCode: 400,
+      error: "codigoBarras inválido. Deve conter entre 8 e 14 dígitos.",
+    };
+  }
+
+  if (descricao.length > 250) {
+    return {
+      ok: false,
+      statusCode: 400,
+      error: "descricao demasiado longa. Máximo: 250 caracteres.",
+    };
+  }
+
+  return {
+    ok: true,
+    value: {
+      artigoInterno,
+      codigoBarras,
+      descricao,
+    },
+  };
 }
 
 function clean(value = "") {
@@ -409,6 +614,8 @@ async function generateContentWithRetry(
   request,
   { maxRetries = 4, initialDelayMs = 1500, maxDelayMs = 10000 } = {},
 ) {
+  ensureAiEnabled();
+
   let attempt = 0;
   let delay = initialDelayMs;
 
@@ -1144,7 +1351,7 @@ async function enrichSingleArticle({ artigoInterno, codigoBarras, descricao }) {
 /* =========================================================
    API
    ========================================================= */
-app.get("/api/artigos", async (_req, res) => {
+app.get("/api/artigos", requireAuth, async (_req, res) => {
   try {
     const db = await loadDB();
     return res.json(db);
@@ -1156,16 +1363,25 @@ app.get("/api/artigos", async (_req, res) => {
   }
 });
 
-app.post("/api/ai-produto", async (req, res) => {
+app.post("/api/ai-produto", requireAuth, aiRateLimit, async (req, res) => {
   try {
-    const { artigoInterno, codigoBarras, descricao } = req.body || {};
-
-    if (!artigoInterno && !codigoBarras && !descricao) {
-      return res.status(400).json({
+    if (!ai) {
+      return res.status(503).json({
         ok: false,
-        error: "Faltam dados para identificar o artigo.",
+        error: "Funcionalidade de IA indisponível: GEMINI_API_KEY em falta.",
       });
     }
+
+    const payloadValidation = validateAiProdutoPayload(req.body || {});
+
+    if (!payloadValidation.ok) {
+      return res.status(payloadValidation.statusCode).json({
+        ok: false,
+        error: payloadValidation.error,
+      });
+    }
+
+    const { artigoInterno, codigoBarras, descricao } = payloadValidation.value;
 
     const result = await enrichSingleArticle({
       artigoInterno,
@@ -1196,6 +1412,16 @@ app.post("/api/ai-produto", async (req, res) => {
     });
   }
 });
+
+setInterval(() => {
+  const now = Date.now();
+
+  for (const [ip, entry] of aiRateLimitStore.entries()) {
+    if (now > entry.resetAt) {
+      aiRateLimitStore.delete(ip);
+    }
+  }
+}, 5 * 60 * 1000);
 
 const PORT = process.env.PORT || 3001;
 
