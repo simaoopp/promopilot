@@ -69,37 +69,6 @@ async function getAccessToken() {
   return token;
 }
 
-function normalizeSearchValue(value) {
-  return String(value || "")
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .trim();
-}
-
-function matchesArtigoQuery(artigo, query) {
-  if (!query) return true;
-
-  const searchable = [
-    artigo?.artigo,
-    artigo?.artigo_interno,
-    artigo?.codigoBarras,
-    artigo?.codigo_barras,
-    artigo?.descricao,
-    artigo?.descricao_comercial,
-    artigo?.titulo_oficial,
-    artigo?.descricao_oficial,
-    artigo?.brand,
-    artigo?.categoria,
-    artigo?.subcategory,
-  ]
-    .map(normalizeSearchValue)
-    .filter(Boolean)
-    .join(" ");
-
-  return searchable.includes(query);
-}
-
 export function normalizeArtigosApiResponse(data, fallbackLimit = 100, fallbackOffset = 0) {
   if (Array.isArray(data)) {
     return {
@@ -132,72 +101,30 @@ export function normalizeArtigosApiResponse(data, fallbackLimit = 100, fallbackO
   };
 }
 
-async function getLocalFallbackArtigos({ q = "", limit = 100, offset = 0 } = {}) {
-  const module = await import("../data/artigos.json");
-  const artigos = Array.isArray(module?.default?.artigos) ? module.default.artigos : [];
-  const normalizedQuery = normalizeSearchValue(q);
-  const filtered = normalizedQuery
-    ? artigos.filter((artigo) => matchesArtigoQuery(artigo, normalizedQuery))
-    : artigos;
-  const items = filtered.slice(offset, offset + limit);
-
-  return {
-    ok: true,
-    items,
-    artigos: items,
-    total: filtered.length,
-    limit,
-    offset,
-    hasMore: offset + items.length < filtered.length,
-    q: normalizedQuery,
-    source: "fallback",
-  };
-}
-
-export async function fetchArtigosPage({
-  q = "",
-  limit = 100,
-  offset = 0,
-  allowFallback = true,
-} = {}) {
+export async function fetchArtigosPage({ q = "", limit = 100, offset = 0 } = {}) {
   const params = new URLSearchParams();
 
   if (q) params.set("q", q);
   params.set("limit", String(limit));
   params.set("offset", String(offset));
 
-  try {
-    const token = await getAccessToken();
-    const response = await fetch(buildApiUrl(`/api/artigos?${params.toString()}`), {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
+  const token = await getAccessToken();
+  const response = await fetch(buildApiUrl(`/api/artigos?${params.toString()}`), {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
 
-    const data = await readJsonResponse(response);
+  const data = await readJsonResponse(response);
 
-    if (!response.ok || data?.ok === false) {
-      throw new Error(data?.error || "Erro ao carregar artigos.");
-    }
-
-    return {
-      ...normalizeArtigosApiResponse(data, limit, offset),
-      source: "api",
-    };
-  } catch (error) {
-    if (!allowFallback) {
-      throw error;
-    }
-
-    return getLocalFallbackArtigos({ q, limit, offset });
+  if (!response.ok || data?.ok === false) {
+    throw new Error(data?.error || "Erro ao carregar artigos.");
   }
+
+  return normalizeArtigosApiResponse(data, limit, offset);
 }
 
-export async function loadAllArtigos({
-  forceRefresh = false,
-  pageSize = 500,
-  allowFallback = true,
-} = {}) {
+export async function loadAllArtigos({ forceRefresh = false, pageSize = 500 } = {}) {
   const cached = !forceRefresh ? cacheGet(ALL_ARTIGOS_CACHE_KEY) : null;
 
   if (cached) {
@@ -206,20 +133,17 @@ export async function loadAllArtigos({
 
   const allItems = [];
   let offset = 0;
-  let source = "api";
 
   while (true) {
     const page = await fetchArtigosPage({
       q: "",
       limit: pageSize,
       offset,
-      allowFallback,
     });
 
-    source = page.source || source;
     allItems.push(...page.items);
 
-    if (!page.hasMore) {
+    if (!page.hasMore || page.items.length === 0) {
       const result = {
         ok: true,
         items: allItems,
@@ -229,34 +153,17 @@ export async function loadAllArtigos({
         offset: 0,
         hasMore: false,
         q: "",
-        source,
       };
 
       return cacheSet(ALL_ARTIGOS_CACHE_KEY, result);
     }
 
     offset += page.items.length;
-
-    if (page.items.length === 0) {
-      const result = {
-        ok: true,
-        items: allItems,
-        artigos: allItems,
-        total: allItems.length,
-        limit: allItems.length,
-        offset: 0,
-        hasMore: false,
-        q: "",
-        source,
-      };
-
-      return cacheSet(ALL_ARTIGOS_CACHE_KEY, result);
-    }
   }
 }
 
 export async function searchArtigos({ q = "", limit = 20, offset = 0 } = {}) {
-  return fetchArtigosPage({ q, limit, offset, allowFallback: true });
+  return fetchArtigosPage({ q, limit, offset });
 }
 
 export async function enrichArtigoWithAi(payload) {

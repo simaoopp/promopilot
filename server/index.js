@@ -1,24 +1,26 @@
-import fs from "fs/promises";
-import path from "path";
+import "dotenv/config";
 import crypto from "crypto";
-import dotenv from "dotenv";
 import express from "express";
 import cors from "cors";
 import { chromium } from "playwright";
 import * as cheerio from "cheerio";
 import { GoogleGenAI } from "@google/genai";
-import { createClient } from "@supabase/supabase-js";
-import { fileURLToPath } from "url";
-
-dotenv.config();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import {
+  SUPABASE_URL,
+  SUPABASE_PUBLISHABLE_KEY,
+  hasSupabaseAuthConfig,
+  hasSupabaseAdminConfig,
+  supabaseAuthClient,
+} from "./lib/supabaseClients.js";
+import {
+  ARTICLES_TABLE,
+  findArticleByIdentifiers,
+  getArticlesHealthcheck,
+  listArticles,
+  upsertArticle,
+} from "./services/articleRepository.js";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
-const SUPABASE_URL = process.env.SUPABASE_URL || "";
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || "";
-
 const ai = GEMINI_API_KEY
   ? new GoogleGenAI({
       apiKey: GEMINI_API_KEY,
@@ -29,15 +31,12 @@ if (!ai) {
   console.warn("[BOOT] GEMINI_API_KEY não configurada. Rotas de IA ficam desativadas.");
 }
 
-const supabaseServer =
-  SUPABASE_URL && SUPABASE_ANON_KEY
-    ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
-    : null;
+if (!hasSupabaseAuthConfig()) {
+  console.warn("[BOOT] SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY não configuradas. Rotas autenticadas ficam indisponíveis.");
+}
 
-if (!supabaseServer) {
-  console.warn(
-    "[BOOT] SUPABASE_URL / SUPABASE_ANON_KEY não configuradas. Rotas autenticadas ficam indisponíveis.",
-  );
+if (!hasSupabaseAdminConfig()) {
+  console.warn("[BOOT] SUPABASE_SERVICE_ROLE_KEY em falta. A base de dados de artigos fica indisponível.");
 }
 
 const app = express();
@@ -72,7 +71,6 @@ app.use(express.json({ limit: "1mb" }));
 const AI_MODEL = "gemini-2.5-flash";
 const USE_GROUNDING_FALLBACK = true;
 
-const DB_FILE = path.resolve(__dirname, "..", "src", "data", "artigos.json");
 const MAX_TEXT_LENGTH = 12000;
 const MAX_CANDIDATE_LINKS = 8;
 const MAX_SCRAPE_ATTEMPTS = 5;
@@ -116,10 +114,11 @@ const PRODUCT_RESPONSE_SCHEMA = {
    ========================================================= */
 function logRuntimeInfo(tag = "BOOT") {
   console.log(`[${tag}] cwd=`, process.cwd());
-  console.log(`[${tag}] DB_FILE=`, DB_FILE);
+  console.log(`[${tag}] ARTICLES_TABLE=`, ARTICLES_TABLE);
   console.log(`[${tag}] GEMINI_API_KEY exists=`, !!GEMINI_API_KEY);
   console.log(`[${tag}] SUPABASE_URL exists=`, !!SUPABASE_URL);
-  console.log(`[${tag}] SUPABASE_ANON_KEY exists=`, !!SUPABASE_ANON_KEY);
+  console.log(`[${tag}] SUPABASE_PUBLISHABLE_KEY exists=`, !!SUPABASE_PUBLISHABLE_KEY);
+  console.log(`[${tag}] SUPABASE_ADMIN_CONFIG exists=`, hasSupabaseAdminConfig());
   console.log(`[${tag}] ALLOWED_ORIGINS=`, ALLOWED_ORIGINS);
   console.log(`[${tag}] NODE_ENV=`, process.env.NODE_ENV || "");
   console.log(`[${tag}] NETLIFY=`, process.env.NETLIFY || "");
@@ -151,7 +150,7 @@ function getBearerToken(req) {
 
 async function requireAuth(req, res, next) {
   try {
-    if (!supabaseServer) {
+    if (!hasSupabaseAuthConfig()) {
       return res.status(503).json({
         ok: false,
         error: "Autenticação indisponível: Supabase não configurado no servidor.",
@@ -167,7 +166,7 @@ async function requireAuth(req, res, next) {
       });
     }
 
-    const { data, error } = await supabaseServer.auth.getUser(token);
+    const { data, error } = await supabaseAuthClient.auth.getUser(token);
 
     if (error || !data?.user) {
       return res.status(401).json({
@@ -232,6 +231,14 @@ function aiRateLimit(req, res, next) {
   aiRateLimitStore.set(ip, entry);
 
   return next();
+}
+
+function normalizeSearchValue(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
 }
 
 function normalizeOptionalString(value) {
@@ -728,40 +735,6 @@ function extractGroundedSources(response) {
 }
 
 /* =========================================================
-   DB
-   ========================================================= */
-async function loadDB() {
-  const raw = await fs.readFile(DB_FILE, "utf8");
-  return JSON.parse(raw);
-}
-
-async function saveDB(db) {
-  await fs.writeFile(DB_FILE, JSON.stringify(db, null, 2), "utf8");
-}
-
-function resolveArticle(artigos, { artigoInterno, codigoBarras }) {
-  if (artigoInterno) {
-    const byInternalCode = artigos.find(
-      (item) => item.artigo === artigoInterno,
-    );
-    if (byInternalCode) {
-      return byInternalCode;
-    }
-  }
-
-  if (codigoBarras) {
-    const byBarcode = artigos.find(
-      (item) => item.codigoBarras === codigoBarras,
-    );
-    if (byBarcode) {
-      return byBarcode;
-    }
-  }
-
-  return null;
-}
-
-/* =========================================================
    SEARCH
    ========================================================= */
 async function searchProductCandidates(page, { descricao, ean }) {
@@ -1187,16 +1160,10 @@ function mapArtigoToResultado(art, marca = "", modelo = "") {
    MAIN FLOW
    ========================================================= */
 async function enrichSingleArticle({ artigoInterno, codigoBarras, descricao }) {
-  const db = await loadDB();
-
-  if (!db || !Array.isArray(db.artigos)) {
-    throw new Error('O JSON deve ter a estrutura { "artigos": [] }');
-  }
-
-  const art = resolveArticle(db.artigos, { artigoInterno, codigoBarras });
+  const art = await findArticleByIdentifiers({ artigoInterno, codigoBarras });
 
   if (!art) {
-    throw new Error("Artigo não encontrado no JSON.");
+    throw new Error("Artigo não encontrado na base de dados.");
   }
 
   const descricaoPesquisa = clean(art.descricao || descricao || "");
@@ -1242,12 +1209,12 @@ async function enrichSingleArticle({ artigoInterno, codigoBarras, descricao }) {
       texto_grounding: grounded.texto || "",
     });
 
-    await saveDB(db);
+    const artigoAtualizado = await upsertArticle(art);
 
     return {
       fromCache: false,
-      artigoAtualizado: art,
-      resultado: mapArtigoToResultado(art, marca, modelo),
+      artigoAtualizado,
+      resultado: mapArtigoToResultado(artigoAtualizado, marca, modelo),
     };
   };
 
@@ -1339,12 +1306,12 @@ async function enrichSingleArticle({ artigoInterno, codigoBarras, descricao }) {
       texto_grounding: "",
     });
 
-    await saveDB(db);
+    const artigoAtualizado = await upsertArticle(art);
 
     return {
       fromCache: false,
-      artigoAtualizado: art,
-      resultado: mapArtigoToResultado(art, marca, modelo),
+      artigoAtualizado,
+      resultado: mapArtigoToResultado(artigoAtualizado, marca, modelo),
     };
   } finally {
     await searchPage.close().catch(() => {});
@@ -1356,29 +1323,45 @@ async function enrichSingleArticle({ artigoInterno, codigoBarras, descricao }) {
 /* =========================================================
    API
    ========================================================= */
+app.get("/api/health", async (_req, res) => {
+  try {
+    const database = hasSupabaseAdminConfig()
+      ? await getArticlesHealthcheck()
+      : { ok: false, total: 0 };
+
+    return res.json({
+      ok: true,
+      service: "etiquetas-api",
+      database,
+      aiEnabled: Boolean(ai),
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Erro em GET /api/health:", error);
+
+    return res.status(500).json({
+      ok: false,
+      error: error?.message || "Healthcheck indisponível.",
+    });
+  }
+});
+
 app.get("/api/artigos", requireAuth, async (req, res) => {
   try {
     const q = normalizeSearchValue(req.query.q || "");
     const limit = Math.min(parsePositiveInt(req.query.limit, 100), 500);
     const offset = parsePositiveInt(req.query.offset, 0);
 
-    const db = await loadDB();
-
-    const filtered = Array.isArray(db)
-      ? db.filter((artigo) => matchesArtigoQuery(artigo, q))
-      : [];
-
-    const total = filtered.length;
-    const items = filtered.slice(offset, offset + limit);
+    const result = await listArticles({ q, limit, offset });
 
     return res.json({
       ok: true,
-      items,
-      artigos: items,
-      total,
-      limit,
-      offset,
-      hasMore: offset + items.length < total,
+      items: result.items,
+      artigos: result.items,
+      total: result.total,
+      limit: result.limit,
+      offset: result.offset,
+      hasMore: result.hasMore,
       q,
     });
   } catch (error) {
@@ -1442,14 +1425,6 @@ app.post("/api/ai-produto", requireAuth, aiRateLimit, async (req, res) => {
 });
 
 
-function normalizeSearchValue(value) {
-  return String(value || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim();
-}
-
 function parsePositiveInt(value, fallback) {
   const parsed = Number.parseInt(value, 10);
 
@@ -1458,29 +1433,6 @@ function parsePositiveInt(value, fallback) {
   }
 
   return parsed;
-}
-
-function matchesArtigoQuery(artigo, query) {
-  if (!query) return true;
-
-  const searchable = [
-    artigo?.artigo,
-    artigo?.artigo_interno,
-    artigo?.codigoBarras,
-    artigo?.codigo_barras,
-    artigo?.descricao,
-    artigo?.descricao_comercial,
-    artigo?.titulo_oficial,
-    artigo?.descricao_oficial,
-    artigo?.brand,
-    artigo?.categoria,
-    artigo?.subcategory,
-  ]
-    .map(normalizeSearchValue)
-    .filter(Boolean)
-    .join(" ");
-
-  return searchable.includes(query);
 }
 
 setInterval(() => {

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import { useAuth } from "../context/AuthContext";
+import { useToast } from "../components/ToastProvider";
 import logo from "../logo.png";
 import Barcode from "../components/Barcode";
 import FilterMenu from "../components/FilterMenu";
@@ -18,6 +19,7 @@ import {
   dividirEmPaginas,
 } from "../utils/filters";
 import { TABLE_COLUMNS } from "../data/tableColumns";
+import { printDocument } from "../utils/print";
 
 /* =========================================================
    AUTO TEXT
@@ -246,6 +248,8 @@ function obterFormatoFinalEtiqueta(
    COMPONENTE
    ========================================================= */
 export default function EtiquetasExcelPage() {
+  const { showError, showInfo, showSuccess } = useToast();
+  const { user, profile } = useAuth();
   const [titulo, setTitulo] = useState("PROMO");
   const [anoValidade, setAnoValidade] = useState(new Date().getFullYear());
   const [dados, setDados] = useState([]);
@@ -367,7 +371,7 @@ export default function EtiquetasExcelPage() {
       setDados(linhas);
     } catch (error) {
       console.error("Erro ao ler Excel:", error);
-      alert("Não foi possível ler o ficheiro Excel.");
+      showError("Não foi possível ler o ficheiro Excel.");
     } finally {
       setLoading(false);
       event.target.value = "";
@@ -517,7 +521,7 @@ export default function EtiquetasExcelPage() {
       return true;
     } catch (error) {
       console.error("Não foi possível guardar a campanha no histórico.", error);
-      alert("Não foi possível guardar a campanha no histórico.");
+      showError("Não foi possível guardar a campanha no histórico.");
       return false;
     }
   }
@@ -531,6 +535,7 @@ export default function EtiquetasExcelPage() {
     try {
       if (texto) {
         await navigator.clipboard.writeText(texto);
+        showSuccess("Códigos inválidos copiados.");
       }
     } catch (error) {
       console.error("Não foi possível copiar os códigos.", error);
@@ -545,15 +550,15 @@ export default function EtiquetasExcelPage() {
     setPopupArtigosInvalidosAberto(false);
 
     if (restantesValidos.length === 0) {
-      alert("Não existem etiquetas válidas para imprimir.");
+      showInfo("Não existem etiquetas válidas para imprimir.");
       return;
     }
 
-    await guardarCampanhaNoHistorico("impressao");
-
-    setTimeout(() => {
-      window.print();
-    }, 150);
+    await printDocument({
+      beforePrint: async () => {
+        await guardarCampanhaNoHistorico("impressao");
+      },
+    });
   }
 
   async function fecharPopupEProsseguir() {
@@ -566,19 +571,19 @@ export default function EtiquetasExcelPage() {
     setPopupArtigosInvalidosAberto(false);
 
     if (restantesValidos.length === 0) {
-      alert("Não existem etiquetas válidas para imprimir.");
+      showInfo("Não existem etiquetas válidas para imprimir.");
       return;
     }
 
-    await guardarCampanhaNoHistorico("impressao");
-
-    setTimeout(() => {
-      window.print();
-    }, 150);
+    await printDocument({
+      beforePrint: async () => {
+        await guardarCampanhaNoHistorico("impressao");
+      },
+    });
   }
   async function imprimirSelecionados() {
     if (selecionados.length === 0) {
-      alert("Seleciona pelo menos um artigo.");
+      showInfo("Seleciona pelo menos um artigo.");
       return;
     }
 
@@ -595,8 +600,11 @@ export default function EtiquetasExcelPage() {
       return;
     }
 
-    await guardarCampanhaNoHistorico("impressao");
-    window.print();
+    await printDocument({
+      beforePrint: async () => {
+        await guardarCampanhaNoHistorico("impressao");
+      },
+    });
   }
 
   function renderEtiqueta(item, formatoAtual) {

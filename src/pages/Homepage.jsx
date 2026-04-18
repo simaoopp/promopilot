@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useToast } from "../components/ToastProvider";
 import {
   enrichArtigoWithAi,
   loadAllArtigos,
@@ -336,6 +337,7 @@ function formatarAutorCampanha(campanha) {
 
 export default function HomePage() {
   const navigate = useNavigate();
+  const { showError, showSuccess } = useToast();
   const { profile } = useAuth();
 
   const [pesquisa, setPesquisa] = useState("");
@@ -465,9 +467,11 @@ export default function HomePage() {
       if (campanhaSelecionada?.id === id) {
         setCampanhaSelecionada(null);
       }
+
+      showSuccess("Campanha apagada do histórico.");
     } catch (error) {
       console.error("Não foi possível apagar a campanha.", error);
-      alert("Não foi possível apagar a campanha.");
+      showError("Não foi possível apagar a campanha.");
     }
   }
 

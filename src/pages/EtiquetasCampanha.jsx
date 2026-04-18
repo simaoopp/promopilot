@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useToast } from "../components/ToastProvider";
 
 import Barcode from "../components/Barcode";
 import FilterMenu from "../components/FilterMenu";
@@ -19,6 +20,7 @@ import {
 } from "../utils/filters";
 import { formatarEuro } from "../utils/formatters";
 import { parseTabelaColada } from "../utils/parsers";
+import { printDocument } from "../utils/print";
 import { useAutoFontSize } from "../utils/useAutoFontSize";
 
 const CAMPANHA_TITULO_DEFAULT = "PROMO";
@@ -250,6 +252,12 @@ function obterFormatoAutomaticoEtiqueta(descricao = "") {
   const texto = normalizarTexto(descricao);
 
   const categoriasA5 = [
+    "Máq. Lavar Loiça",
+    "Máq. Lavar Louça",
+    "Máq. Secar Roupa",
+    "Máq. Secar",
+    "Máq. Lavar Roupa",
+    "Máq. Lavar",
     "maquina de lavar",
     "maquinas de lavar",
     "máquina de lavar",
@@ -376,6 +384,7 @@ function itemTabelaInvalido(item) {
 export default function EtiquetasPage() {
   const location = useLocation();
   const { user, profile } = useAuth();
+  const { showError, showInfo, showSuccess } = useToast();
 
   const [titulo, setTitulo] = useState(CAMPANHA_TITULO_DEFAULT);
   const [textoColado, setTextoColado] = useState("");
@@ -686,7 +695,7 @@ export default function EtiquetasPage() {
 
       setDados(linhas);
     } catch {
-      alert("Verifique se os dados inseridos estão corretos.");
+      showError("Verifica se os dados inseridos estão corretos.");
     }
   }
 
@@ -723,7 +732,7 @@ export default function EtiquetasPage() {
       return true;
     } catch (error) {
       console.error("Não foi possível guardar a campanha no histórico.", error);
-      alert("Não foi possível guardar a campanha no histórico.");
+      showError("Não foi possível guardar a campanha no histórico.");
       return false;
     }
   }
@@ -773,15 +782,15 @@ export default function EtiquetasPage() {
     setPopupArtigosInvalidosAberto(false);
 
     if (restantesValidos.length === 0) {
-      alert("Não existem etiquetas válidas para imprimir.");
+      showInfo("Não existem etiquetas válidas para imprimir.");
       return;
     }
 
-    await guardarCampanhaNoHistorico("impressao");
-
-    setTimeout(() => {
-      window.print();
-    }, 150);
+    await printDocument({
+      beforePrint: async () => {
+        await guardarCampanhaNoHistorico("impressao");
+      },
+    });
   }
 
   async function copiarCodigosInvalidosEProsseguir() {
@@ -793,6 +802,7 @@ export default function EtiquetasPage() {
     try {
       if (texto) {
         await navigator.clipboard.writeText(texto);
+        showSuccess("Códigos inválidos copiados.");
       }
     } catch (error) {
       console.error("Não foi possível copiar os códigos.", error);
@@ -817,7 +827,7 @@ export default function EtiquetasPage() {
 
   async function imprimirSelecionados() {
     if (!selecionados.length) {
-      alert("Seleciona pelo menos um artigo.");
+      showInfo("Seleciona pelo menos um artigo.");
       return;
     }
 
@@ -831,13 +841,16 @@ export default function EtiquetasPage() {
       return;
     }
 
-    await guardarCampanhaNoHistorico("impressao");
-    window.print();
+    await printDocument({
+      beforePrint: async () => {
+        await guardarCampanhaNoHistorico("impressao");
+      },
+    });
   }
 
   function adicionarArtigoCampanha() {
     if (!artigoCampanhaSelecionado) {
-      alert("Seleciona um artigo.");
+      showInfo("Seleciona um artigo.");
       return;
     }
 
