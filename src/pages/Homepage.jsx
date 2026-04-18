@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { supabase } from "../lib/supabase";
 import artigosData from "../data/artigos.json";
 import {
   loadCampaignHistory,
@@ -44,6 +45,25 @@ async function readJsonResponse(response) {
   } catch {
     throw new Error(`Resposta inválida do servidor: ${rawText.slice(0, 200)}`);
   }
+}
+
+async function getAccessToken() {
+  const {
+    data: { session },
+    error,
+  } = await supabase.auth.getSession();
+
+  if (error) {
+    throw new Error(error.message || "Não foi possível obter a sessão.");
+  }
+
+  const token = session?.access_token || "";
+
+  if (!token) {
+    throw new Error("Sessão inválida ou expirada.");
+  }
+
+  return token;
 }
 
 function normalizarTexto(texto) {
@@ -404,7 +424,13 @@ export default function HomePage() {
 
     async function syncArtigosFromApi() {
       try {
-        const response = await fetch(buildApiUrl("/api/artigos"));
+        const token = await getAccessToken();
+
+        const response = await fetch(buildApiUrl("/api/artigos"), {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
         const data = await readJsonResponse(response);
 
         if (!response.ok || !Array.isArray(data?.artigos)) {
@@ -532,10 +558,13 @@ export default function HomePage() {
         codigoBarras: artigoSelecionado.codigoBarras || "",
       };
 
+      const token = await getAccessToken();
+
       const response = await fetch(buildApiUrl("/api/ai-produto"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(payload),
       });
