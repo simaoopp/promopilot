@@ -20,7 +20,6 @@ import {
 } from "../utils/filters";
 import { formatarEuro } from "../utils/formatters";
 import { parseTabelaColada } from "../utils/parsers";
-import { printDocument } from "../utils/print";
 import { useAutoFontSize } from "../utils/useAutoFontSize";
 
 const CAMPANHA_TITULO_DEFAULT = "PROMO";
@@ -251,7 +250,7 @@ function obterTextoValidade(item, anoValidadeAtual) {
 function obterFormatoAutomaticoEtiqueta(descricao = "") {
   const texto = normalizarTexto(descricao);
 
-  const categoriasA5 = [
+   const categoriasA5 = [
     "Máq. Lavar Loiça",
     "Máq. Lavar Louça",
     "Máq. Secar Roupa",
@@ -384,7 +383,7 @@ function itemTabelaInvalido(item) {
 export default function EtiquetasPage() {
   const location = useLocation();
   const { user, profile } = useAuth();
-  const { showError, showInfo, showSuccess } = useToast();
+  const toast = useToast();
 
   const [titulo, setTitulo] = useState(CAMPANHA_TITULO_DEFAULT);
   const [textoColado, setTextoColado] = useState("");
@@ -695,7 +694,7 @@ export default function EtiquetasPage() {
 
       setDados(linhas);
     } catch {
-      showError("Verifica se os dados inseridos estão corretos.");
+      toast.error("Verifica se os dados inseridos estão corretos.");
     }
   }
 
@@ -732,7 +731,7 @@ export default function EtiquetasPage() {
       return true;
     } catch (error) {
       console.error("Não foi possível guardar a campanha no histórico.", error);
-      showError("Não foi possível guardar a campanha no histórico.");
+      toast.error("Não foi possível guardar a campanha no histórico.");
       return false;
     }
   }
@@ -782,15 +781,15 @@ export default function EtiquetasPage() {
     setPopupArtigosInvalidosAberto(false);
 
     if (restantesValidos.length === 0) {
-      showInfo("Não existem etiquetas válidas para imprimir.");
+      toast.warning("Não existem etiquetas válidas para imprimir.");
       return;
     }
 
-    await printDocument({
-      beforePrint: async () => {
-        await guardarCampanhaNoHistorico("impressao");
-      },
-    });
+    await guardarCampanhaNoHistorico("impressao");
+
+    setTimeout(() => {
+      window.print();
+    }, 150);
   }
 
   async function copiarCodigosInvalidosEProsseguir() {
@@ -802,7 +801,6 @@ export default function EtiquetasPage() {
     try {
       if (texto) {
         await navigator.clipboard.writeText(texto);
-        showSuccess("Códigos inválidos copiados.");
       }
     } catch (error) {
       console.error("Não foi possível copiar os códigos.", error);
@@ -827,7 +825,7 @@ export default function EtiquetasPage() {
 
   async function imprimirSelecionados() {
     if (!selecionados.length) {
-      showInfo("Seleciona pelo menos um artigo.");
+      toast.warning("Seleciona pelo menos um artigo.");
       return;
     }
 
@@ -841,16 +839,13 @@ export default function EtiquetasPage() {
       return;
     }
 
-    await printDocument({
-      beforePrint: async () => {
-        await guardarCampanhaNoHistorico("impressao");
-      },
-    });
+    await guardarCampanhaNoHistorico("impressao");
+    window.print();
   }
 
   function adicionarArtigoCampanha() {
     if (!artigoCampanhaSelecionado) {
-      showInfo("Seleciona um artigo.");
+      toast.warning("Seleciona um artigo.");
       return;
     }
 

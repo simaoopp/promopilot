@@ -32,7 +32,7 @@ export const STORE_OPTIONS = [
     const minLength = clean.length >= 8;
     const hasLetter = /[A-Za-zÀ-ÿ]/.test(clean);
     const hasNumber = /\d/.test(clean);
-    const hasSpecial = /[!@#$%^&*(),.?":{}|<>_\-\/\[\];'`~+=]/.test(clean);
+    const hasSpecial = /[^A-Za-zÀ-ÿ0-9\s]/.test(clean);
     const notCommon = !COMMON_PASSWORDS.has(clean.toLowerCase());
   
     return minLength && hasLetter && hasNumber && hasSpecial && notCommon;

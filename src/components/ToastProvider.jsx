@@ -1,69 +1,89 @@
-import React, { createContext, useCallback, useContext, useMemo, useState } from "react";
+import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
 
 const ToastContext = createContext(null);
-const TOAST_DURATION_MS = 4200;
 
-function ToastViewport({ toasts, onClose }) {
-  return (
-    <div className="toast-viewport" aria-live="polite" aria-atomic="true">
-      {toasts.map((toast) => (
-        <div
-          key={toast.id}
-          className={`toast toast-${toast.variant}`}
-          role="status"
-        >
-          <div className="toast-content">
-            <strong>{toast.title}</strong>
-            {toast.description ? <p>{toast.description}</p> : null}
-          </div>
-          <button
-            type="button"
-            className="toast-close"
-            onClick={() => onClose(toast.id)}
-            aria-label="Fechar notificação"
-          >
-            ×
-          </button>
-        </div>
-      ))}
-    </div>
-  );
+function createToast(id, message, options = {}) {
+  return {
+    id,
+    message,
+    type: options.type || "info",
+    duration: Number.isFinite(options.duration) ? options.duration : 3500,
+  };
 }
 
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);
+  const timersRef = useRef(new Map());
+  const nextIdRef = useRef(1);
 
   const dismissToast = useCallback((id) => {
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
+
+    const timer = timersRef.current.get(id);
+    if (timer) {
+      window.clearTimeout(timer);
+      timersRef.current.delete(id);
+    }
   }, []);
 
-  const pushToast = useCallback(({ title, description = "", variant = "info" }) => {
-    const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const showToast = useCallback((message, options = {}) => {
+    const text = String(message || "").trim();
+    if (!text) return null;
 
-    setToasts((prev) => [...prev, { id, title, description, variant }]);
-    window.setTimeout(() => dismissToast(id), TOAST_DURATION_MS);
+    const id = nextIdRef.current++;
+    const toast = createToast(id, text, options);
+
+    setToasts((prev) => [...prev, toast]);
+
+    if (toast.duration > 0) {
+      const timer = window.setTimeout(() => {
+        dismissToast(id);
+      }, toast.duration);
+
+      timersRef.current.set(id, timer);
+    }
+
+    return id;
   }, [dismissToast]);
 
-  const value = useMemo(
-    () => ({
-      showSuccess(title, description = "") {
-        pushToast({ title, description, variant: "success" });
-      },
-      showError(title, description = "") {
-        pushToast({ title, description, variant: "error" });
-      },
-      showInfo(title, description = "") {
-        pushToast({ title, description, variant: "info" });
-      },
-      dismissToast,
-    }),
-    [dismissToast, pushToast],
-  );
+  const value = useMemo(() => ({
+    showToast,
+    dismissToast,
+    success(message, options = {}) {
+      return showToast(message, { ...options, type: "success" });
+    },
+    error(message, options = {}) {
+      return showToast(message, { ...options, type: "error" });
+    },
+    warning(message, options = {}) {
+      return showToast(message, { ...options, type: "warning" });
+    },
+    info(message, options = {}) {
+      return showToast(message, { ...options, type: "info" });
+    },
+  }), [dismissToast, showToast]);
 
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <ToastViewport toasts={toasts} onClose={dismissToast} />
+
+      <div className="toast-stack" aria-live="polite" aria-atomic="true">
+        {toasts.map((toast) => (
+          <div key={toast.id} className={`toast toast-${toast.type}`} role="status">
+            <div className="toast-content">
+              <span>{toast.message}</span>
+            </div>
+            <button
+              type="button"
+              className="toast-close"
+              onClick={() => dismissToast(toast.id)}
+              aria-label="Fechar notificação"
+            >
+              ×
+            </button>
+          </div>
+        ))}
+      </div>
     </ToastContext.Provider>
   );
 }

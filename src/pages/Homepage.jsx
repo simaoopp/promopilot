@@ -337,8 +337,8 @@ function formatarAutorCampanha(campanha) {
 
 export default function HomePage() {
   const navigate = useNavigate();
-  const { showError, showSuccess } = useToast();
   const { profile } = useAuth();
+  const toast = useToast();
 
   const [pesquisa, setPesquisa] = useState("");
   const [artigoSelecionado, setArtigoSelecionado] = useState(null);
@@ -467,11 +467,9 @@ export default function HomePage() {
       if (campanhaSelecionada?.id === id) {
         setCampanhaSelecionada(null);
       }
-
-      showSuccess("Campanha apagada do histórico.");
     } catch (error) {
       console.error("Não foi possível apagar a campanha.", error);
-      showError("Não foi possível apagar a campanha.");
+      toast.error("Não foi possível apagar a campanha.");
     }
   }
 
