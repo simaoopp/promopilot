@@ -8,8 +8,12 @@ import { chromium } from "playwright";
 import * as cheerio from "cheerio";
 import { GoogleGenAI } from "@google/genai";
 import { createClient } from "@supabase/supabase-js";
+import { fileURLToPath } from "url";
 
 dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
@@ -37,6 +41,7 @@ if (!supabaseServer) {
 }
 
 const app = express();
+app.set("trust proxy", 1);
 
 const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS || "")
   .split(",")
@@ -67,7 +72,7 @@ app.use(express.json({ limit: "1mb" }));
 const AI_MODEL = "gemini-2.5-flash";
 const USE_GROUNDING_FALLBACK = true;
 
-const DB_FILE = path.resolve("../src/data/artigos.json");
+const DB_FILE = path.resolve(__dirname, "..", "src", "data", "artigos.json");
 const MAX_TEXT_LENGTH = 12000;
 const MAX_CANDIDATE_LINKS = 8;
 const MAX_SCRAPE_ATTEMPTS = 5;
@@ -1351,11 +1356,34 @@ async function enrichSingleArticle({ artigoInterno, codigoBarras, descricao }) {
 /* =========================================================
    API
    ========================================================= */
-app.get("/api/artigos", requireAuth, async (_req, res) => {
+app.get("/api/artigos", requireAuth, async (req, res) => {
   try {
+    const q = normalizeSearchValue(req.query.q || "");
+    const limit = Math.min(parsePositiveInt(req.query.limit, 100), 500);
+    const offset = parsePositiveInt(req.query.offset, 0);
+
     const db = await loadDB();
-    return res.json(db);
+
+    const filtered = Array.isArray(db)
+      ? db.filter((artigo) => matchesArtigoQuery(artigo, q))
+      : [];
+
+    const total = filtered.length;
+    const items = filtered.slice(offset, offset + limit);
+
+    return res.json({
+      ok: true,
+      items,
+      artigos: items,
+      total,
+      limit,
+      offset,
+      hasMore: offset + items.length < total,
+      q,
+    });
   } catch (error) {
+    console.error("Erro em GET /api/artigos:", error);
+
     return res.status(500).json({
       ok: false,
       error: error?.message || "Erro ao carregar artigos.",
@@ -1412,6 +1440,48 @@ app.post("/api/ai-produto", requireAuth, aiRateLimit, async (req, res) => {
     });
   }
 });
+
+
+function normalizeSearchValue(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function parsePositiveInt(value, fallback) {
+  const parsed = Number.parseInt(value, 10);
+
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return fallback;
+  }
+
+  return parsed;
+}
+
+function matchesArtigoQuery(artigo, query) {
+  if (!query) return true;
+
+  const searchable = [
+    artigo?.artigo,
+    artigo?.artigo_interno,
+    artigo?.codigoBarras,
+    artigo?.codigo_barras,
+    artigo?.descricao,
+    artigo?.descricao_comercial,
+    artigo?.titulo_oficial,
+    artigo?.descricao_oficial,
+    artigo?.brand,
+    artigo?.categoria,
+    artigo?.subcategory,
+  ]
+    .map(normalizeSearchValue)
+    .filter(Boolean)
+    .join(" ");
+
+  return searchable.includes(query);
+}
 
 setInterval(() => {
   const now = Date.now();

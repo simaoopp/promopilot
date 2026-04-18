@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { BrowserMultiFormatReader } from "@zxing/browser";
 import { createWorker } from "tesseract.js";
-import { fetchArtigos } from "../services/artigosService";
+import { loadAllArtigos } from "../services/artigosService";
 import "../styles/styles.css";
 
 const LIMITE_RESULTADOS = 100;
@@ -54,12 +54,14 @@ function extrairMelhorTextoOCR(texto) {
   return linhas[0] || "";
 }
 
-export default function EtiquetasPage() {
+export default function EtiquetasCampanhaExcelPage() {
   const [modoPesquisa, setModoPesquisa] = useState("manual");
   const [pesquisa, setPesquisa] = useState("");
   const [pesquisaDebounced, setPesquisaDebounced] = useState("");
   const [selecionados, setSelecionados] = useState({});
   const [mensagem, setMensagem] = useState("");
+  const [artigos, setArtigos] = useState([]);
+  const [artigosLoading, setArtigosLoading] = useState(true);
 
   const [menuScanAberto, setMenuScanAberto] = useState(false);
   const [scannerAberto, setScannerAberto] = useState(false);
@@ -74,7 +76,6 @@ export default function EtiquetasPage() {
   const controlsRef = useRef(null);
   const ocrWorkerRef = useRef(null);
 
-  const [artigos, setArtigos] = useState([]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -85,31 +86,6 @@ export default function EtiquetasPage() {
   }, [pesquisa]);
 
   useEffect(() => {
-    let active = true;
-
-    async function loadArtigos() {
-      try {
-        const artigosCarregados = await fetchArtigos();
-
-        if (active) {
-          setArtigos(artigosCarregados);
-        }
-      } catch (error) {
-        console.error("Não foi possível carregar os artigos.", error);
-        if (active) {
-          setArtigos([]);
-        }
-      }
-    }
-
-    loadArtigos();
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  useEffect(() => {
     if (!mensagem) return;
 
     const timer = setTimeout(() => {
@@ -118,6 +94,37 @@ export default function EtiquetasPage() {
 
     return () => clearTimeout(timer);
   }, [mensagem]);
+
+
+  useEffect(() => {
+    let ativo = true;
+
+    async function syncArtigos() {
+      try {
+        const data = await loadAllArtigos({ pageSize: 500 });
+
+        if (ativo) {
+          setArtigos(data.items || []);
+        }
+      } catch (error) {
+        console.error("Não foi possível carregar artigos.", error);
+
+        if (ativo) {
+          setMensagem("Não foi possível carregar o catálogo de artigos.");
+        }
+      } finally {
+        if (ativo) {
+          setArtigosLoading(false);
+        }
+      }
+    }
+
+    syncArtigos();
+
+    return () => {
+      ativo = false;
+    };
+  }, []);
 
   const artigosPreparados = useMemo(() => {
     return artigos.map((item, index) => ({
@@ -425,7 +432,7 @@ export default function EtiquetasPage() {
       setMensagem("A ler texto da imagem...");
 
       if (!ocrWorkerRef.current) {
-        ocrWorkerRef.current = await createWorker("por+eng");
+        ocrWorkerRef.current = await createWorker("eng");
       }
 
       const {
@@ -597,7 +604,13 @@ export default function EtiquetasPage() {
             </thead>
 
             <tbody>
-              {pesquisaDebounced.trim().length < 2 ? (
+              {artigosLoading ? (
+                <tr>
+                  <td colSpan={7} className="empty-cell">
+                    A carregar catálogo de artigos...
+                  </td>
+                </tr>
+              ) : pesquisaDebounced.trim().length < 2 ? (
                 <tr>
                   <td colSpan={7} className="empty-cell">
                     Escreve pelo menos 2 caracteres para pesquisar.

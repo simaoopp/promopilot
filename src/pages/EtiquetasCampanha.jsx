@@ -4,7 +4,7 @@ import { useAuth } from "../context/AuthContext";
 
 import Barcode from "../components/Barcode";
 import FilterMenu from "../components/FilterMenu";
-import { fetchArtigos } from "../services/artigosService";
+import { loadAllArtigos } from "../services/artigosService";
 import { TABLE_COLUMNS } from "../data/tableColumns";
 import logo from "../logo.png";
 import "../styles/styles.css";
@@ -399,11 +399,14 @@ export default function EtiquetasPage() {
   const [campanhaDataInicio, setCampanhaDataInicio] = useState("");
   const [campanhaDataFim, setCampanhaDataFim] = useState("");
   const [erroCampanha, setErroCampanha] = useState("");
+  const [catalogoArtigos, setCatalogoArtigos] = useState([]);
+  const [catalogoLoading, setCatalogoLoading] = useState(true);
+  const [catalogoErro, setCatalogoErro] = useState("");
 
   const [filtroAberto, setFiltroAberto] = useState(null);
   const [ordenacao, setOrdenacao] = useState({ coluna: "", direcao: "" });
   const [filtros, setFiltros] = useState(FILTROS_INICIAIS);
-  const [artigosJson, setArtigosJson] = useState([]);
+
 
   useEffect(() => {
     const campanhaDuplicada = location.state?.campanhaDuplicada;
@@ -439,31 +442,6 @@ export default function EtiquetasPage() {
   }, []);
 
   useEffect(() => {
-    let active = true;
-
-    async function loadArtigos() {
-      try {
-        const artigosCarregados = await fetchArtigos();
-
-        if (active) {
-          setArtigosJson(artigosCarregados);
-        }
-      } catch (error) {
-        console.error("Não foi possível carregar os artigos.", error);
-        if (active) {
-          setArtigosJson([]);
-        }
-      }
-    }
-
-    loadArtigos();
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  useEffect(() => {
     const antes = converterPreco(campanhaAntes);
     const atual = converterPreco(campanhaAtual);
 
@@ -480,11 +458,43 @@ export default function EtiquetasPage() {
     setErroCampanha("");
   }, [campanhaAntes, campanhaAtual]);
 
+
+  useEffect(() => {
+    let ativo = true;
+
+    async function syncCatalogo() {
+      try {
+        const data = await loadAllArtigos({ pageSize: 500 });
+
+        if (ativo) {
+          setCatalogoArtigos(data.items || []);
+          setCatalogoErro("");
+        }
+      } catch (error) {
+        console.error("Não foi possível carregar o catálogo da campanha.", error);
+
+        if (ativo) {
+          setCatalogoErro("Não foi possível carregar o catálogo de artigos.");
+        }
+      } finally {
+        if (ativo) {
+          setCatalogoLoading(false);
+        }
+      }
+    }
+
+    syncCatalogo();
+
+    return () => {
+      ativo = false;
+    };
+  }, []);
+
   const sugestoesCampanha = useMemo(() => {
     const termo = normalizarTexto(pesquisaCampanha);
     if (termo.length < 2) return [];
 
-    return artigosJson
+    return catalogoArtigos
       .filter((item) => {
         const artigo = normalizarTexto(item.artigo);
         const descricao = normalizarTexto(item.descricao);
@@ -497,13 +507,45 @@ export default function EtiquetasPage() {
         );
       })
       .slice(0, 10);
-  }, [pesquisaCampanha, artigosJson]);
+  }, [pesquisaCampanha, catalogoArtigos]);
 
   const descontoCampanha = useMemo(() => {
     const antes = converterPreco(campanhaAntes);
     const atual = converterPreco(campanhaAtual);
     return Math.max(0, antes - atual);
   }, [campanhaAntes, campanhaAtual]);
+
+
+  useEffect(() => {
+    let ativo = true;
+
+    async function syncCatalogo() {
+      try {
+        const data = await loadAllArtigos({ pageSize: 500 });
+
+        if (ativo) {
+          setCatalogoArtigos(data.items || []);
+          setCatalogoErro("");
+        }
+      } catch (error) {
+        console.error("Não foi possível carregar o catálogo da campanha.", error);
+
+        if (ativo) {
+          setCatalogoErro("Não foi possível carregar o catálogo de artigos.");
+        }
+      } finally {
+        if (ativo) {
+          setCatalogoLoading(false);
+        }
+      }
+    }
+
+    syncCatalogo();
+
+    return () => {
+      ativo = false;
+    };
+  }, []);
 
   const pvpBaseCampanha = useMemo(
     () => converterPreco(artigoCampanhaSelecionado?.pvp2 || ""),
@@ -1191,7 +1233,11 @@ export default function EtiquetasPage() {
                       />
                     </div>
 
-                    {sugestoesCampanha.length > 0 ? (
+                    {catalogoLoading ? (
+                      <p className="empty-state-text">A carregar catálogo de artigos...</p>
+                    ) : catalogoErro ? (
+                      <p className="campanha-erro">{catalogoErro}</p>
+                    ) : sugestoesCampanha.length > 0 ? (
                       <div className="campanha-sugestoes">
                         {sugestoesCampanha.map((item, index) => {
                           const ativo =
