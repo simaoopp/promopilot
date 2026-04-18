@@ -313,35 +313,35 @@ export default function EtiquetasExcelPage() {
   }
 
   const ordenarLista = useCallback(
-    (lista) => {
-      if (!ordenacao.coluna || !ordenacao.direcao) return lista;
+  (lista) => {
+    if (!ordenacao.coluna || !ordenacao.direcao) return lista;
 
-      const copia = [...lista];
+    const copia = [...lista];
 
-      copia.sort((a, b) => {
-        const va = a[ordenacao.coluna];
-        const vb = b[ordenacao.coluna];
+    copia.sort((a, b) => {
+      const va = a[ordenacao.coluna];
+      const vb = b[ordenacao.coluna];
 
-        const aNum = Number(va);
-        const bNum = Number(vb);
-        const ambosNumeros = !Number.isNaN(aNum) && !Number.isNaN(bNum);
+      const aNum = Number(va);
+      const bNum = Number(vb);
+      const ambosNumeros = !Number.isNaN(aNum) && !Number.isNaN(bNum);
 
-        if (ambosNumeros) {
-          return ordenacao.direcao === "asc" ? aNum - bNum : bNum - aNum;
-        }
+      if (ambosNumeros) {
+        return ordenacao.direcao === "asc" ? aNum - bNum : bNum - aNum;
+      }
 
-        const aText = String(va || "").toLowerCase();
-        const bText = String(vb || "").toLowerCase();
+      const aText = String(va || "").toLowerCase();
+      const bText = String(vb || "").toLowerCase();
 
-        return ordenacao.direcao === "asc"
-          ? aText.localeCompare(bText, "pt")
-          : bText.localeCompare(aText, "pt");
-      });
+      return ordenacao.direcao === "asc"
+        ? aText.localeCompare(bText, "pt")
+        : bText.localeCompare(aText, "pt");
+    });
 
-      return copia;
-    },
-    [ordenacao],
-  );
+    return copia;
+  },
+  [ordenacao],
+);
 
   async function carregarExcel(event) {
     try {
@@ -381,35 +381,35 @@ export default function EtiquetasExcelPage() {
   }
 
   const dadosFiltrados = useMemo(() => {
-    const filtrados = dados.filter((item) => {
-      const codigoOk = aplicarFiltroTexto(item.codigo, filtros.codigo);
-      const descricaoOk = aplicarFiltroTexto(item.descricao, filtros.descricao);
-      const pnOk = aplicarFiltroTexto(item.pn, filtros.pn);
-      const estadoOk = aplicarFiltroTexto(item.estado, filtros.estado);
-      const infoOk = aplicarFiltroTexto(item.info, filtros.info);
+  const filtrados = dados.filter((item) => {
+    const codigoOk = aplicarFiltroTexto(item.codigo, filtros.codigo);
+    const descricaoOk = aplicarFiltroTexto(item.descricao, filtros.descricao);
+    const pnOk = aplicarFiltroTexto(item.pn, filtros.pn);
+    const estadoOk = aplicarFiltroTexto(item.estado, filtros.estado);
+    const infoOk = aplicarFiltroTexto(item.info, filtros.info);
 
-      const aeOk = compararNumero(item.ae, filtros.ae.op, filtros.ae.valor);
-      const aeaOk = compararNumero(item.aea, filtros.aea.op, filtros.aea.valor);
-      const aevOk = compararNumero(item.aev, filtros.aev.op, filtros.aev.valor);
-      const a10Ok = compararNumero(item.a10, filtros.a10.op, filtros.a10.valor);
-      const a1eOk = compararNumero(item.a1e, filtros.a1e.op, filtros.a1e.valor);
+    const aeOk = compararNumero(item.ae, filtros.ae.op, filtros.ae.valor);
+    const aeaOk = compararNumero(item.aea, filtros.aea.op, filtros.aea.valor);
+    const aevOk = compararNumero(item.aev, filtros.aev.op, filtros.aev.valor);
+    const a10Ok = compararNumero(item.a10, filtros.a10.op, filtros.a10.valor);
+    const a1eOk = compararNumero(item.a1e, filtros.a1e.op, filtros.a1e.valor);
 
-      return (
-        codigoOk &&
-        descricaoOk &&
-        pnOk &&
-        estadoOk &&
-        infoOk &&
-        aeOk &&
-        aeaOk &&
-        aevOk &&
-        a10Ok &&
-        a1eOk
-      );
-    });
+    return (
+      codigoOk &&
+      descricaoOk &&
+      pnOk &&
+      estadoOk &&
+      infoOk &&
+      aeOk &&
+      aeaOk &&
+      aevOk &&
+      a10Ok &&
+      a1eOk
+    );
+  });
 
-    return ordenarLista(filtrados);
-  }, [dados, filtros, ordenacao]);
+  return ordenarLista(filtrados);
+}, [dados, filtros, ordenarLista]);
 
   const selecionados = useMemo(
     () => dados.filter((item) => item.selecionado),
