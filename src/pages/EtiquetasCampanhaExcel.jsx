@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../components/ToastProvider";
@@ -312,33 +312,36 @@ export default function EtiquetasExcelPage() {
     }));
   }
 
-  function ordenarLista(lista) {
-    if (!ordenacao.coluna || !ordenacao.direcao) return lista;
+  const ordenarLista = useCallback(
+    (lista) => {
+      if (!ordenacao.coluna || !ordenacao.direcao) return lista;
 
-    const copia = [...lista];
+      const copia = [...lista];
 
-    copia.sort((a, b) => {
-      const va = a[ordenacao.coluna];
-      const vb = b[ordenacao.coluna];
+      copia.sort((a, b) => {
+        const va = a[ordenacao.coluna];
+        const vb = b[ordenacao.coluna];
 
-      const aNum = Number(va);
-      const bNum = Number(vb);
-      const ambosNumeros = !Number.isNaN(aNum) && !Number.isNaN(bNum);
+        const aNum = Number(va);
+        const bNum = Number(vb);
+        const ambosNumeros = !Number.isNaN(aNum) && !Number.isNaN(bNum);
 
-      if (ambosNumeros) {
-        return ordenacao.direcao === "asc" ? aNum - bNum : bNum - aNum;
-      }
+        if (ambosNumeros) {
+          return ordenacao.direcao === "asc" ? aNum - bNum : bNum - aNum;
+        }
 
-      const aText = String(va || "").toLowerCase();
-      const bText = String(vb || "").toLowerCase();
+        const aText = String(va || "").toLowerCase();
+        const bText = String(vb || "").toLowerCase();
 
-      return ordenacao.direcao === "asc"
-        ? aText.localeCompare(bText, "pt")
-        : bText.localeCompare(aText, "pt");
-    });
+        return ordenacao.direcao === "asc"
+          ? aText.localeCompare(bText, "pt")
+          : bText.localeCompare(aText, "pt");
+      });
 
-    return copia;
-  }
+      return copia;
+    },
+    [ordenacao],
+  );
 
   async function carregarExcel(event) {
     try {
