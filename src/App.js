@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import Sidebar from "./components/Sidebar";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -8,28 +8,20 @@ import Etiquetas from "./pages/Etiquetas";
 import Homepage from "./pages/Homepage";
 import Login from "./pages/Login";
 import { useAuth } from "./context/AuthContext";
+import { resolveInitialRoute } from "./utils/accessControl";
 import logo from "./logo.png";
 import "./styles/styles.css";
 
 export default function App() {
   const [menuAberto, setMenuAberto] = useState(false);
-  const [loadingInicial, setLoadingInicial] = useState(true);
+  const { user, loadingAuth, loadingProfile, onboardingRequired } = useAuth();
 
-  const { user, loadingAuth } = useAuth();
+  const rotaInicial = useMemo(
+    () => resolveInitialRoute({ user, onboardingRequired }),
+    [user, onboardingRequired],
+  );
 
-  const rotaInicial = useMemo(() => {
-    return user ? "/Homepage" : "/login";
-  }, [user]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setLoadingInicial(false);
-    }, 1200);
-
-    return () => clearTimeout(timer);
-  }, []);
-
-  if (loadingInicial || loadingAuth) {
+  if (loadingAuth || (user && loadingProfile)) {
     return (
       <div className="splash-screen">
         <img src={logo} alt="Expert" className="splash-logo" />
@@ -40,7 +32,7 @@ export default function App() {
 
   return (
     <div className={user ? "app" : "app app-login"}>
-      {user && (
+      {user && !onboardingRequired && (
         <Sidebar
           menuAberto={menuAberto}
           setMenuAberto={setMenuAberto}
@@ -50,11 +42,7 @@ export default function App() {
 
       <Routes>
         <Route path="/" element={<Navigate to={rotaInicial} replace />} />
-
-        <Route
-          path="/login"
-          element={user ? <Navigate to="/Homepage" replace /> : <Login />}
-        />
+        <Route path="/login" element={<Login />} />
 
         <Route
           path="/Homepage"

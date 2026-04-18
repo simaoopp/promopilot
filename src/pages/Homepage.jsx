@@ -1,70 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { supabase } from "../lib/supabase";
-import artigosData from "../data/artigos.json";
+import { enrichArtigo, fetchArtigos, updateArtigoCache } from "../services/artigosService";
 import {
   loadCampaignHistory,
   removeCampaignFromHistory,
 } from "../utils/campaignHistory";
 import "../styles/styles.css";
-
-const API_BASE_URL =
-  process.env.REACT_APP_API_BASE_URL ||
-  (typeof window !== "undefined" && window.location.hostname === "localhost"
-    ? "http://localhost:3001"
-    : "");
-
-function buildApiUrl(path) {
-  return `${API_BASE_URL}${path}`;
-}
-
-function mergeArtigoData(base = {}, updated = {}) {
-  return {
-    ...base,
-    ...updated,
-    caracteristicas_tecnicas:
-      updated?.caracteristicas_tecnicas ?? base?.caracteristicas_tecnicas ?? {},
-    documentos_oficiais:
-      updated?.documentos_oficiais ?? base?.documentos_oficiais ?? [],
-    texto_grounding: updated?.texto_grounding ?? base?.texto_grounding ?? "",
-    observacoes_ia: updated?.observacoes_ia ?? base?.observacoes_ia ?? "",
-    resumo_vendedor: updated?.resumo_vendedor ?? base?.resumo_vendedor ?? "",
-  };
-}
-
-async function readJsonResponse(response) {
-  const rawText = await response.text();
-
-  if (!rawText) {
-    return {};
-  }
-
-  try {
-    return JSON.parse(rawText);
-  } catch {
-    throw new Error(`Resposta inválida do servidor: ${rawText.slice(0, 200)}`);
-  }
-}
-
-async function getAccessToken() {
-  const {
-    data: { session },
-    error,
-  } = await supabase.auth.getSession();
-
-  if (error) {
-    throw new Error(error.message || "Não foi possível obter a sessão.");
-  }
-
-  const token = session?.access_token || "";
-
-  if (!token) {
-    throw new Error("Sessão inválida ou expirada.");
-  }
-
-  return token;
-}
 
 function normalizarTexto(texto) {
   return String(texto || "")
@@ -399,7 +341,7 @@ export default function HomePage() {
 
   const [historicoCampanhas, setHistoricoCampanhas] = useState([]);
   const [campanhaSelecionada, setCampanhaSelecionada] = useState(null);
-  const [artigos, setArtigos] = useState(() => artigosData?.artigos || []);
+  const [artigos, setArtigos] = useState([]);
 
   useEffect(() => {
     let isMounted = true;
@@ -424,24 +366,16 @@ export default function HomePage() {
 
     async function syncArtigosFromApi() {
       try {
-        const token = await getAccessToken();
-
-        const response = await fetch(buildApiUrl("/api/artigos"), {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-        const data = await readJsonResponse(response);
-
-        if (!response.ok || !Array.isArray(data?.artigos)) {
-          return;
-        }
+        const artigosCarregados = await fetchArtigos();
 
         if (isMounted) {
-          setArtigos(data.artigos);
+          setArtigos(artigosCarregados);
         }
       } catch (error) {
-        console.warn("Não foi possível sincronizar artigos pela API.", error);
+        console.warn("Não foi possível sincronizar artigos.", error);
+        if (isMounted) {
+          setArtigos([]);
+        }
       }
     }
 
@@ -557,27 +491,7 @@ export default function HomePage() {
         descricao: artigoSelecionado.descricao || "",
         codigoBarras: artigoSelecionado.codigoBarras || "",
       };
-
-      const token = await getAccessToken();
-
-      const response = await fetch(buildApiUrl("/api/ai-produto"), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await readJsonResponse(response);
-
-      if (!response.ok) {
-        throw new Error(data?.error || data?.detalhe || "Erro no servidor.");
-      }
-
-      if (!data?.ok) {
-        throw new Error(data?.error || "Resposta inválida da AI.");
-      }
+      const data = await enrichArtigo(payload);
 
       const artigoAtualizado = mergeArtigoData(
         artigoSelecionado,
@@ -588,6 +502,7 @@ export default function HomePage() {
         artigoAtualizado,
       );
 
+      updateArtigoCache(data?.artigoAtualizado);
       setAiResultado(resultadoNormalizado);
       setArtigoSelecionado(artigoAtualizado);
       setArtigos((prev) =>

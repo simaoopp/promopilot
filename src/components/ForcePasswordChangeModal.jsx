@@ -1,34 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 
-const STORE_OPTIONS = [
-  "Loja da Praia",
-  "Loja de Angra",
-  "Loja de Valados",
-];
-
-function passwordValida(password) {
-  const limpa = String(password || "").trim();
-
-  const minLength = limpa.length >= 8;
-  const hasLetter = /[A-Za-zÀ-ÿ]/.test(limpa);
-  const hasNumber = /\d/.test(limpa);
-  const hasSpecial = /[!@#$%^&*(),.?":{}|<>_\-\\/\[\];'`~+=]/.test(limpa);
-
-  const passwordsProibidas = [
-    "123",
-    "1234",
-    "12345",
-    "123456",
-    "password",
-    "admin",
-    "qwerty",
-  ];
-
-  const notCommon = !passwordsProibidas.includes(limpa.toLowerCase());
-
-  return minLength && hasLetter && hasNumber && hasSpecial && notCommon;
-}
+import {
+  STORE_OPTIONS,
+  getPasswordValidationMessage,
+  isValidPassword,
+  isValidStore,
+} from "../utils/validators";
 
 export default function ForcePasswordChangeModal({
   open,
@@ -77,16 +55,14 @@ export default function ForcePasswordChangeModal({
       return;
     }
 
-    if (!STORE_OPTIONS.includes(store)) {
+    if (!isValidStore(store)) {
       setErro("Seleciona uma loja válida.");
       return;
     }
 
     if (requirePassword) {
-      if (!passwordValida(passwordTrimmed)) {
-        setErro(
-          "A nova palavra-passe deve ter pelo menos 8 caracteres, incluir letras, números e 1 carácter especial, e não pode ser demasiado comum."
-        );
+      if (!isValidPassword(passwordTrimmed)) {
+        setErro(getPasswordValidationMessage(passwordTrimmed));
         return;
       }
 
