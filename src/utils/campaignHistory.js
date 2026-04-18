@@ -30,23 +30,49 @@ function mapRowToCampaign(row = {}) {
   };
 }
 
-function mapSnapshotToRow(snapshot = {}) {
-  return {
-    id: snapshot.id,
-    titulo: snapshot.titulo || "PROMO",
-    dados: Array.isArray(snapshot.dados) ? snapshot.dados : [],
-    ano_validade: snapshot.anoValidade || new Date().getFullYear(),
-    formato_etiqueta: snapshot.formatoEtiqueta || "a6",
+export function normalizeCampaignSnapshot(snapshot = {}) {
+  const normalized = {
+    id: String(snapshot.id || `camp-${Date.now()}`).trim(),
+    titulo: String(snapshot.titulo || "PROMO").trim() || "PROMO",
+    dados: Array.isArray(snapshot.dados) ? snapshot.dados.filter(Boolean) : [],
+    anoValidade: snapshot.anoValidade || new Date().getFullYear(),
+    formatoEtiqueta: snapshot.formatoEtiqueta || "a6",
     origem: snapshot.origem || "manual",
-    created_by: snapshot.createdBy || "Utilizador",
-    created_by_email: snapshot.createdByEmail || "",
-    created_at: snapshot.criadoEm || nowIso(),
-    expires_at:
+    createdBy: String(snapshot.createdBy || "Utilizador").trim() || "Utilizador",
+    createdByEmail: String(snapshot.createdByEmail || "").trim(),
+    criadoEm: snapshot.criadoEm || nowIso(),
+    expiraEm:
       snapshot.expiraEm ||
       new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
-    total_artigos: Array.isArray(snapshot.dados) ? snapshot.dados.length : 0,
-    store: snapshot.store || "",
-    user_id: snapshot.userId || null,
+    totalArtigos: Array.isArray(snapshot.dados) ? snapshot.dados.filter(Boolean).length : 0,
+    store: String(snapshot.store || "").trim(),
+    userId: String(snapshot.userId || "").trim(),
+  };
+
+  if (!normalized.store) {
+    throw new Error("A campanha precisa de uma loja associada.");
+  }
+
+  return normalized;
+}
+
+function mapSnapshotToRow(snapshot = {}) {
+  const normalized = normalizeCampaignSnapshot(snapshot);
+
+  return {
+    id: normalized.id,
+    titulo: normalized.titulo,
+    dados: normalized.dados,
+    ano_validade: normalized.anoValidade,
+    formato_etiqueta: normalized.formatoEtiqueta,
+    origem: normalized.origem,
+    created_by: normalized.createdBy,
+    created_by_email: normalized.createdByEmail,
+    created_at: normalized.criadoEm,
+    expires_at: normalized.expiraEm,
+    total_artigos: normalized.totalArtigos,
+    store: normalized.store,
+    user_id: normalized.userId || null,
   };
 }
 
@@ -65,20 +91,20 @@ export function createCampaignSnapshot({
 
   return {
     id: `camp-${agora.getTime()}`,
-    titulo: titulo || "PROMO",
-    dados: Array.isArray(dados) ? dados : [],
+    titulo: String(titulo || "PROMO").trim() || "PROMO",
+    dados: Array.isArray(dados) ? dados.filter(Boolean) : [],
     anoValidade: anoValidade || agora.getFullYear(),
     formatoEtiqueta: formatoEtiqueta || "a6",
     origem,
-    createdBy: createdBy || "Utilizador",
-    createdByEmail: createdByEmail || "",
+    createdBy: String(createdBy || "Utilizador").trim() || "Utilizador",
+    createdByEmail: String(createdByEmail || "").trim(),
     criadoEm: agora.toISOString(),
     expiraEm: new Date(
       agora.getTime() + 2 * 24 * 60 * 60 * 1000,
     ).toISOString(),
-    totalArtigos: Array.isArray(dados) ? dados.length : 0,
+    totalArtigos: Array.isArray(dados) ? dados.filter(Boolean).length : 0,
     store: String(store || "").trim(),
-    userId: userId || "",
+    userId: String(userId || "").trim(),
   };
 }
 
@@ -127,13 +153,11 @@ export async function loadCampaignHistory(store) {
 }
 
 export async function addCampaignToHistory(snapshot) {
-  if (!snapshot?.store) {
-    throw new Error("A campanha precisa de uma loja associada.");
-  }
+  const normalized = normalizeCampaignSnapshot(snapshot);
 
-  await cleanupExpiredCampaignHistory(snapshot.store);
+  await cleanupExpiredCampaignHistory(normalized.store);
 
-  const row = mapSnapshotToRow(snapshot);
+  const row = mapSnapshotToRow(normalized);
 
   const { data, error } = await supabase
     .from(CAMPAIGNS_TABLE)

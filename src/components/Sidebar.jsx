@@ -3,28 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import logo from "../logo.png";
 
-function passwordValida(password) {
-  const limpa = String(password || "").trim();
-
-  const minLength = limpa.length >= 8;
-  const hasLetter = /[A-Za-zÀ-ÿ]/.test(limpa);
-  const hasNumber = /\d/.test(limpa);
-  const hasSpecial = /[!@#$%^&*(),.?":{}|<>_\-\\/\[\];'`~+=]/.test(limpa);
-
-  const passwordsProibidas = [
-    "123",
-    "1234",
-    "12345",
-    "123456",
-    "password",
-    "admin",
-    "qwerty",
-  ];
-
-  const notCommon = !passwordsProibidas.includes(limpa.toLowerCase());
-
-  return minLength && hasLetter && hasNumber && hasSpecial && notCommon;
-}
+import { getPasswordValidationMessage, isValidPassword } from "../utils/validators";
 
 export default function Sidebar({
   menuAberto,
@@ -157,10 +136,8 @@ export default function Sidebar({
     const passwordTrimmed = String(novaPassword || "").trim();
     const confirmTrimmed = String(confirmarPassword || "").trim();
 
-    if (!passwordValida(passwordTrimmed)) {
-      setErroPassword(
-        "A nova palavra-passe deve ter pelo menos 8 caracteres, incluir letras, números e 1 carácter especial, e não pode ser demasiado comum.",
-      );
+    if (!isValidPassword(passwordTrimmed)) {
+      setErroPassword(getPasswordValidationMessage(passwordTrimmed));
       return;
     }
 

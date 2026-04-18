@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
+import { useAuth } from "../context/AuthContext";
 import logo from "../logo.png";
 import Barcode from "../components/Barcode";
 import FilterMenu from "../components/FilterMenu";
@@ -482,10 +483,22 @@ export default function EtiquetasExcelPage() {
     );
   }
 
-  function guardarCampanhaNoHistorico(origem = "manual") {
+  async function guardarCampanhaNoHistorico(origem = "manual") {
     const itensSelecionados = dados.filter((item) => item.selecionado);
 
-    if (!itensSelecionados.length) return;
+    if (!itensSelecionados.length) return false;
+
+    const store = String(profile?.store || "").trim();
+
+    if (!store || !user?.id) {
+      console.warn(
+        "Sem utilizador autenticado ou loja associada; campanha não foi guardada.",
+      );
+      return false;
+    }
+
+    const nomeCompleto =
+      `${profile?.first_name || ""} ${profile?.last_name || ""}`.trim();
 
     const snapshot = createCampaignSnapshot({
       titulo,
@@ -493,9 +506,20 @@ export default function EtiquetasExcelPage() {
       anoValidade,
       formatoEtiqueta,
       origem,
+      createdBy: nomeCompleto || "Utilizador",
+      createdByEmail: user?.email || "",
+      store,
+      userId: user.id,
     });
 
-    addCampaignToHistory(snapshot);
+    try {
+      await addCampaignToHistory(snapshot);
+      return true;
+    } catch (error) {
+      console.error("Não foi possível guardar a campanha no histórico.", error);
+      alert("Não foi possível guardar a campanha no histórico.");
+      return false;
+    }
   }
 
   async function copiarCodigosInvalidosEProsseguir() {
@@ -525,14 +549,14 @@ export default function EtiquetasExcelPage() {
       return;
     }
 
-    guardarCampanhaNoHistorico("impressao");
+    await guardarCampanhaNoHistorico("impressao");
 
     setTimeout(() => {
       window.print();
     }, 150);
   }
 
-  function fecharPopupEProsseguir() {
+  async function fecharPopupEProsseguir() {
     const idsInvalidos = new Set(artigosInvalidosPopup.map((item) => item.id));
     const restantesValidos = selecionados.filter(
       (item) => !idsInvalidos.has(item.id),
@@ -546,13 +570,13 @@ export default function EtiquetasExcelPage() {
       return;
     }
 
-    guardarCampanhaNoHistorico("impressao");
+    await guardarCampanhaNoHistorico("impressao");
 
     setTimeout(() => {
       window.print();
     }, 150);
   }
-  function imprimirSelecionados() {
+  async function imprimirSelecionados() {
     if (selecionados.length === 0) {
       alert("Seleciona pelo menos um artigo.");
       return;
@@ -571,7 +595,7 @@ export default function EtiquetasExcelPage() {
       return;
     }
 
-    guardarCampanhaNoHistorico("impressao");
+    await guardarCampanhaNoHistorico("impressao");
     window.print();
   }
 

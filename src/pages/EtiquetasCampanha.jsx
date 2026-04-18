@@ -4,7 +4,7 @@ import { useAuth } from "../context/AuthContext";
 
 import Barcode from "../components/Barcode";
 import FilterMenu from "../components/FilterMenu";
-import artigosData from "../data/artigos.json";
+import { fetchArtigos } from "../services/artigosService";
 import { TABLE_COLUMNS } from "../data/tableColumns";
 import logo from "../logo.png";
 import "../styles/styles.css";
@@ -403,8 +403,7 @@ export default function EtiquetasPage() {
   const [filtroAberto, setFiltroAberto] = useState(null);
   const [ordenacao, setOrdenacao] = useState({ coluna: "", direcao: "" });
   const [filtros, setFiltros] = useState(FILTROS_INICIAIS);
-
-  const artigosJson = artigosData?.artigos || [];
+  const [artigosJson, setArtigosJson] = useState([]);
 
   useEffect(() => {
     const campanhaDuplicada = location.state?.campanhaDuplicada;
@@ -436,6 +435,31 @@ export default function EtiquetasPage() {
 
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadArtigos() {
+      try {
+        const artigosCarregados = await fetchArtigos();
+
+        if (active) {
+          setArtigosJson(artigosCarregados);
+        }
+      } catch (error) {
+        console.error("Não foi possível carregar os artigos.", error);
+        if (active) {
+          setArtigosJson([]);
+        }
+      }
+    }
+
+    loadArtigos();
+
+    return () => {
+      active = false;
     };
   }, []);
 

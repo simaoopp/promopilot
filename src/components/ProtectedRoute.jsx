@@ -12,13 +12,17 @@ function LoadingScreen() {
 }
 
 export default function ProtectedRoute({ children }) {
-  const { user, loadingAuth } = useAuth();
+  const { user, loadingAuth, loadingProfile, onboardingRequired } = useAuth();
 
-  if (loadingAuth) {
+  if (loadingAuth || (user && loadingProfile)) {
     return <LoadingScreen />;
   }
 
   if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (onboardingRequired) {
     return <Navigate to="/login" replace />;
   }
 

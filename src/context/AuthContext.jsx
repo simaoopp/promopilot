@@ -9,12 +9,13 @@ import React, {
 } from "react";
 import { supabase } from "../lib/supabase";
 import { getProfile, upsertProfile } from "../services/profileService";
+import {
+  hasMissingProfileFields,
+  isOnboardingRequired,
+  profileRequiresPasswordChange,
+} from "../utils/accessControl";
 
 const AuthContext = createContext(null);
-
-function isBlank(value) {
-  return !String(value || "").trim();
-}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -23,6 +24,7 @@ export function AuthProvider({ children }) {
   const [loadingProfile, setLoadingProfile] = useState(false);
 
   const lastLoadedProfileUserId = useRef(null);
+  const profileRef = useRef(null);
 
   const loadProfile = useCallback(async (userId, options = {}) => {
     const { force = false } = options;
@@ -35,7 +37,7 @@ export function AuthProvider({ children }) {
     }
 
     if (!force && lastLoadedProfileUserId.current === userId) {
-      return profile;
+      return profileRef.current;
     }
 
     try {
@@ -52,6 +54,10 @@ export function AuthProvider({ children }) {
     } finally {
       setLoadingProfile(false);
     }
+  }, []);
+
+  useEffect(() => {
+    profileRef.current = profile;
   }, [profile]);
 
   useEffect(() => {
@@ -179,17 +185,13 @@ export function AuthProvider({ children }) {
     return updatedProfile;
   }
 
-  const requiresPasswordChange = profile?.must_change_password === true;
-
-  const missingProfileFields =
-    !!user &&
-    (!profile ||
-      isBlank(profile.first_name) ||
-      isBlank(profile.last_name) ||
-      isBlank(profile.store));
-
-  const onboardingRequired =
-    !!user && !loadingProfile && (requiresPasswordChange || missingProfileFields);
+  const requiresPasswordChange = profileRequiresPasswordChange(profile);
+  const missingProfileFields = !!user && hasMissingProfileFields(profile);
+  const onboardingRequired = isOnboardingRequired({
+    user,
+    profile,
+    loadingProfile,
+  });
 
   const value = useMemo(
     () => ({

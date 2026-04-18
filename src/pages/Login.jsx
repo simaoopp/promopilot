@@ -1,20 +1,18 @@
-import React, { useMemo, useState } from "react";
-import { Navigate, useLocation } from "react-router-dom";
+import React, { useState } from "react";
+import { Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import ForcePasswordChangeModal from "../components/ForcePasswordChangeModal";
 import logo from "../favicon.png";
 import "../styles/styles.css";
 
 export default function Login() {
-  const location = useLocation();
-
   const {
     user,
     loadingAuth,
     loadingProfile,
     signIn,
+    onboardingRequired,
     requiresPasswordChange,
-    missingProfileFields,
   } = useAuth();
 
   const [email, setEmail] = useState("");
@@ -23,16 +21,7 @@ export default function Login() {
   const [carregando, setCarregando] = useState(false);
   const [mostrarSenha, setMostrarSenha] = useState(false);
 
-  const isInviteFlow = useMemo(() => {
-    const params = new URLSearchParams(location.search);
-    return params.get("invite") === "1";
-  }, [location.search]);
-
-  const mostrarModalConvite =
-    !!user &&
-    isInviteFlow &&
-    !loadingProfile &&
-    (requiresPasswordChange || missingProfileFields);
+  const mostrarModalOnboarding = !!user && !loadingProfile && onboardingRequired;
 
   if (loadingAuth || (user && loadingProfile)) {
     return (
@@ -49,7 +38,7 @@ export default function Login() {
     );
   }
 
-  if (user && !mostrarModalConvite) {
+  if (user && !onboardingRequired) {
     return <Navigate to="/Homepage" replace />;
   }
 
@@ -61,7 +50,7 @@ export default function Login() {
     try {
       const emailLimpo = String(email || "").trim();
       await signIn(emailLimpo, senha);
-    } catch (err) {
+    } catch (_err) {
       setErro("Email ou palavra-passe inválidos.");
     } finally {
       setCarregando(false);
@@ -154,13 +143,10 @@ export default function Login() {
         )}
       </div>
 
-      {mostrarModalConvite && (
+      {mostrarModalOnboarding && (
         <ForcePasswordChangeModal
           open={true}
-          requirePassword={true}
-          onSuccess={() => {
-            window.location.replace("/Homepage");
-          }}
+          requirePassword={requiresPasswordChange}
         />
       )}
     </div>

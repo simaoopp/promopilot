@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { BrowserMultiFormatReader } from "@zxing/browser";
 import { createWorker } from "tesseract.js";
-import artigosData from "../data/artigos.json";
+import { fetchArtigos } from "../services/artigosService";
 import "../styles/styles.css";
 
 const LIMITE_RESULTADOS = 100;
@@ -54,7 +54,7 @@ function extrairMelhorTextoOCR(texto) {
   return linhas[0] || "";
 }
 
-export default function EtiquetasCampanhaExcelPage() {
+export default function EtiquetasPage() {
   const [modoPesquisa, setModoPesquisa] = useState("manual");
   const [pesquisa, setPesquisa] = useState("");
   const [pesquisaDebounced, setPesquisaDebounced] = useState("");
@@ -74,7 +74,7 @@ export default function EtiquetasCampanhaExcelPage() {
   const controlsRef = useRef(null);
   const ocrWorkerRef = useRef(null);
 
-  const artigos = artigosData?.artigos || [];
+  const [artigos, setArtigos] = useState([]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -83,6 +83,31 @@ export default function EtiquetasCampanhaExcelPage() {
 
     return () => clearTimeout(timer);
   }, [pesquisa]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadArtigos() {
+      try {
+        const artigosCarregados = await fetchArtigos();
+
+        if (active) {
+          setArtigos(artigosCarregados);
+        }
+      } catch (error) {
+        console.error("Não foi possível carregar os artigos.", error);
+        if (active) {
+          setArtigos([]);
+        }
+      }
+    }
+
+    loadArtigos();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!mensagem) return;
@@ -400,7 +425,7 @@ export default function EtiquetasCampanhaExcelPage() {
       setMensagem("A ler texto da imagem...");
 
       if (!ocrWorkerRef.current) {
-        ocrWorkerRef.current = await createWorker("eng");
+        ocrWorkerRef.current = await createWorker("por+eng");
       }
 
       const {
