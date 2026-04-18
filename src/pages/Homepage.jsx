@@ -1,7 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { enrichArtigo, fetchArtigos, updateArtigoCache } from "../services/artigosService";
+import {
+  enrichArtigoWithAi,
+  loadAllArtigos,
+  mergeArtigoData,
+  mergeArtigosIntoList,
+  syncUpdatedArtigoToCache,
+} from "../services/artigosService";
 import {
   loadCampaignHistory,
   removeCampaignFromHistory,
@@ -342,6 +348,7 @@ export default function HomePage() {
   const [historicoCampanhas, setHistoricoCampanhas] = useState([]);
   const [campanhaSelecionada, setCampanhaSelecionada] = useState(null);
   const [artigos, setArtigos] = useState([]);
+  const [artigosLoading, setArtigosLoading] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
@@ -366,15 +373,16 @@ export default function HomePage() {
 
     async function syncArtigosFromApi() {
       try {
-        const artigosCarregados = await fetchArtigos();
+        const data = await loadAllArtigos({ pageSize: 500 });
 
         if (isMounted) {
-          setArtigos(artigosCarregados);
+          setArtigos(data.items || []);
         }
       } catch (error) {
-        console.warn("Não foi possível sincronizar artigos.", error);
+        console.warn("Não foi possível sincronizar artigos pela API.", error);
+      } finally {
         if (isMounted) {
-          setArtigos([]);
+          setArtigosLoading(false);
         }
       }
     }
@@ -491,7 +499,8 @@ export default function HomePage() {
         descricao: artigoSelecionado.descricao || "",
         codigoBarras: artigoSelecionado.codigoBarras || "",
       };
-      const data = await enrichArtigo(payload);
+
+      const data = await enrichArtigoWithAi(payload);
 
       const artigoAtualizado = mergeArtigoData(
         artigoSelecionado,
@@ -502,16 +511,10 @@ export default function HomePage() {
         artigoAtualizado,
       );
 
-      updateArtigoCache(data?.artigoAtualizado);
       setAiResultado(resultadoNormalizado);
       setArtigoSelecionado(artigoAtualizado);
-      setArtigos((prev) =>
-        prev.map((item) =>
-          item.artigo === artigoAtualizado.artigo
-            ? mergeArtigoData(item, data?.artigoAtualizado)
-            : item,
-        ),
-      );
+      setArtigos((prev) => mergeArtigosIntoList(prev, artigoAtualizado));
+      syncUpdatedArtigoToCache(artigoAtualizado);
     } catch (error) {
       console.error("Erro completo AI:", error);
       setAiErro(error?.message || "Erro ao obter dados do artigo.");
@@ -528,6 +531,10 @@ export default function HomePage() {
           <p className="page-subtitle">
             Pesquisa artigos, cria etiquetas e faz scan rápido num só lugar.
           </p>
+
+          {artigosLoading && (
+            <p className="page-subtitle">A carregar catálogo de artigos...</p>
+          )}
 
           <div className="home-search-wrap">
             <input

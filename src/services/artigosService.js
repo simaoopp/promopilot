@@ -1,18 +1,42 @@
 import { supabase } from "../lib/supabase";
 
-let artigosCache = null;
-
 const API_BASE_URL =
   process.env.REACT_APP_API_BASE_URL ||
   (typeof window !== "undefined" && window.location.hostname === "localhost"
     ? "http://localhost:3001"
     : "");
 
-export function buildApiUrl(path) {
+const CACHE_TTL_MS = 60 * 1000;
+const ALL_ARTIGOS_CACHE_KEY = "all-artigos";
+const artigosCache = new Map();
+
+function buildApiUrl(path) {
   return `${API_BASE_URL}${path}`;
 }
 
-export async function readJsonResponse(response) {
+function cacheGet(key) {
+  const entry = artigosCache.get(key);
+
+  if (!entry) return null;
+
+  if (Date.now() - entry.updatedAt > CACHE_TTL_MS) {
+    artigosCache.delete(key);
+    return null;
+  }
+
+  return entry.value;
+}
+
+function cacheSet(key, value) {
+  artigosCache.set(key, {
+    value,
+    updatedAt: Date.now(),
+  });
+
+  return value;
+}
+
+async function readJsonResponse(response) {
   const rawText = await response.text();
 
   if (!rawText) {
@@ -26,7 +50,7 @@ export async function readJsonResponse(response) {
   }
 }
 
-export async function getAccessToken({ required = true } = {}) {
+async function getAccessToken() {
   const {
     data: { session },
     error,
@@ -38,64 +62,204 @@ export async function getAccessToken({ required = true } = {}) {
 
   const token = session?.access_token || "";
 
-  if (!token && required) {
+  if (!token) {
     throw new Error("Sessão inválida ou expirada.");
   }
 
   return token;
 }
 
-async function loadLocalArtigosFallback() {
-  const module = await import("../data/artigos.json");
-  return Array.isArray(module?.default?.artigos) ? module.default.artigos : [];
+function normalizeSearchValue(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .trim();
 }
 
-export async function fetchArtigos({ preferApi = true, force = false } = {}) {
-  if (!force && Array.isArray(artigosCache)) {
-    return artigosCache;
+function matchesArtigoQuery(artigo, query) {
+  if (!query) return true;
+
+  const searchable = [
+    artigo?.artigo,
+    artigo?.artigo_interno,
+    artigo?.codigoBarras,
+    artigo?.codigo_barras,
+    artigo?.descricao,
+    artigo?.descricao_comercial,
+    artigo?.titulo_oficial,
+    artigo?.descricao_oficial,
+    artigo?.brand,
+    artigo?.categoria,
+    artigo?.subcategory,
+  ]
+    .map(normalizeSearchValue)
+    .filter(Boolean)
+    .join(" ");
+
+  return searchable.includes(query);
+}
+
+export function normalizeArtigosApiResponse(data, fallbackLimit = 100, fallbackOffset = 0) {
+  if (Array.isArray(data)) {
+    return {
+      ok: true,
+      items: data,
+      artigos: data,
+      total: data.length,
+      limit: data.length || fallbackLimit,
+      offset: fallbackOffset,
+      hasMore: false,
+      q: "",
+    };
   }
 
-  if (preferApi && API_BASE_URL) {
-    try {
-      const token = await getAccessToken();
-      const response = await fetch(buildApiUrl("/api/artigos"), {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+  const items = Array.isArray(data?.items)
+    ? data.items
+    : Array.isArray(data?.artigos)
+      ? data.artigos
+      : [];
 
-      const data = await readJsonResponse(response);
+  return {
+    ok: data?.ok !== false,
+    items,
+    artigos: items,
+    total: Number.isFinite(data?.total) ? data.total : items.length,
+    limit: Number.isFinite(data?.limit) ? data.limit : fallbackLimit,
+    offset: Number.isFinite(data?.offset) ? data.offset : fallbackOffset,
+    hasMore: Boolean(data?.hasMore),
+    q: data?.q || "",
+  };
+}
 
-      if (response.ok && Array.isArray(data?.artigos)) {
-        artigosCache = data.artigos;
-        return artigosCache;
-      }
+async function getLocalFallbackArtigos({ q = "", limit = 100, offset = 0 } = {}) {
+  const module = await import("../data/artigos.json");
+  const artigos = Array.isArray(module?.default?.artigos) ? module.default.artigos : [];
+  const normalizedQuery = normalizeSearchValue(q);
+  const filtered = normalizedQuery
+    ? artigos.filter((artigo) => matchesArtigoQuery(artigo, normalizedQuery))
+    : artigos;
+  const items = filtered.slice(offset, offset + limit);
 
-      throw new Error(data?.error || "Não foi possível carregar artigos pela API.");
-    } catch (error) {
-      console.warn("Fallback local de artigos ativado:", error);
+  return {
+    ok: true,
+    items,
+    artigos: items,
+    total: filtered.length,
+    limit,
+    offset,
+    hasMore: offset + items.length < filtered.length,
+    q: normalizedQuery,
+    source: "fallback",
+  };
+}
+
+export async function fetchArtigosPage({
+  q = "",
+  limit = 100,
+  offset = 0,
+  allowFallback = true,
+} = {}) {
+  const params = new URLSearchParams();
+
+  if (q) params.set("q", q);
+  params.set("limit", String(limit));
+  params.set("offset", String(offset));
+
+  try {
+    const token = await getAccessToken();
+    const response = await fetch(buildApiUrl(`/api/artigos?${params.toString()}`), {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const data = await readJsonResponse(response);
+
+    if (!response.ok || data?.ok === false) {
+      throw new Error(data?.error || "Erro ao carregar artigos.");
+    }
+
+    return {
+      ...normalizeArtigosApiResponse(data, limit, offset),
+      source: "api",
+    };
+  } catch (error) {
+    if (!allowFallback) {
+      throw error;
+    }
+
+    return getLocalFallbackArtigos({ q, limit, offset });
+  }
+}
+
+export async function loadAllArtigos({
+  forceRefresh = false,
+  pageSize = 500,
+  allowFallback = true,
+} = {}) {
+  const cached = !forceRefresh ? cacheGet(ALL_ARTIGOS_CACHE_KEY) : null;
+
+  if (cached) {
+    return cached;
+  }
+
+  const allItems = [];
+  let offset = 0;
+  let source = "api";
+
+  while (true) {
+    const page = await fetchArtigosPage({
+      q: "",
+      limit: pageSize,
+      offset,
+      allowFallback,
+    });
+
+    source = page.source || source;
+    allItems.push(...page.items);
+
+    if (!page.hasMore) {
+      const result = {
+        ok: true,
+        items: allItems,
+        artigos: allItems,
+        total: allItems.length,
+        limit: allItems.length,
+        offset: 0,
+        hasMore: false,
+        q: "",
+        source,
+      };
+
+      return cacheSet(ALL_ARTIGOS_CACHE_KEY, result);
+    }
+
+    offset += page.items.length;
+
+    if (page.items.length === 0) {
+      const result = {
+        ok: true,
+        items: allItems,
+        artigos: allItems,
+        total: allItems.length,
+        limit: allItems.length,
+        offset: 0,
+        hasMore: false,
+        q: "",
+        source,
+      };
+
+      return cacheSet(ALL_ARTIGOS_CACHE_KEY, result);
     }
   }
-
-  artigosCache = await loadLocalArtigosFallback();
-  return artigosCache;
 }
 
-export function updateArtigoCache(artigoAtualizado) {
-  if (!artigoAtualizado || !Array.isArray(artigosCache)) {
-    return;
-  }
-
-  artigosCache = artigosCache.map((item) =>
-    item.artigo === artigoAtualizado.artigo ? { ...item, ...artigoAtualizado } : item,
-  );
+export async function searchArtigos({ q = "", limit = 20, offset = 0 } = {}) {
+  return fetchArtigosPage({ q, limit, offset, allowFallback: true });
 }
 
-export async function enrichArtigo(payload) {
-  if (!API_BASE_URL) {
-    throw new Error("A API não está configurada para enriquecimento de artigos.");
-  }
-
+export async function enrichArtigoWithAi(payload) {
   const token = await getAccessToken();
   const response = await fetch(buildApiUrl("/api/ai-produto"), {
     method: "POST",
@@ -108,13 +272,53 @@ export async function enrichArtigo(payload) {
 
   const data = await readJsonResponse(response);
 
-  if (!response.ok) {
+  if (!response.ok || data?.ok === false) {
     throw new Error(data?.error || data?.detalhe || "Erro no servidor.");
   }
 
-  if (!data?.ok) {
-    throw new Error(data?.error || "Resposta inválida da AI.");
-  }
-
   return data;
+}
+
+export function mergeArtigoData(base = {}, updated = {}) {
+  return {
+    ...base,
+    ...updated,
+    caracteristicas_tecnicas:
+      updated?.caracteristicas_tecnicas ?? base?.caracteristicas_tecnicas ?? {},
+    documentos_oficiais:
+      updated?.documentos_oficiais ?? base?.documentos_oficiais ?? [],
+    texto_grounding: updated?.texto_grounding ?? base?.texto_grounding ?? "",
+    observacoes_ia: updated?.observacoes_ia ?? base?.observacoes_ia ?? "",
+    resumo_vendedor: updated?.resumo_vendedor ?? base?.resumo_vendedor ?? "",
+  };
+}
+
+export function mergeArtigosIntoList(list = [], updatedArtigo = {}) {
+  return list.map((item) =>
+    item.artigo === updatedArtigo.artigo
+      ? mergeArtigoData(item, updatedArtigo)
+      : item,
+  );
+}
+
+export function syncUpdatedArtigoToCache(updatedArtigo = {}) {
+  if (!updatedArtigo?.artigo) return;
+
+  for (const [key, entry] of artigosCache.entries()) {
+    if (!entry?.value?.items) continue;
+
+    const mergedItems = mergeArtigosIntoList(entry.value.items, updatedArtigo);
+    artigosCache.set(key, {
+      value: {
+        ...entry.value,
+        items: mergedItems,
+        artigos: mergedItems,
+      },
+      updatedAt: Date.now(),
+    });
+  }
+}
+
+export function __clearArtigosCacheForTests() {
+  artigosCache.clear();
 }
