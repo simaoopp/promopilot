@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import { useAuth } from "../context/AuthContext";
+import { useToast } from "../components/ToastProvider";
 import logo from "../logo.png";
 import Barcode from "../components/Barcode";
 import FilterMenu from "../components/FilterMenu";
@@ -246,6 +247,8 @@ function obterFormatoFinalEtiqueta(
    COMPONENTE
    ========================================================= */
 export default function EtiquetasExcelPage() {
+  const { user, profile } = useAuth();
+  const toast = useToast();
   const [titulo, setTitulo] = useState("PROMO");
   const [anoValidade, setAnoValidade] = useState(new Date().getFullYear());
   const [dados, setDados] = useState([]);
@@ -367,7 +370,7 @@ export default function EtiquetasExcelPage() {
       setDados(linhas);
     } catch (error) {
       console.error("Erro ao ler Excel:", error);
-      alert("Não foi possível ler o ficheiro Excel.");
+      toast.error("Não foi possível ler o ficheiro Excel.");
     } finally {
       setLoading(false);
       event.target.value = "";
@@ -517,7 +520,7 @@ export default function EtiquetasExcelPage() {
       return true;
     } catch (error) {
       console.error("Não foi possível guardar a campanha no histórico.", error);
-      alert("Não foi possível guardar a campanha no histórico.");
+      toast.error("Não foi possível guardar a campanha no histórico.");
       return false;
     }
   }
@@ -545,7 +548,7 @@ export default function EtiquetasExcelPage() {
     setPopupArtigosInvalidosAberto(false);
 
     if (restantesValidos.length === 0) {
-      alert("Não existem etiquetas válidas para imprimir.");
+      toast.warning("Não existem etiquetas válidas para imprimir.");
       return;
     }
 
@@ -566,7 +569,7 @@ export default function EtiquetasExcelPage() {
     setPopupArtigosInvalidosAberto(false);
 
     if (restantesValidos.length === 0) {
-      alert("Não existem etiquetas válidas para imprimir.");
+      toast.warning("Não existem etiquetas válidas para imprimir.");
       return;
     }
 
@@ -578,7 +581,7 @@ export default function EtiquetasExcelPage() {
   }
   async function imprimirSelecionados() {
     if (selecionados.length === 0) {
-      alert("Seleciona pelo menos um artigo.");
+      toast.warning("Seleciona pelo menos um artigo.");
       return;
     }
 

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useToast } from "../components/ToastProvider";
 import {
   enrichArtigoWithAi,
   loadAllArtigos,
@@ -337,6 +338,7 @@ function formatarAutorCampanha(campanha) {
 export default function HomePage() {
   const navigate = useNavigate();
   const { profile } = useAuth();
+  const toast = useToast();
 
   const [pesquisa, setPesquisa] = useState("");
   const [artigoSelecionado, setArtigoSelecionado] = useState(null);
@@ -467,7 +469,7 @@ export default function HomePage() {
       }
     } catch (error) {
       console.error("Não foi possível apagar a campanha.", error);
-      alert("Não foi possível apagar a campanha.");
+      toast.error("Não foi possível apagar a campanha.");
     }
   }
 

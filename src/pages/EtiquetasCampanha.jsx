@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useToast } from "../components/ToastProvider";
 
 import Barcode from "../components/Barcode";
 import FilterMenu from "../components/FilterMenu";
@@ -249,7 +250,13 @@ function obterTextoValidade(item, anoValidadeAtual) {
 function obterFormatoAutomaticoEtiqueta(descricao = "") {
   const texto = normalizarTexto(descricao);
 
-  const categoriasA5 = [
+   const categoriasA5 = [
+    "Máq. Lavar Loiça",
+    "Máq. Lavar Louça",
+    "Máq. Secar Roupa",
+    "Máq. Secar",
+    "Máq. Lavar Roupa",
+    "Máq. Lavar",
     "maquina de lavar",
     "maquinas de lavar",
     "máquina de lavar",
@@ -376,6 +383,7 @@ function itemTabelaInvalido(item) {
 export default function EtiquetasPage() {
   const location = useLocation();
   const { user, profile } = useAuth();
+  const toast = useToast();
 
   const [titulo, setTitulo] = useState(CAMPANHA_TITULO_DEFAULT);
   const [textoColado, setTextoColado] = useState("");
@@ -686,7 +694,7 @@ export default function EtiquetasPage() {
 
       setDados(linhas);
     } catch {
-      alert("Verifique se os dados inseridos estão corretos.");
+      toast.error("Verifica se os dados inseridos estão corretos.");
     }
   }
 
@@ -723,7 +731,7 @@ export default function EtiquetasPage() {
       return true;
     } catch (error) {
       console.error("Não foi possível guardar a campanha no histórico.", error);
-      alert("Não foi possível guardar a campanha no histórico.");
+      toast.error("Não foi possível guardar a campanha no histórico.");
       return false;
     }
   }
@@ -773,7 +781,7 @@ export default function EtiquetasPage() {
     setPopupArtigosInvalidosAberto(false);
 
     if (restantesValidos.length === 0) {
-      alert("Não existem etiquetas válidas para imprimir.");
+      toast.warning("Não existem etiquetas válidas para imprimir.");
       return;
     }
 
@@ -817,7 +825,7 @@ export default function EtiquetasPage() {
 
   async function imprimirSelecionados() {
     if (!selecionados.length) {
-      alert("Seleciona pelo menos um artigo.");
+      toast.warning("Seleciona pelo menos um artigo.");
       return;
     }
 
@@ -837,7 +845,7 @@ export default function EtiquetasPage() {
 
   function adicionarArtigoCampanha() {
     if (!artigoCampanhaSelecionado) {
-      alert("Seleciona um artigo.");
+      toast.warning("Seleciona um artigo.");
       return;
     }
 

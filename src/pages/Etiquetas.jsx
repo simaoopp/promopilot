@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BrowserMultiFormatReader } from "@zxing/browser";
 import { createWorker } from "tesseract.js";
 import { loadAllArtigos } from "../services/artigosService";
@@ -31,7 +31,7 @@ function extrairMelhorTextoOCR(texto) {
 
     if (!limpo) continue;
 
-    const matches = limpo.match(/[A-Z0-9][A-Z0-9\-\/\.]{4,}/gi);
+    const matches = limpo.match(/[A-Z0-9][A-Z0-9./-]{4,}/gi);
     if (matches) {
       candidatos.push(...matches);
     }
@@ -175,15 +175,18 @@ export default function EtiquetasCampanhaExcelPage() {
     }
   }
 
-  function procurarArtigoPorCodigoBarras(codigo) {
-    const codigoNormalizado = normalizarPesquisaLivre(codigo);
+  const procurarArtigoPorCodigoBarras = useCallback(
+    (codigo) => {
+      const codigoNormalizado = normalizarPesquisaLivre(codigo);
 
-    const encontrado = artigosPreparados.find(
-      (item) => item.codigoBarrasTexto === codigoNormalizado,
-    );
+      const encontrado = artigosPreparados.find(
+        (item) => item.codigoBarrasTexto === codigoNormalizado,
+      );
 
-    abrirResultado(codigo, encontrado || null);
-  }
+      abrirResultado(codigo, encontrado || null);
+    },
+    [artigosPreparados]
+  );
 
   function procurarArtigoPorTextoOCR(texto) {
     const termoNormalizado = normalizarTexto(texto);
@@ -262,7 +265,7 @@ export default function EtiquetasCampanhaExcelPage() {
       ativo = false;
       pararScanner();
     };
-  }, [scannerAberto, artigosPreparados]);
+  }, [scannerAberto, artigosPreparados, procurarArtigoPorCodigoBarras]);
 
   const resultados = useMemo(() => {
     const termo = pesquisaDebounced.trim();

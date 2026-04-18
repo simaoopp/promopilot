@@ -130,16 +130,16 @@ export function AuthProvider({ children }) {
     };
   }, [loadProfile]);
 
-  async function signIn(email, password) {
+  const signIn = useCallback(async (email, password) => {
     const { error } = await supabase.auth.signInWithPassword({
       email: String(email || "").trim(),
       password,
     });
 
     if (error) throw error;
-  }
+  }, []);
 
-  async function signOut() {
+  const signOut = useCallback(async () => {
     const { error } = await supabase.auth.signOut();
 
     if (error) throw error;
@@ -148,42 +148,45 @@ export function AuthProvider({ children }) {
     setProfile(null);
     lastLoadedProfileUserId.current = null;
     setLoadingProfile(false);
-  }
+  }, []);
 
-  async function updatePassword(newPassword) {
+  const updatePassword = useCallback(async (newPassword) => {
     const { error } = await supabase.auth.updateUser({
       password: newPassword,
     });
 
     if (error) throw error;
-  }
+  }, []);
 
-  async function completeOnboarding({
-    password,
-    first_name,
-    last_name,
-    store,
-    requirePassword,
-  }) {
-    if (!user?.id) {
-      throw new Error("Utilizador não autenticado.");
-    }
-
-    if (requirePassword) {
-      await updatePassword(password);
-    }
-
-    const updatedProfile = await upsertProfile(user.id, {
+  const completeOnboarding = useCallback(
+    async ({
+      password,
       first_name,
       last_name,
       store,
-      must_change_password: false,
-    });
+      requirePassword,
+    }) => {
+      if (!user?.id) {
+        throw new Error("Utilizador não autenticado.");
+      }
 
-    setProfile(updatedProfile);
-    lastLoadedProfileUserId.current = user.id;
-    return updatedProfile;
-  }
+      if (requirePassword) {
+        await updatePassword(password);
+      }
+
+      const updatedProfile = await upsertProfile(user.id, {
+        first_name,
+        last_name,
+        store,
+        must_change_password: false,
+      });
+
+      setProfile(updatedProfile);
+      lastLoadedProfileUserId.current = user.id;
+      return updatedProfile;
+    },
+    [updatePassword, user?.id]
+  );
 
   const requiresPasswordChange = profileRequiresPasswordChange(profile);
   const missingProfileFields = !!user && hasMissingProfileFields(profile);
@@ -192,6 +195,11 @@ export function AuthProvider({ children }) {
     profile,
     loadingProfile,
   });
+
+  const refreshProfile = useCallback(
+    () => loadProfile(user?.id, { force: true }),
+    [loadProfile, user?.id]
+  );
 
   const value = useMemo(
     () => ({
@@ -206,7 +214,7 @@ export function AuthProvider({ children }) {
       signOut,
       updatePassword,
       completeOnboarding,
-      refreshProfile: () => loadProfile(user?.id, { force: true }),
+      refreshProfile,
     }),
     [
       user,
@@ -216,7 +224,11 @@ export function AuthProvider({ children }) {
       onboardingRequired,
       requiresPasswordChange,
       missingProfileFields,
-      loadProfile,
+      signIn,
+      signOut,
+      updatePassword,
+      completeOnboarding,
+      refreshProfile,
     ]
   );
 

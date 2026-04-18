@@ -1,11 +1,11 @@
 FROM mcr.microsoft.com/playwright:v1.59.1-jammy
 
-WORKDIR /app
+WORKDIR /app/server
 
-COPY package*.json ./
-RUN npm install
+COPY server/package*.json ./
+RUN npm ci --omit=dev
 
-COPY . .
+COPY server/ ./
 
 ENV NODE_ENV=production
 ENV PLAYWRIGHT_SKIP_BROWSER_GC=1

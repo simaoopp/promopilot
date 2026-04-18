@@ -825,3 +825,62 @@ tbody tr:hover {
   color: #8c8c8c;
   cursor: not-allowed;
 }
+
+/* Toasts */
+.toast-viewport {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 3000;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(360px, calc(100vw - 32px));
+}
+
+.toast {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(14px);
+}
+
+.toast-content strong {
+  display: block;
+  font-size: 0.95rem;
+  margin-bottom: 4px;
+}
+
+.toast-content p {
+  margin: 0;
+  color: #334155;
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
+.toast-success {
+  border-left: 4px solid #16a34a;
+}
+
+.toast-error {
+  border-left: 4px solid #dc2626;
+}
+
+.toast-info {
+  border-left: 4px solid #2563eb;
+}
+
+.toast-close {
+  border: 0;
+  background: transparent;
+  color: #475569;
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+

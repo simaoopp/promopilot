@@ -1,9 +1,8 @@
 {
   "name": "react",
   "version": "1.0.0",
-  "description": "",
+  "description": "Expert Administração - gestão de artigos, campanhas e etiquetas com Supabase.",
   "keywords": [],
-  "main": "src/index.tsx",
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
     "@zxing/browser": "^0.1.5",
@@ -13,7 +12,8 @@
     "react-router-dom": "^6.22.3",
     "react-scripts": "^5.0.0",
     "tesseract.js": "^7.0.0",
-    "xlsx": "0.18.5"
+    "xlsx": "0.18.5",
+    "dotenv": "^16.6.1"
   },
   "devDependencies": {
     "@types/react": "19.0.0",
@@ -25,12 +25,16 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test --env=jsdom",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "test:ci": "react-scripts test --watch=false --runInBand",
+    "qa:static": "python3 scripts/qa_check.py",
+    "seed:articles": "node scripts/import-artigos-to-supabase.mjs"
   },
   "browserslist": [
     ">0.2%",
     "not dead",
     "not ie <= 11",
     "not op_mini all"
-  ]
+  ],
+  "private": true
 }
