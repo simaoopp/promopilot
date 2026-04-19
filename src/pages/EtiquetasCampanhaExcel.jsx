@@ -177,34 +177,68 @@ function obterFormatoAutomaticoEtiqueta(descricao = "") {
   const texto = normalizarTexto(descricao);
 
   const palavrasA5 = [
+     "Máq. Lavar Loiça",
+    "Máq. Lavar Louça",
+    "Máq. Secar Roupa",
+    "Máq. Secar",
+    "Máq. Lavar Roupa",
+    "Máq. Lavar",
     "maquina de lavar",
+    "maquinas de lavar",
     "máquina de lavar",
+    "máquinas de lavar",
     "maquina de secar",
+    "maquinas de secar",
     "máquina de secar",
+    "máquinas de secar",
     "lavar e secar",
-    "maquina lavar e secar",
-    "máquina lavar e secar",
+    "maquina de lavar e secar",
+    "maquinas de lavar e secar",
+    "máquina de lavar e secar",
+    "máquinas de lavar e secar",
     "maquina de lavar loica",
+    "maquinas de lavar loica",
     "máquina de lavar loiça",
-    "maquina de lavar louca",
+    "máquinas de lavar loiça",
+    "lava loica",
+    "lava loiça",
     "televisao",
+    "televisoes",
     "televisão",
-    "tv ",
-    " tv",
+    "televisões",
+    "tv",
+    "smart tv",
+    "qled",
+    "oled",
     "monitor",
+    "monitores",
     "frigorifico",
+    "frigorificos",
     "frigorífico",
-    "frigo",
+    "frigoríficos",
+    "combinado",
+    "combinados",
     "cadeira",
+    "cadeiras",
     "mesa",
+    "mesas",
     "fogao",
+    "fogoes",
     "fogão",
+    "fogões",
     "arca",
+    "arcas",
     "chamine",
+    "chamines",
     "chaminé",
+    "chaminés",
     "exaustor",
+    "exaustores",
     "cave de vinho",
     "caves de vinho",
+    "cave vinho",
+    "garrafeira",
+    "garrafeiras",
   ];
 
   const isA5 = palavrasA5.some((palavra) => texto.includes(palavra));
@@ -256,7 +290,7 @@ export default function EtiquetasExcelPage() {
   const [loading, setLoading] = useState(false);
   const [nomeFicheiro, setNomeFicheiro] = useState("");
   const [formatoEtiqueta, setFormatoEtiqueta] = useState("a6");
-  const [formatoAutomaticoAtivo, setFormatoAutomaticoAtivo] = useState(true);
+  const [formatoAutomaticoAtivo, setFormatoAutomaticoAtivo] = useState(false);
 
   const [popupArtigosInvalidosAberto, setPopupArtigosInvalidosAberto] =
     useState(false);
