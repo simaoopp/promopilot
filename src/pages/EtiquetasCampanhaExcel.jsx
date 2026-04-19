@@ -939,7 +939,7 @@ export default function EtiquetasExcelPage() {
               <tbody>
                 {dadosFiltrados.length === 0 ? (
                   <tr>
-                    <td colSpan="19" className="empty-cell">
+                    <td colSpan={TABLE_COLUMNS.length + 1} className="empty-cell">
                       Importa um ficheiro Excel para carregar os artigos.
                     </td>
                   </tr>
@@ -970,7 +970,6 @@ export default function EtiquetasExcelPage() {
 
                         <td>{item.codigo}</td>
                         <td>{item.descricao}</td>
-                        <td>{item.pn}</td>
                         <td>{item.ean}</td>
                         <td>{formatarEuro(item.antes)}€</td>
                         <td>{formatarEuro(item.atual)}€</td>
@@ -979,8 +978,6 @@ export default function EtiquetasExcelPage() {
                         <td>{item.ae}</td>
                         <td>{item.aea}</td>
                         <td>{item.aev}</td>
-                        <td>{item.a10}</td>
-                        <td>{item.a1e}</td>
                         <td>{item.data}</td>
                         <td>{item.dataInicio}</td>
                         <td>{item.dataFim}</td>

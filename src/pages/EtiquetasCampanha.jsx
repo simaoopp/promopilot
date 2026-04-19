@@ -1161,7 +1161,6 @@ export default function EtiquetasPage() {
 
                       <td>{item.codigo}</td>
                       <td>{item.descricao}</td>
-                      <td>{item.pn}</td>
                       <td>{item.ean}</td>
                       <td>{formatarEuro(item.antes)}€</td>
                       <td>{formatarEuro(item.atual)}€</td>
@@ -1170,8 +1169,6 @@ export default function EtiquetasPage() {
                       <td>{item.ae}</td>
                       <td>{item.aea}</td>
                       <td>{item.aev}</td>
-                      <td>{item.a10}</td>
-                      <td>{item.a1e}</td>
                       <td>{item.data}</td>
                       <td>{item.dataInicio}</td>
                       <td>{item.dataFim}</td>

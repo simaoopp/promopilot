@@ -952,21 +952,21 @@ tbody tr:hover {
 }
 
 .compact-table.compact-campaign-table th:nth-child(2),
-.compact-table.compact-campaign-table td:nth-child(2) { width: 5%; }
+.compact-table.compact-campaign-table td:nth-child(2) { width: 7%; }
 .compact-table.compact-campaign-table th:nth-child(3),
-.compact-table.compact-campaign-table td:nth-child(3) { width: 14%; }
+.compact-table.compact-campaign-table td:nth-child(3) { width: 19%; }
 .compact-table.compact-campaign-table th:nth-child(4),
-.compact-table.compact-campaign-table td:nth-child(4) { width: 5.5%; }
+.compact-table.compact-campaign-table td:nth-child(4) { width: 10%; }
 .compact-table.compact-campaign-table th:nth-child(5),
-.compact-table.compact-campaign-table td:nth-child(5) { width: 8.5%; }
+.compact-table.compact-campaign-table td:nth-child(5),
 .compact-table.compact-campaign-table th:nth-child(6),
 .compact-table.compact-campaign-table td:nth-child(6),
 .compact-table.compact-campaign-table th:nth-child(7),
-.compact-table.compact-campaign-table td:nth-child(7) { width: 4.5%; }
+.compact-table.compact-campaign-table td:nth-child(7) { width: 6%; }
 .compact-table.compact-campaign-table th:nth-child(8),
-.compact-table.compact-campaign-table td:nth-child(8) { width: 3.8%; }
+.compact-table.compact-campaign-table td:nth-child(8) { width: 5%; }
 .compact-table.compact-campaign-table th:nth-child(9),
-.compact-table.compact-campaign-table td:nth-child(9) { width: 4.2%; }
+.compact-table.compact-campaign-table td:nth-child(9),
 .compact-table.compact-campaign-table th:nth-child(10),
 .compact-table.compact-campaign-table td:nth-child(10),
 .compact-table.compact-campaign-table th:nth-child(11),
@@ -976,17 +976,11 @@ tbody tr:hover {
 .compact-table.compact-campaign-table th:nth-child(13),
 .compact-table.compact-campaign-table td:nth-child(13),
 .compact-table.compact-campaign-table th:nth-child(14),
-.compact-table.compact-campaign-table td:nth-child(14) { width: 3.4%; }
+.compact-table.compact-campaign-table td:nth-child(14) { width: 4.5%; }
 .compact-table.compact-campaign-table th:nth-child(15),
-.compact-table.compact-campaign-table td:nth-child(15),
+.compact-table.compact-campaign-table td:nth-child(15) { width: 7%; }
 .compact-table.compact-campaign-table th:nth-child(16),
-.compact-table.compact-campaign-table td:nth-child(16),
-.compact-table.compact-campaign-table th:nth-child(17),
-.compact-table.compact-campaign-table td:nth-child(17) { width: 4.5%; }
-.compact-table.compact-campaign-table th:nth-child(18),
-.compact-table.compact-campaign-table td:nth-child(18) { width: 6%; }
-.compact-table.compact-campaign-table th:nth-child(19),
-.compact-table.compact-campaign-table td:nth-child(19) { width: 9.5%; }
+.compact-table.compact-campaign-table td:nth-child(16) { width: 12%; }
 
 .ai-sources-accordion {
   margin-top: 18px;
