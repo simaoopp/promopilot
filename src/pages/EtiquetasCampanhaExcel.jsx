@@ -888,8 +888,8 @@ export default function EtiquetasExcelPage() {
             <h2>Lista de artigos</h2>
           </div>
 
-          <div className="table-panel">
-            <table>
+          <div className="table-panel table-panel-compact">
+            <table className="compact-table compact-campaign-table">
               <thead>
                 <tr>
                   <th>Selecionar</th>
