@@ -42,27 +42,39 @@ if (!hasSupabaseAdminConfig()) {
 const app = express();
 app.set("trust proxy", 1);
 
+function normalizeOrigin(value = "") {
+  return String(value).trim().replace(/\/+$/, "");
+}
+
 const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS || "")
   .split(",")
-  .map((value) => value.trim())
+  .map(normalizeOrigin)
   .filter(Boolean);
 
-app.use(
-  cors({
-    origin(origin, callback) {
-      if (!origin) {
-        return callback(null, true);
-      }
+const corsOptions = {
+  origin(origin, callback) {
+    if (!origin) {
+      return callback(null, true);
+    }
 
-      if (ALLOWED_ORIGINS.includes(origin)) {
-        return callback(null, true);
-      }
+    const normalizedOrigin = normalizeOrigin(origin);
 
-      return callback(new Error(`CORS bloqueado para origem: ${origin}`));
-    },
-    methods: ["GET", "POST", "OPTIONS"],
-  }),
-);
+    if (ALLOWED_ORIGINS.includes(normalizedOrigin)) {
+      return callback(null, true);
+    }
+
+    console.error("[CORS] Origem bloqueada:", origin);
+    console.error("[CORS] Permitidas:", ALLOWED_ORIGINS);
+
+    return callback(new Error(`CORS bloqueado para origem: ${origin}`));
+  },
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Authorization", "Content-Type"],
+  optionsSuccessStatus: 204,
+};
+
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 app.use(express.json({ limit: "1mb" }));
 
 /* =========================================================
