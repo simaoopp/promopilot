@@ -19,7 +19,8 @@ import {
   compararNumero,
   dividirEmPaginas,
 } from "../utils/filters";
-import { TABLE_COLUMNS } from "../data/tableColumns";
+import { PRIMARY_TABLE_COLUMNS, TABLE_COLUMNS } from "../data/tableColumns";
+import SyncedHorizontalScroll from "../components/SyncedHorizontalScroll";
 
 /* =========================================================
    AUTO TEXT
@@ -115,6 +116,21 @@ function obterValor(normalizado, chaves = [], fallback = "") {
   }
   return fallback;
 }
+
+function renderExcelTableCell(item, columnKey, formatoPrevisto = "") {
+  switch (columnKey) {
+    case "antes":
+    case "atual":
+      return `${formatarEuro(item[columnKey])}€`;
+    case "info": {
+      const infoBase = item.info || "";
+      return `${infoBase}${infoBase ? " · " : ""}${formatoPrevisto.toUpperCase()}`;
+    }
+    default:
+      return item[columnKey] ?? "";
+  }
+}
+
 
 function formatarDataDiaMes(data) {
   const dia = String(data.getDate()).padStart(2, "0");
@@ -314,6 +330,7 @@ export default function EtiquetasExcelPage() {
     a10: { op: "", valor: "" },
     a1e: { op: "", valor: "" },
   });
+  const [mostrarTabelaCompleta, setMostrarTabelaCompleta] = useState(false);
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -884,17 +901,137 @@ export default function EtiquetasExcelPage() {
         </div>
 
         <div className="table-card table-card-fluid">
-          <div className="table-card-header">
-            <h2>Lista de artigos</h2>
+          <div className="table-card-header table-card-header-stack">
+            <div>
+              <h2>Lista de artigos</h2>
+              <p className="table-card-subtitle">
+                Vista rápida com as colunas principais. A tabela completa abre
+                acima com todos os cabeçalhos.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              className={`btn ${mostrarTabelaCompleta ? "btn-secondary" : "btn-primary"}`}
+              onClick={() => setMostrarTabelaCompleta((prev) => !prev)}
+            >
+              {mostrarTabelaCompleta
+                ? "Fechar tabela completa"
+                : "Abrir tabela completa"}
+            </button>
           </div>
 
+          {mostrarTabelaCompleta ? (
+            <div className="expanded-table-section">
+              <div className="expanded-table-header">
+                <div>
+                  <h3>Tabela completa</h3>
+                  <p>Todos os cabeçalhos e colunas disponíveis.</p>
+                </div>
+              </div>
+
+              <SyncedHorizontalScroll className="table-panel table-panel-complete">
+                <table className="full-table full-campaign-table">
+                  <thead>
+                    <tr>
+                      <th>Selecionar</th>
+
+                      {TABLE_COLUMNS.map((col) => (
+                        <th
+                          key={col.key}
+                          className={col.tipo ? "filter-th" : undefined}
+                        >
+                          {col.tipo ? (
+                            <>
+                              <button
+                                type="button"
+                                className="filter-button"
+                                onClick={() =>
+                                  setFiltroAberto(
+                                    filtroAberto === col.key ? null : col.key,
+                                  )
+                                }
+                              >
+                                {col.label}
+                              </button>
+
+                              <FilterMenu
+                                coluna={col.label}
+                                tipo={col.tipo}
+                                aberto={filtroAberto === col.key}
+                                filtro={filtros[col.key]}
+                                onClose={() => setFiltroAberto(null)}
+                                onUpdate={(chave, valor) =>
+                                  atualizarFiltroPopup(col.key, chave, valor)
+                                }
+                                onSort={(direcao) =>
+                                  setOrdenacao({ coluna: col.key, direcao })
+                                }
+                                onClear={() => limparFiltro(col.key, col.tipo)}
+                              />
+                            </>
+                          ) : (
+                            col.label
+                          )}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {dadosFiltrados.length === 0 ? (
+                      <tr>
+                        <td colSpan={TABLE_COLUMNS.length + 1} className="empty-cell">
+                          Importa um ficheiro Excel para carregar os artigos.
+                        </td>
+                      </tr>
+                    ) : (
+                      dadosFiltrados.map((item) => {
+                        const formatoPrevisto = obterFormatoFinalEtiqueta(
+                          item,
+                          formatoAutomaticoAtivo,
+                          formatoEtiqueta,
+                        );
+
+                        return (
+                          <tr
+                            key={`full-${item.id}`}
+                            className={item.selecionado ? "linha-selecionada" : ""}
+                            onClick={() => alternarSelecionado(item.id)}
+                          >
+                            <td
+                              className="col-select"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={!!item.selecionado}
+                                readOnly
+                              />
+                            </td>
+
+                            {TABLE_COLUMNS.map((col) => (
+                              <td key={`${item.id}-${col.key}`}>
+                                {renderExcelTableCell(item, col.key, formatoPrevisto)}
+                              </td>
+                            ))}
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </SyncedHorizontalScroll>
+            </div>
+          ) : null}
+
           <div className="table-panel table-panel-compact">
-            <table className="compact-table compact-campaign-table">
+            <table className="compact-table compact-campaign-table compact-campaign-table--summary">
               <thead>
                 <tr>
                   <th>Selecionar</th>
 
-                  {TABLE_COLUMNS.map((col) => (
+                  {PRIMARY_TABLE_COLUMNS.map((col) => (
                     <th
                       key={col.key}
                       className={col.tipo ? "filter-th" : undefined}
@@ -939,53 +1076,35 @@ export default function EtiquetasExcelPage() {
               <tbody>
                 {dadosFiltrados.length === 0 ? (
                   <tr>
-                    <td colSpan={TABLE_COLUMNS.length + 1} className="empty-cell">
+                    <td colSpan={PRIMARY_TABLE_COLUMNS.length + 1} className="empty-cell">
                       Importa um ficheiro Excel para carregar os artigos.
                     </td>
                   </tr>
                 ) : (
-                  dadosFiltrados.map((item) => {
-                    const formatoPrevisto = obterFormatoFinalEtiqueta(
-                      item,
-                      formatoAutomaticoAtivo,
-                      formatoEtiqueta,
-                    );
-
-                    return (
-                      <tr
-                        key={item.id}
-                        className={item.selecionado ? "linha-selecionada" : ""}
-                        onClick={() => alternarSelecionado(item.id)}
+                  dadosFiltrados.map((item) => (
+                    <tr
+                      key={item.id}
+                      className={item.selecionado ? "linha-selecionada" : ""}
+                      onClick={() => alternarSelecionado(item.id)}
+                    >
+                      <td
+                        className="col-select"
+                        onClick={(e) => e.stopPropagation()}
                       >
-                        <td
-                          className="col-select"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={!!item.selecionado}
-                            readOnly
-                          />
-                        </td>
+                        <input
+                          type="checkbox"
+                          checked={!!item.selecionado}
+                          readOnly
+                        />
+                      </td>
 
-                        <td>{item.codigo}</td>
-                        <td>{item.descricao}</td>
-                        <td>{item.ean}</td>
-                        <td>{formatarEuro(item.antes)}€</td>
-                        <td>{formatarEuro(item.atual)}€</td>
-                        <td>{item.pv3}</td>
-                        <td>{item.estado}</td>
-                        <td>{item.ae}</td>
-                        <td>{item.aea}</td>
-                        <td>{item.aev}</td>
-                        <td>{item.data}</td>
-                        <td>{item.dataInicio}</td>
-                        <td>{item.dataFim}</td>
-                        <td>{item.alterado}</td>
-                        <td>{`${item.info}${item.info ? " · " : ""}${formatoPrevisto.toUpperCase()}`}</td>
-                      </tr>
-                    );
-                  })
+                      {PRIMARY_TABLE_COLUMNS.map((col) => (
+                        <td key={`${item.id}-${col.key}`}>
+                          {renderExcelTableCell(item, col.key)}
+                        </td>
+                      ))}
+                    </tr>
+                  ))
                 )}
               </tbody>
             </table>
