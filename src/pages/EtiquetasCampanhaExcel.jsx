@@ -756,7 +756,7 @@ export default function EtiquetasExcelPage() {
 
   return (
     <>
-      <div className="page-content no-print">
+      <div className="page-content page-content-fluid no-print">
         <div className="page-header">
           <div>
             <h1 className="page-title">Etiquetas de Campanha em Excel</h1>
@@ -767,7 +767,7 @@ export default function EtiquetasExcelPage() {
           </div>
         </div>
 
-        <div className="control-card">
+        <div className="control-card control-card-fluid">
           <div className="toolbar-grid">
             <label className="input-group">
               <span>Título da campanha</span>
@@ -883,7 +883,7 @@ export default function EtiquetasExcelPage() {
           </div>
         </div>
 
-        <div className="table-card">
+        <div className="table-card table-card-fluid">
           <div className="table-card-header">
             <h2>Lista de artigos</h2>
           </div>

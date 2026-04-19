@@ -886,6 +886,33 @@ tbody tr:hover {
 
 
 
+
+.page-content.page-content-fluid {
+  max-width: none;
+  width: 100%;
+  padding-inline: 16px;
+}
+
+.control-card.control-card-fluid,
+.table-card.table-card-fluid {
+  max-width: none;
+  width: 100%;
+}
+
+.table-card.table-card-fluid .table-panel {
+  max-width: none;
+  width: 100%;
+  margin-top: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+.table-card.table-card-fluid .compact-table.compact-campaign-table {
+  width: 100%;
+}
+
 .table-panel-compact {
   overflow-x: hidden;
 }
