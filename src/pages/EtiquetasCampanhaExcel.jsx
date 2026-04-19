@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
+import { printDocument } from "../utils/print";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../components/ToastProvider";
 import logo from "../logo.png";
@@ -255,7 +256,7 @@ export default function EtiquetasExcelPage() {
   const [loading, setLoading] = useState(false);
   const [nomeFicheiro, setNomeFicheiro] = useState("");
   const [formatoEtiqueta, setFormatoEtiqueta] = useState("a6");
-  const [formatoAutomaticoAtivo, setFormatoAutomaticoAtivo] = useState(false);
+  const [formatoAutomaticoAtivo, setFormatoAutomaticoAtivo] = useState(true);
 
   const [popupArtigosInvalidosAberto, setPopupArtigosInvalidosAberto] =
     useState(false);
@@ -557,9 +558,7 @@ export default function EtiquetasExcelPage() {
 
     await guardarCampanhaNoHistorico("impressao");
 
-    setTimeout(() => {
-      window.print();
-    }, 150);
+    await printDocument();
   }
 
   async function fecharPopupEProsseguir() {
@@ -578,9 +577,7 @@ export default function EtiquetasExcelPage() {
 
     await guardarCampanhaNoHistorico("impressao");
 
-    setTimeout(() => {
-      window.print();
-    }, 150);
+    await printDocument();
   }
   async function imprimirSelecionados() {
     if (selecionados.length === 0) {
@@ -602,7 +599,7 @@ export default function EtiquetasExcelPage() {
     }
 
     await guardarCampanhaNoHistorico("impressao");
-    window.print();
+    await printDocument();
   }
 
   function renderEtiqueta(item, formatoAtual) {

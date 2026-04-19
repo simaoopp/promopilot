@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BrowserMultiFormatReader } from "@zxing/browser";
 import { createWorker } from "tesseract.js";
+import { useLocation, useSearchParams } from "react-router-dom";
 import { loadAllArtigos } from "../services/artigosService";
 import "../styles/styles.css";
 
@@ -55,6 +56,8 @@ function extrairMelhorTextoOCR(texto) {
 }
 
 export default function EtiquetasCampanhaExcelPage() {
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const [modoPesquisa, setModoPesquisa] = useState("manual");
   const [pesquisa, setPesquisa] = useState("");
   const [pesquisaDebounced, setPesquisaDebounced] = useState("");
@@ -95,6 +98,20 @@ export default function EtiquetasCampanhaExcelPage() {
     return () => clearTimeout(timer);
   }, [mensagem]);
 
+  useEffect(() => {
+    const initialSearch = String(searchParams.get("search") || "").trim();
+    const initialMode = String(searchParams.get("mode") || "").trim().toLowerCase();
+
+    if (initialSearch) {
+      setModoPesquisa("manual");
+      setPesquisa(initialSearch);
+    }
+
+    if (initialMode === "scan" || location.state?.openScanMenu) {
+      setModoPesquisa("scan");
+      setMenuScanAberto(true);
+    }
+  }, [location.state, searchParams]);
 
   useEffect(() => {
     let ativo = true;

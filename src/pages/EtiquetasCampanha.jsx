@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../components/ToastProvider";
+import { printDocument } from "../utils/print";
 
 import Barcode from "../components/Barcode";
 import FilterMenu from "../components/FilterMenu";
@@ -787,9 +788,7 @@ export default function EtiquetasPage() {
 
     await guardarCampanhaNoHistorico("impressao");
 
-    setTimeout(() => {
-      window.print();
-    }, 150);
+    await printDocument();
   }
 
   async function copiarCodigosInvalidosEProsseguir() {
@@ -840,7 +839,7 @@ export default function EtiquetasPage() {
     }
 
     await guardarCampanhaNoHistorico("impressao");
-    window.print();
+    await printDocument();
   }
 
   function adicionarArtigoCampanha() {
@@ -1005,7 +1004,7 @@ export default function EtiquetasPage() {
                   } formato-btn`}
                   onClick={() => setModoFormatoAutomatico((prev) => !prev)}
                 >
-                  Auto formato: {modoFormatoAutomatico ? "Ligado" : "Desligado"}
+                  Automático: {modoFormatoAutomatico ? "ON" : "OFF"}
                 </button>
               </div>
             </div>
