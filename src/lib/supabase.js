@@ -6,4 +6,14 @@ const hasConfig = Boolean(supabaseUrl && supabasePublishableKey);
 if (!hasConfig && !isTestEnv) {
   throw new Error("Faltam variáveis do Supabase (REACT_APP_SUPABASE_URL / REACT_APP_SUPABASE_PUBLISHABLE_KEY). Verifica a configuração local ou do Netlify.");
 }
-export const supabase = createClient(hasConfig ? supabaseUrl : "https://example.supabase.co", hasConfig ? supabasePublishableKey : "test-anon-key", { auth: { autoRefreshToken: false, persistSession: false } });
+export const supabase = createClient(
+  hasConfig ? supabaseUrl : "https://example.supabase.co",
+  hasConfig ? supabasePublishableKey : "test-anon-key",
+  {
+    auth: {
+      autoRefreshToken: true,
+      persistSession: true,
+    },
+  }
+);
+
