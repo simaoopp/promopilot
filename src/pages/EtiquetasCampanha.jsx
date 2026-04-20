@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../components/ToastProvider";
@@ -428,6 +428,7 @@ export default function EtiquetasPage() {
   const [ordenacao, setOrdenacao] = useState({ coluna: "", direcao: "" });
   const [filtros, setFiltros] = useState(FILTROS_INICIAIS);
   const [mostrarTabelaCompleta, setMostrarTabelaCompleta] = useState(false);
+  const filterButtonRefs = useRef({});
 
 
   useEffect(() => {
@@ -1136,7 +1137,11 @@ export default function EtiquetasPage() {
                             <>
                               <button
                                 type="button"
+                                ref={(node) => {
+                                  filterButtonRefs.current[col.key] = node;
+                                }}
                                 className="filter-button"
+                                aria-expanded={filtroAberto === col.key}
                                 onClick={() =>
                                   setFiltroAberto(
                                     filtroAberto === col.key ? null : col.key,
@@ -1151,6 +1156,7 @@ export default function EtiquetasPage() {
                                 tipo={col.tipo}
                                 aberto={filtroAberto === col.key}
                                 filtro={filtros[col.key]}
+                                anchorEl={filterButtonRefs.current[col.key]}
                                 onClose={() => setFiltroAberto(null)}
                                 onUpdate={(chave, valor) =>
                                   atualizarFiltroPopup(col.key, chave, valor)
@@ -1213,7 +1219,7 @@ export default function EtiquetasPage() {
 
           {!mostrarTabelaCompleta ? (
             <div className="table-panel table-panel-compact">
-              <table className="compact-table compact-campaign-table compact-campaign-table--summary">
+            <table className="compact-table compact-campaign-table compact-campaign-table--summary">
               <thead>
                 <tr>
                   <th>Selecionar</th>
@@ -1227,7 +1233,11 @@ export default function EtiquetasPage() {
                         <>
                           <button
                             type="button"
+                            ref={(node) => {
+                              filterButtonRefs.current[col.key] = node;
+                            }}
                             className="filter-button"
+                            aria-expanded={filtroAberto === col.key}
                             onClick={() =>
                               setFiltroAberto(
                                 filtroAberto === col.key ? null : col.key,
@@ -1242,6 +1252,7 @@ export default function EtiquetasPage() {
                             tipo={col.tipo}
                             aberto={filtroAberto === col.key}
                             filtro={filtros[col.key]}
+                            anchorEl={filterButtonRefs.current[col.key]}
                             onClose={() => setFiltroAberto(null)}
                             onUpdate={(chave, valor) =>
                               atualizarFiltroPopup(col.key, chave, valor)
@@ -1297,7 +1308,7 @@ export default function EtiquetasPage() {
                   ))
                 )}
               </tbody>
-              </table>
+            </table>
             </div>
           ) : null}
         </div>

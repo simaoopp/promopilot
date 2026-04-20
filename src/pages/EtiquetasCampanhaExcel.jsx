@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { printDocument } from "../utils/print";
 import { useAuth } from "../context/AuthContext";
@@ -331,6 +331,7 @@ export default function EtiquetasExcelPage() {
     a1e: { op: "", valor: "" },
   });
   const [mostrarTabelaCompleta, setMostrarTabelaCompleta] = useState(false);
+  const filterButtonRefs = useRef({});
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -945,7 +946,11 @@ export default function EtiquetasExcelPage() {
                             <>
                               <button
                                 type="button"
+                                ref={(node) => {
+                                  filterButtonRefs.current[col.key] = node;
+                                }}
                                 className="filter-button"
+                                aria-expanded={filtroAberto === col.key}
                                 onClick={() =>
                                   setFiltroAberto(
                                     filtroAberto === col.key ? null : col.key,
@@ -960,6 +965,7 @@ export default function EtiquetasExcelPage() {
                                 tipo={col.tipo}
                                 aberto={filtroAberto === col.key}
                                 filtro={filtros[col.key]}
+                                anchorEl={filterButtonRefs.current[col.key]}
                                 onClose={() => setFiltroAberto(null)}
                                 onUpdate={(chave, valor) =>
                                   atualizarFiltroPopup(col.key, chave, valor)
@@ -1027,7 +1033,7 @@ export default function EtiquetasExcelPage() {
 
           {!mostrarTabelaCompleta ? (
             <div className="table-panel table-panel-compact">
-              <table className="compact-table compact-campaign-table compact-campaign-table--summary">
+            <table className="compact-table compact-campaign-table compact-campaign-table--summary">
               <thead>
                 <tr>
                   <th>Selecionar</th>
@@ -1041,7 +1047,11 @@ export default function EtiquetasExcelPage() {
                         <>
                           <button
                             type="button"
+                            ref={(node) => {
+                              filterButtonRefs.current[col.key] = node;
+                            }}
                             className="filter-button"
+                            aria-expanded={filtroAberto === col.key}
                             onClick={() =>
                               setFiltroAberto(
                                 filtroAberto === col.key ? null : col.key,
@@ -1056,6 +1066,7 @@ export default function EtiquetasExcelPage() {
                             tipo={col.tipo}
                             aberto={filtroAberto === col.key}
                             filtro={filtros[col.key]}
+                            anchorEl={filterButtonRefs.current[col.key]}
                             onClose={() => setFiltroAberto(null)}
                             onUpdate={(chave, valor) =>
                               atualizarFiltroPopup(col.key, chave, valor)
@@ -1108,7 +1119,7 @@ export default function EtiquetasExcelPage() {
                   ))
                 )}
               </tbody>
-              </table>
+            </table>
             </div>
           ) : null}
         </div>
