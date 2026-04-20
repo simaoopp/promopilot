@@ -1025,8 +1025,9 @@ export default function EtiquetasExcelPage() {
             </div>
           ) : null}
 
-          <div className="table-panel table-panel-compact">
-            <table className="compact-table compact-campaign-table compact-campaign-table--summary">
+          {!mostrarTabelaCompleta ? (
+            <div className="table-panel table-panel-compact">
+              <table className="compact-table compact-campaign-table compact-campaign-table--summary">
               <thead>
                 <tr>
                   <th>Selecionar</th>
@@ -1107,8 +1108,9 @@ export default function EtiquetasExcelPage() {
                   ))
                 )}
               </tbody>
-            </table>
-          </div>
+              </table>
+            </div>
+          ) : null}
         </div>
       </div>
 

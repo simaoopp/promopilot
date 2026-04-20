@@ -1211,8 +1211,9 @@ export default function EtiquetasPage() {
             </div>
           ) : null}
 
-          <div className="table-panel table-panel-compact">
-            <table className="compact-table compact-campaign-table compact-campaign-table--summary">
+          {!mostrarTabelaCompleta ? (
+            <div className="table-panel table-panel-compact">
+              <table className="compact-table compact-campaign-table compact-campaign-table--summary">
               <thead>
                 <tr>
                   <th>Selecionar</th>
@@ -1296,8 +1297,9 @@ export default function EtiquetasPage() {
                   ))
                 )}
               </tbody>
-            </table>
-          </div>
+              </table>
+            </div>
+          ) : null}
         </div>
       </div>
 

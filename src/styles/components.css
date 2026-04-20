@@ -1004,59 +1004,74 @@ tbody tr:hover {
 .compact-table.compact-campaign-table {
   min-width: 0;
   width: 100%;
-  table-layout: fixed;
+}
+
+.compact-table.compact-campaign-table--summary {
+  table-layout: auto;
 }
 
 .compact-table.compact-campaign-table th,
 .compact-table.compact-campaign-table td {
-  padding: 8px 6px;
-  font-size: 11px;
-  line-height: 1.25;
-  word-break: break-word;
+  padding: 10px 10px;
+  font-size: 12px;
+  line-height: 1.35;
   overflow-wrap: anywhere;
+  vertical-align: middle;
 }
 
 .compact-table.compact-campaign-table th {
-  white-space: normal;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.compact-table.compact-campaign-table td {
+  word-break: break-word;
 }
 
 .compact-table.compact-campaign-table .filter-button {
   width: 100%;
-  font-size: 11px;
+  font-size: 13px;
+  font-weight: 700;
   line-height: 1.15;
   padding: 0;
   text-align: left;
-  white-space: normal;
+  white-space: nowrap;
 }
 
 .compact-table.compact-campaign-table--summary th:nth-child(1),
 .compact-table.compact-campaign-table--summary td:nth-child(1) {
   width: 8%;
+  min-width: 88px;
   text-align: center;
 }
 
 .compact-table.compact-campaign-table--summary th:nth-child(2),
 .compact-table.compact-campaign-table--summary td:nth-child(2) {
   width: 14%;
+  min-width: 130px;
 }
 
 .compact-table.compact-campaign-table--summary th:nth-child(3),
 .compact-table.compact-campaign-table--summary td:nth-child(3) {
-  width: 36%;
+  width: 38%;
+  min-width: 320px;
 }
 
 .compact-table.compact-campaign-table--summary th:nth-child(4),
 .compact-table.compact-campaign-table--summary td:nth-child(4),
 .compact-table.compact-campaign-table--summary th:nth-child(5),
 .compact-table.compact-campaign-table--summary td:nth-child(5) {
-  width: 12%;
+  width: 13%;
+  min-width: 120px;
 }
 
 .compact-table.compact-campaign-table--summary th:nth-child(6),
 .compact-table.compact-campaign-table--summary td:nth-child(6),
 .compact-table.compact-campaign-table--summary th:nth-child(7),
 .compact-table.compact-campaign-table--summary td:nth-child(7) {
-  width: 9%;
+  width: 7%;
+  min-width: 96px;
 }
 
 .ai-sources-accordion {
