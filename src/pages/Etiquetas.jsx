@@ -3,21 +3,14 @@ import { BrowserMultiFormatReader } from "@zxing/browser";
 import { createWorker } from "tesseract.js";
 import { useLocation, useSearchParams } from "react-router-dom";
 import { loadAllArtigos } from "../services/artigosService";
+import {
+  filterAndRankPreparedArticles,
+  normalizeArticleCompact,
+  prepareArticlesForSearch,
+} from "../utils/articleSearch";
 import "../styles/styles.css";
 
 const LIMITE_RESULTADOS = 100;
-
-function normalizarTexto(texto) {
-  return String(texto || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim();
-}
-
-function normalizarPesquisaLivre(texto) {
-  return normalizarTexto(texto).replace(/[^a-z0-9]/g, "");
-}
 
 function extrairMelhorTextoOCR(texto) {
   const linhas = String(texto || "")
@@ -58,7 +51,7 @@ function extrairMelhorTextoOCR(texto) {
 export default function EtiquetasCampanhaExcelPage() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const [modoPesquisa, setModoPesquisa] = useState("manual");
+  const [, setModoPesquisa] = useState("manual");
   const [pesquisa, setPesquisa] = useState("");
   const [pesquisaDebounced, setPesquisaDebounced] = useState("");
   const [selecionados, setSelecionados] = useState({});
@@ -118,7 +111,7 @@ export default function EtiquetasCampanhaExcelPage() {
 
     async function syncArtigos() {
       try {
-        const data = await loadAllArtigos({ pageSize: 500 });
+        const data = await loadAllArtigos({ pageSize: 1000 });
 
         if (ativo) {
           setArtigos(data.items || []);
@@ -143,18 +136,7 @@ export default function EtiquetasCampanhaExcelPage() {
     };
   }, []);
 
-  const artigosPreparados = useMemo(() => {
-    return artigos.map((item, index) => ({
-      ...item,
-      _id: `${item.artigo}-${item.armazem}-${item.codigoBarras || ""}-${index}`,
-      artigoLower: String(item.artigo || "").toLowerCase(),
-      artigoNormalizado: normalizarPesquisaLivre(item.artigo),
-      descricaoLower: String(item.descricao || "").toLowerCase(),
-      descricaoNormalizada: normalizarTexto(item.descricao),
-      descricaoPesquisaLivre: normalizarPesquisaLivre(item.descricao),
-      codigoBarrasTexto: normalizarPesquisaLivre(item.codigoBarras || ""),
-    }));
-  }, [artigos]);
+  const artigosPreparados = useMemo(() => prepareArticlesForSearch(artigos), [artigos]);
 
   function pararScanner() {
     try {
@@ -194,10 +176,10 @@ export default function EtiquetasCampanhaExcelPage() {
 
   const procurarArtigoPorCodigoBarras = useCallback(
     (codigo) => {
-      const codigoNormalizado = normalizarPesquisaLivre(codigo);
+      const codigoNormalizado = normalizeArticleCompact(codigo);
 
       const encontrado = artigosPreparados.find(
-        (item) => item.codigoBarrasTexto === codigoNormalizado,
+        (item) => item._searchIndex?.codigoBarras?.compact === codigoNormalizado,
       );
 
       abrirResultado(codigo, encontrado || null);
@@ -206,14 +188,9 @@ export default function EtiquetasCampanhaExcelPage() {
   );
 
   function procurarArtigoPorTextoOCR(texto) {
-    const termoNormalizado = normalizarTexto(texto);
-    const termoLivre = normalizarPesquisaLivre(texto);
-
-    const encontrado = artigosPreparados.find(
-      (item) =>
-        item.descricaoPesquisaLivre.includes(termoLivre) ||
-        item.descricaoNormalizada.includes(termoNormalizado),
-    );
+    const [encontrado] = filterAndRankPreparedArticles(artigosPreparados, texto, {
+      limit: 1,
+    });
 
     abrirResultado(texto, encontrado || null);
   }
@@ -285,65 +262,12 @@ export default function EtiquetasCampanhaExcelPage() {
   }, [scannerAberto, artigosPreparados, procurarArtigoPorCodigoBarras]);
 
   const resultados = useMemo(() => {
-    const termo = pesquisaDebounced.trim();
+    const termoCompacto = normalizeArticleCompact(pesquisaDebounced);
 
-    if (termo.length < 2) return [];
+    if (termoCompacto.length < 2) return [];
 
-    const termoLower = termo.toLowerCase();
-    const termoNormalizado = normalizarTexto(termo);
-    const termoLivre = normalizarPesquisaLivre(termo);
-    const palavras = termoNormalizado.split(/\s+/).filter(Boolean);
-
-    return artigosPreparados.filter((item) => {
-      if (modoPesquisa === "scan") {
-        const matchCodigoBarrasExato =
-          termoLivre &&
-          item.codigoBarrasTexto &&
-          item.codigoBarrasTexto === termoLivre;
-
-        if (matchCodigoBarrasExato) return true;
-
-        const matchDireto =
-          item.descricaoLower.includes(termoLower) ||
-          item.descricaoNormalizada.includes(termoNormalizado) ||
-          item.descricaoPesquisaLivre.includes(termoLivre) ||
-          item.codigoBarrasTexto.includes(termoLivre);
-
-        if (matchDireto) return true;
-
-        if (palavras.length > 1) {
-          return palavras.every(
-            (palavra) =>
-              item.descricaoNormalizada.includes(palavra) ||
-              item.codigoBarrasTexto.includes(normalizarPesquisaLivre(palavra)),
-          );
-        }
-
-        return false;
-      }
-
-      const matchDireto =
-        item.artigoLower.includes(termoLower) ||
-        item.artigoNormalizado.includes(termoLivre) ||
-        item.descricaoLower.includes(termoLower) ||
-        item.descricaoNormalizada.includes(termoNormalizado) ||
-        item.descricaoPesquisaLivre.includes(termoLivre) ||
-        item.codigoBarrasTexto.includes(termoLivre);
-
-      if (matchDireto) return true;
-
-      if (palavras.length > 1) {
-        return palavras.every(
-          (palavra) =>
-            item.descricaoNormalizada.includes(palavra) ||
-            item.artigoLower.includes(palavra) ||
-            item.codigoBarrasTexto.includes(normalizarPesquisaLivre(palavra)),
-        );
-      }
-
-      return false;
-    });
-  }, [pesquisaDebounced, artigosPreparados, modoPesquisa]);
+    return filterAndRankPreparedArticles(artigosPreparados, pesquisaDebounced);
+  }, [pesquisaDebounced, artigosPreparados]);
 
   const resultadosVisiveis = useMemo(
     () => resultados.slice(0, LIMITE_RESULTADOS),
@@ -504,7 +428,7 @@ export default function EtiquetasCampanhaExcelPage() {
       <div className="page-header">
         <h1 className="page-title">Etiquetas</h1>
         <p className="page-subtitle">
-          Pesquisa por código, descrição ou código de barras.
+          Pesquisa por artigo, descrição, modelo, marca ou EAN.
         </p>
       </div>
 
@@ -526,7 +450,7 @@ export default function EtiquetasCampanhaExcelPage() {
                   setModoPesquisa("manual");
                   setPesquisa(e.target.value);
                 }}
-                placeholder="Ex: samsung microondas, máquina lavar, 5601234567890"
+                placeholder="Ex: 05.604.003.00028, ECF02BLEU, SMEG, 8017709324803"
               />
 
               <button

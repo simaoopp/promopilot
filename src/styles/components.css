@@ -1191,3 +1191,107 @@ tbody tr:hover {
   color: #475569;
   line-height: 1.6;
 }
+
+
+.table-card-header.table-card-header-inline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.table-card-header.table-card-header-inline .btn {
+  flex-shrink: 0;
+}
+
+.table-panel.table-panel-summary,
+.table-panel.table-panel-complete {
+  margin-top: 0;
+}
+
+.table-panel.table-panel-summary {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.table-panel.table-panel-complete {
+  overflow: hidden;
+}
+
+.compact-table.compact-campaign-table,
+.full-table.full-campaign-table {
+  table-layout: auto;
+}
+
+.compact-table.compact-campaign-table {
+  width: 100%;
+  min-width: 980px;
+}
+
+.compact-table.compact-campaign-table th,
+.compact-table.compact-campaign-table td,
+.full-table.full-campaign-table th,
+.full-table.full-campaign-table td {
+  padding: 12px;
+  font-size: 14px;
+  line-height: 1.45;
+  word-break: normal;
+  overflow-wrap: normal;
+}
+
+.compact-table.compact-campaign-table th,
+.full-table.full-campaign-table th {
+  white-space: nowrap;
+}
+
+.compact-table.compact-campaign-table .filter-button,
+.full-table.full-campaign-table .filter-button {
+  width: 100%;
+  padding: 9px 10px;
+  font-size: 14px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.compact-table.compact-campaign-table--summary th:nth-child(1),
+.compact-table.compact-campaign-table--summary td:nth-child(1) {
+  min-width: 84px;
+  width: 84px;
+  text-align: center;
+}
+
+.compact-table.compact-campaign-table--summary th:nth-child(2),
+.compact-table.compact-campaign-table--summary td:nth-child(2) {
+  min-width: 120px;
+}
+
+.compact-table.compact-campaign-table--summary th:nth-child(3),
+.compact-table.compact-campaign-table--summary td:nth-child(3) {
+  min-width: 320px;
+}
+
+.compact-table.compact-campaign-table--summary th:nth-child(4),
+.compact-table.compact-campaign-table--summary td:nth-child(4),
+.compact-table.compact-campaign-table--summary th:nth-child(5),
+.compact-table.compact-campaign-table--summary td:nth-child(5),
+.compact-table.compact-campaign-table--summary th:nth-child(6),
+.compact-table.compact-campaign-table--summary td:nth-child(6),
+.compact-table.compact-campaign-table--summary th:nth-child(7),
+.compact-table.compact-campaign-table--summary td:nth-child(7) {
+  min-width: 130px;
+  white-space: nowrap;
+}
+
+.full-table.full-campaign-table {
+  min-width: 1800px;
+  width: max-content;
+}
+
+.full-table.full-campaign-table td,
+.full-table.full-campaign-table th {
+  white-space: nowrap;
+}
+
+.synced-scrollbar-top {
+  border-bottom: 1px solid var(--color-border-soft);
+}

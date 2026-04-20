@@ -9,7 +9,7 @@ export const TABLE_COLUMNS = [
   { key: "estado", label: "ESTADO", tipo: "text" },
   { key: "ae", label: "AE", tipo: "number" },
   { key: "aea", label: "AEA", tipo: "number" },
-  { key: "aev", label: "AEV" },
+  { key: "aev", label: "AEV", tipo: "number" },
   { key: "a10", label: "A10", tipo: "number" },
   { key: "a1e", label: "A1E", tipo: "number" },
   { key: "data", label: "DATA" },
@@ -19,6 +19,8 @@ export const TABLE_COLUMNS = [
   { key: "info", label: "INFORMAÇÃO", tipo: "text" },
 ];
 
+export const FILTERABLE_COLUMNS = TABLE_COLUMNS.filter((col) => col.tipo);
+
 export const PRIMARY_TABLE_COLUMNS = [
   { key: "codigo", label: "ARTIGO", tipo: "text" },
   { key: "descricao", label: "DESCRIÇÃO", tipo: "text" },
@@ -27,5 +29,3 @@ export const PRIMARY_TABLE_COLUMNS = [
   { key: "dataInicio", label: "DATA INÍCIO" },
   { key: "dataFim", label: "DATA FIM" },
 ];
-
-export const FILTERABLE_COLUMNS = TABLE_COLUMNS.filter((col) => col.tipo);

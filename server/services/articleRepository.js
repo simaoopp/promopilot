@@ -47,6 +47,10 @@ function normalizeSearchValue(value = "") {
     .trim();
 }
 
+function normalizeCompactSearchValue(value = "") {
+  return normalizeSearchValue(value).replace(/[^a-z0-9]/g, "");
+}
+
 function normalizeJsonObject(value, fallback) {
   if (value && typeof value === "object" && !Array.isArray(value)) {
     return value;
@@ -132,20 +136,30 @@ export function mapArticleToRow(article = {}) {
     categoria,
     subcategory,
     texto_grounding: String(article.texto_grounding || "").trim(),
-    search_terms: normalizeSearchValue(
-      [
-        articleCode,
-        barcode,
-        descricao,
-        tituloOficial,
-        descricaoOficial,
-        marca,
-        modelo,
-        brand,
-        categoria,
-        subcategory,
-      ].join(" "),
-    ),
+    search_terms: [
+      normalizeSearchValue(
+        [
+          articleCode,
+          barcode,
+          descricao,
+          tituloOficial,
+          descricaoOficial,
+          marca,
+          modelo,
+          brand,
+          categoria,
+          subcategory,
+        ].join(" "),
+      ),
+      normalizeCompactSearchValue(articleCode),
+      normalizeCompactSearchValue(barcode),
+      normalizeCompactSearchValue(descricao),
+      normalizeCompactSearchValue(marca),
+      normalizeCompactSearchValue(modelo),
+      normalizeCompactSearchValue(brand),
+    ]
+      .filter(Boolean)
+      .join(" "),
     updated_at: nowIso,
   };
 }
@@ -157,12 +171,24 @@ function applySearch(queryBuilder, rawQuery) {
     return queryBuilder;
   }
 
+  const compact = normalizeCompactSearchValue(rawQuery || "");
   const escaped = query.replace(/,/g, " ").replace(/%/g, "");
   const ilike = `%${escaped}%`;
+  const clauses = [
+    `artigo.ilike.${ilike}`,
+    `codigo_barras.ilike.${ilike}`,
+    `descricao.ilike.${ilike}`,
+    `marca.ilike.${ilike}`,
+    `modelo.ilike.${ilike}`,
+    `brand.ilike.${ilike}`,
+    `search_terms.ilike.${ilike}`,
+  ];
 
-  return queryBuilder.or(
-    [`artigo.ilike.${ilike}`, `codigo_barras.ilike.${ilike}`, `search_terms.ilike.${ilike}`].join(","),
-  );
+  if (compact) {
+    clauses.push(`search_terms.ilike.%${compact}%`);
+  }
+
+  return queryBuilder.or(clauses.join(","));
 }
 
 export async function listArticles({ q = "", limit = 100, offset = 0 } = {}) {

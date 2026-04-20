@@ -1,5 +1,16 @@
 import React from "react";
-export default function HomeHero({ pesquisa, onPesquisaChange, onKeyDown, loading, erro, sugestoes, highlightedIndex, onSuggestionHover, onSuggestionClick }) {
+export default function HomeHero({
+  pesquisa,
+  onPesquisaChange,
+  onPesquisaFocus,
+  onKeyDown,
+  loading,
+  erro,
+  sugestoes,
+  highlightedIndex,
+  onSuggestionHover,
+  onSuggestionClick,
+}) {
   return (
     <div className="home-hero">
       <div className="home-hero-content">
@@ -13,8 +24,9 @@ export default function HomeHero({ pesquisa, onPesquisaChange, onKeyDown, loadin
             type="text"
             value={pesquisa}
             onChange={(e) => onPesquisaChange(e.target.value)}
+            onFocus={onPesquisaFocus}
             onKeyDown={onKeyDown}
-            placeholder="Pesquisar artigo, descrição ou código de barras"
+            placeholder="Pesquisar por artigo, descrição, modelo, EAN ou marca"
             className="home-search-input"
             autoComplete="off"
             aria-label="Pesquisar artigos"

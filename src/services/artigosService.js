@@ -101,7 +101,7 @@ export function normalizeArtigosApiResponse(data, fallbackLimit = 100, fallbackO
   };
 }
 
-export async function fetchArtigosPage({ q = "", limit = 100, offset = 0 } = {}) {
+export async function fetchArtigosPage({ q = "", limit = 100, offset = 0, signal } = {}) {
   const params = new URLSearchParams();
 
   if (q) params.set("q", q);
@@ -113,6 +113,7 @@ export async function fetchArtigosPage({ q = "", limit = 100, offset = 0 } = {})
     headers: {
       Authorization: `Bearer ${token}`,
     },
+    signal,
   });
 
   const data = await readJsonResponse(response);
@@ -162,8 +163,21 @@ export async function loadAllArtigos({ forceRefresh = false, pageSize = 500 } = 
   }
 }
 
-export async function searchArtigos({ q = "", limit = 20, offset = 0 } = {}) {
-  return fetchArtigosPage({ q, limit, offset });
+function buildSearchCacheKey({ q = "", limit = 20, offset = 0 } = {}) {
+  const normalizedQ = String(q || "").trim().toLowerCase();
+  return `search:${normalizedQ}:${limit}:${offset}`;
+}
+
+export async function searchArtigos({ q = "", limit = 20, offset = 0, signal } = {}) {
+  const cacheKey = buildSearchCacheKey({ q, limit, offset });
+  const cached = cacheGet(cacheKey);
+
+  if (cached) {
+    return cached;
+  }
+
+  const result = await fetchArtigosPage({ q, limit, offset, signal });
+  return cacheSet(cacheKey, result);
 }
 
 export async function enrichArtigoWithAi(payload) {

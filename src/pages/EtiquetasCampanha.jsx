@@ -963,7 +963,7 @@ export default function EtiquetasPage() {
 
   return (
     <>
-      <div className="page-content page-content-fluid no-print">
+      <div className="page-content no-print">
         <div className="page-header">
           <h1 className="page-title">Etiquetas de Campanha</h1>
           <p className="page-subtitle">
@@ -972,7 +972,7 @@ export default function EtiquetasPage() {
           </p>
         </div>
 
-        <div className="control-card control-card-fluid">
+        <div className="control-card">
           <div className="toolbar-grid">
             <label className="input-group">
               <span>Título da campanha</span>
@@ -1092,15 +1092,9 @@ export default function EtiquetasPage() {
           </div>
         </div>
 
-        <div className="table-card table-card-fluid">
-          <div className="table-card-header table-card-header-stack">
-            <div>
-              <h2>Lista de artigos</h2>
-              <p className="table-card-subtitle">
-                Vista rápida com as colunas principais. A tabela completa abre
-                acima com todos os cabeçalhos.
-              </p>
-            </div>
+        <div className="table-card">
+          <div className="table-card-header table-card-header-inline">
+            <h2>{mostrarTabelaCompleta ? "Tabela completa" : "Lista de artigos"}</h2>
 
             <button
               type="button"
@@ -1108,21 +1102,13 @@ export default function EtiquetasPage() {
               onClick={() => setMostrarTabelaCompleta((prev) => !prev)}
             >
               {mostrarTabelaCompleta
-                ? "Fechar tabela completa"
+                ? "Ver tabela simples"
                 : "Abrir tabela completa"}
             </button>
           </div>
 
           {mostrarTabelaCompleta ? (
-            <div className="expanded-table-section">
-              <div className="expanded-table-header">
-                <div>
-                  <h3>Tabela completa</h3>
-                  <p>Todos os cabeçalhos e colunas disponíveis.</p>
-                </div>
-              </div>
-
-              <SyncedHorizontalScroll className="table-panel table-panel-complete">
+            <SyncedHorizontalScroll className="table-panel table-panel-complete">
                 <table className="full-table full-campaign-table">
                   <thead>
                     <tr>
@@ -1213,13 +1199,12 @@ export default function EtiquetasPage() {
                     )}
                   </tbody>
                 </table>
-              </SyncedHorizontalScroll>
-            </div>
+            </SyncedHorizontalScroll>
           ) : null}
 
           {!mostrarTabelaCompleta ? (
-            <div className="table-panel table-panel-compact">
-            <table className="compact-table compact-campaign-table compact-campaign-table--summary">
+            <div className="table-panel table-panel-summary">
+              <table className="compact-table compact-campaign-table compact-campaign-table--summary">
               <thead>
                 <tr>
                   <th>Selecionar</th>
