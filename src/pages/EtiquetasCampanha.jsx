@@ -449,20 +449,6 @@ export default function EtiquetasPage() {
     );
   }, [location.state]);
 
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      const clicouDentroDeFiltro = event.target.closest(".filter-th");
-      if (!clicouDentroDeFiltro) {
-        setFiltroAberto(null);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []);
 
   useEffect(() => {
     const antes = converterPreco(campanhaAntes);

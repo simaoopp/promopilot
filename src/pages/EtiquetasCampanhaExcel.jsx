@@ -333,19 +333,6 @@ export default function EtiquetasExcelPage() {
   const [mostrarTabelaCompleta, setMostrarTabelaCompleta] = useState(false);
   const filterButtonRefs = useRef({});
 
-  useEffect(() => {
-    function handleClickOutside(event) {
-      const clicouDentroDeFiltro = event.target.closest(".filter-th");
-      if (!clicouDentroDeFiltro) {
-        setFiltroAberto(null);
-      }
-    }
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []);
 
   function atualizarFiltroPopup(campo, chave, valor) {
     setFiltros((prev) => ({
