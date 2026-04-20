@@ -338,6 +338,8 @@
   box-shadow: 0 18px 44px rgba(15, 23, 42, 0.18);
   padding: 12px;
   z-index: 5000;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .filter-popup-header {
