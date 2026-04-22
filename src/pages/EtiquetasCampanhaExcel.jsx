@@ -194,6 +194,11 @@ function obterValor(normalizado, chaves = [], fallback = "") {
 function formatarValorTabelaMoeda(valor) {
   return Number(valor) > 0 ? `${formatarEuro(valor)}€` : "—";
 }
+function formatarLabelOpcaoPreco(opcao) {
+  if (opcao.value === "manual") return "Outro valor";
+  return `${opcao.label}: ${formatarValorTabelaMoeda(opcao.valor)}`;
+}
+
 function obterOpcoesPrecoShopping(item) {
   return [
     {
@@ -264,6 +269,19 @@ function formatarSelecaoPrecoShopping(item, tipo) {
   const label = SHOPPING_PRICE_SOURCE_LABELS[fonte] || "—";
 
   return `${label}: ${formatarValorTabelaMoeda(valor)}`;
+}
+
+function obterOpcoesSelectShopping(item) {
+  return SHOPPING_PRICE_SOURCE_OPTIONS.map((option) => {
+    const valor =
+      option.value === "manual" ? null : obterValorFontePreco(item, option.value);
+
+    return {
+      ...option,
+      valor,
+      optionLabel: formatarLabelOpcaoPreco({ ...option, valor }),
+    };
+  });
 }
 
 function renderExcelTableCell(item, columnKey, formatoPrevisto = "") {
@@ -1014,7 +1032,7 @@ export default function EtiquetasExcelPage() {
         return (
           Number(item.antes) > 0 &&
           Number(item.atual) > 0 &&
-          Number(item.antes) >= Number(item.atual)
+          Number(item.antes) <= Number(item.atual)
         );
       }
 
@@ -1165,41 +1183,58 @@ export default function EtiquetasExcelPage() {
     const valorManual = isSemDesconto
       ? item.precoSemDescontoManual
       : item.precoComDescontoManual;
+    const valorSelecionado = isSemDesconto ? item.antes : item.atual;
+    const opcoesSelect = obterOpcoesSelectShopping(item);
 
     return (
-      <div className="shopping-price-selector" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="shopping-price-selector"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="shopping-price-selector__header">
+          <span className="shopping-price-selector__label">
+            {isSemDesconto ? "Sem promoção" : "Com promoção"}
+          </span>
+
+          <span className="shopping-price-selector__value">
+            {formatarValorTabelaMoeda(valorSelecionado)}
+          </span>
+        </div>
+
         <select
+          className="shopping-price-selector__select"
           value={fonteAtual}
           onChange={(e) =>
             atualizarPrecoShopping(item.id, {
-              [isSemDesconto ? "precoSemDescontoFonte" : "precoComDescontoFonte"]:
-                e.target.value,
+              [isSemDesconto
+                ? "precoSemDescontoFonte"
+                : "precoComDescontoFonte"]: e.target.value,
             })
           }
         >
-          {SHOPPING_PRICE_SOURCE_OPTIONS.map((option) => (
+          {opcoesSelect.map((option) => (
             <option key={option.value} value={option.value}>
-              {option.label}
+              {option.optionLabel}
             </option>
           ))}
         </select>
 
         {fonteAtual === "manual" ? (
           <input
+            className="shopping-price-selector__input"
             type="text"
             inputMode="decimal"
             value={valorManual}
-            placeholder="0,00"
+            placeholder="Outro valor: 0,00"
             onChange={(e) =>
               atualizarPrecoShopping(item.id, {
-                [isSemDesconto ? "precoSemDescontoManual" : "precoComDescontoManual"]:
-                  e.target.value,
+                [isSemDesconto
+                  ? "precoSemDescontoManual"
+                  : "precoComDescontoManual"]: e.target.value,
               })
             }
           />
         ) : null}
-
-        <small>{formatarValorTabelaMoeda(isSemDesconto ? item.antes : item.atual)}</small>
       </div>
     );
   }
@@ -1586,7 +1621,7 @@ export default function EtiquetasExcelPage() {
 
             <p className="popup-text">
               {modeloImportado === EXCEL_FORMATS.SHOPPING
-                ? "Os artigos abaixo foram selecionados para impressão, mas têm o preço sem promoção maior ou igual ao preço de promoção."
+                ? "Os artigos abaixo foram selecionados para impressão, mas têm o preço sem promoção menor ou igual ao preço com promoção."
                 : "Os artigos abaixo foram selecionados para impressão, mas têm o PVP2 atual maior ou igual ao PVP2 antes."}
             </p>
 
