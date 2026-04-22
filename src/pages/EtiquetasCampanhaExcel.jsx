@@ -26,13 +26,6 @@ const EXCEL_FORMATS = {
   SHOPPING: "shopping",
 };
 
-const SHOPPING_PRICE_SOURCE_OPTIONS = [
-  { value: "nossoPreco", label: "Nosso preço" },
-  { value: "worten", label: "Worten" },
-  { value: "radioPopular", label: "Rádio Popular" },
-  { value: "manual", label: "Outro" },
-];
-
 const CAMPANHA_TABLE_COLUMNS = [
   { key: "codigo", label: "CÓDIGO", tipo: "text" },
   { key: "descricao", label: "DESCRIÇÃO", tipo: "text" },
@@ -70,20 +63,35 @@ const SHOPPING_TABLE_COLUMNS = [
   { key: "nossoPreco", label: "NOSSO PREÇO", tipo: "number" },
   { key: "worten", label: "WORTEN", tipo: "number" },
   { key: "radioPopular", label: "RÁDIO POPULAR", tipo: "number" },
-  { key: "precoSemDescontoSelecionado", label: "PREÇO SEM DESCONTO" },
-  { key: "precoComDescontoSelecionado", label: "PREÇO COM DESCONTO" },
   { key: "menorConcorrente", label: "MENOR CONCORRÊNCIA", tipo: "number" },
   { key: "comparacao", label: "COMPARAÇÃO", tipo: "text" },
+  { key: "precoSemDescontoSelecionado", label: "PREÇO SEM DESCONTO" },
+  { key: "precoComDescontoSelecionado", label: "PREÇO COM DESCONTO" },
 ];
 
 const SHOPPING_PRIMARY_COLUMNS = [
   { key: "codigo", label: "ARTIGO", tipo: "text" },
   { key: "descricao", label: "DESCRIÇÃO", tipo: "text" },
   { key: "nossoPreco", label: "NOSSO PREÇO", tipo: "number" },
+  { key: "menorConcorrente", label: "MENOR CONCORRÊNCIA", tipo: "number" },
+  { key: "comparacao", label: "COMPARAÇÃO", tipo: "text" },
   { key: "precoSemDescontoSelecionado", label: "PREÇO SEM DESCONTO" },
   { key: "precoComDescontoSelecionado", label: "PREÇO COM DESCONTO" },
-  { key: "comparacao", label: "COMPARAÇÃO", tipo: "text" },
 ];
+
+const SHOPPING_PRICE_SOURCE_OPTIONS = [
+  { value: "nossoPreco", label: "Nosso preço" },
+  { value: "worten", label: "Worten" },
+  { value: "radioPopular", label: "Rádio Popular" },
+  { value: "manual", label: "Outro" },
+];
+
+const SHOPPING_PRICE_SOURCE_LABELS = {
+  nossoPreco: "Nosso preço",
+  worten: "Worten",
+  radioPopular: "Rádio Popular",
+  manual: "Outro",
+};
 
 /* =========================================================
    AUTO TEXT
@@ -150,38 +158,7 @@ function PrecoAtualAuto({ valor, formatoEtiqueta }) {
   );
 }
 
-function ShoppingPriceAuto({ valor, formatoEtiqueta }) {
-  return (
-    <AutoText
-      texto={`${formatarEuro(valor)}€`}
-      className="shopping-main-price"
-      min={formatoEtiqueta === "a5" ? 62 : 42}
-      max={formatoEtiqueta === "a5" ? 88 : 64}
-    />
-  );
-}
 
-function ShoppingBeforePriceAuto({ valor, formatoEtiqueta }) {
-  return (
-    <AutoText
-      texto={valor > 0 ? `${formatarEuro(valor)}€` : "—"}
-      className="shopping-before-price"
-      min={formatoEtiqueta === "a5" ? 34 : 24}
-      max={formatoEtiqueta === "a5" ? 48 : 34}
-    />
-  );
-}
-
-function ShoppingCardPriceAuto({ valor, formatoEtiqueta }) {
-  return (
-    <AutoText
-      texto={valor > 0 ? `${formatarEuro(valor)}€` : "—"}
-      className="shopping-card-price"
-      min={formatoEtiqueta === "a5" ? 22 : 16}
-      max={formatoEtiqueta === "a5" ? 34 : 24}
-    />
-  );
-}
 
 /* =========================================================
    HELPERS
@@ -217,6 +194,77 @@ function obterValor(normalizado, chaves = [], fallback = "") {
 function formatarValorTabelaMoeda(valor) {
   return Number(valor) > 0 ? `${formatarEuro(valor)}€` : "—";
 }
+function obterOpcoesPrecoShopping(item) {
+  return [
+    {
+      key: "nossoPreco",
+      label: "Nosso preço",
+      valor: parseNumero(item.nossoPreco),
+    },
+    {
+      key: "worten",
+      label: "Worten",
+      valor: parseNumero(item.worten),
+    },
+    {
+      key: "radioPopular",
+      label: "Rádio Popular",
+      valor: parseNumero(item.radioPopular),
+    },
+  ].filter((opcao) => Number.isFinite(opcao.valor) && opcao.valor > 0);
+}
+
+function obterFontePrecoPredefinida(item, criterio = "max") {
+  const opcoes = obterOpcoesPrecoShopping(item);
+
+  if (!opcoes.length) return "nossoPreco";
+
+  const comparador = criterio === "min"
+    ? (atual, melhor) => atual.valor < melhor.valor
+    : (atual, melhor) => atual.valor > melhor.valor;
+
+  return opcoes.reduce((melhor, atual) => (
+    comparador(atual, melhor) ? atual : melhor
+  )).key;
+}
+
+function obterValorFontePreco(item, fonte, valorManual = "") {
+  if (fonte === "manual") {
+    return parseNumero(valorManual);
+  }
+
+  return parseNumero(item[fonte]);
+}
+
+function recalcularSelecaoPrecosShopping(item) {
+  const antes = obterValorFontePreco(
+    item,
+    item.precoSemDescontoFonte,
+    item.precoSemDescontoManual,
+  );
+  const atual = obterValorFontePreco(
+    item,
+    item.precoComDescontoFonte,
+    item.precoComDescontoManual,
+  );
+
+  return {
+    ...item,
+    antes,
+    atual,
+  };
+}
+
+function formatarSelecaoPrecoShopping(item, tipo) {
+  const isSemDesconto = tipo === "semDesconto";
+  const fonte = isSemDesconto
+    ? item.precoSemDescontoFonte
+    : item.precoComDescontoFonte;
+  const valor = isSemDesconto ? item.antes : item.atual;
+  const label = SHOPPING_PRICE_SOURCE_LABELS[fonte] || "—";
+
+  return `${label}: ${formatarValorTabelaMoeda(valor)}`;
+}
 
 function renderExcelTableCell(item, columnKey, formatoPrevisto = "") {
   switch (columnKey) {
@@ -228,13 +276,9 @@ function renderExcelTableCell(item, columnKey, formatoPrevisto = "") {
     case "menorConcorrente":
       return formatarValorTabelaMoeda(item[columnKey]);
     case "precoSemDescontoSelecionado":
-      return formatarValorTabelaMoeda(
-        obterValorPrecoConfigurado(item, "semDesconto"),
-      );
+      return formatarSelecaoPrecoShopping(item, "semDesconto");
     case "precoComDescontoSelecionado":
-      return formatarValorTabelaMoeda(
-        obterValorPrecoConfigurado(item, "comDesconto"),
-      );
+      return formatarSelecaoPrecoShopping(item, "comDesconto");
     case "info": {
       const infoBase = item.info || "";
       return `${infoBase}${infoBase ? " · " : ""}${formatoPrevisto.toUpperCase()}`;
@@ -250,9 +294,6 @@ function formatarDataDiaMes(data) {
   return `${dia}/${mes}`;
 }
 
-function formatarDataCompleta(data) {
-  return `${formatarDataDiaMes(data)}/${data.getFullYear()}`;
-}
 
 function normalizarCodigoTexto(valor) {
   if (valor === null || valor === undefined) return "";
@@ -280,69 +321,6 @@ function obterMenorPrecoConcorrencia(...valores) {
 
   if (!numeros.length) return 0;
   return Math.min(...numeros);
-}
-
-function obterOpcoesPrecoShopping(item) {
-  return [
-    {
-      source: "nossoPreco",
-      label: "Nosso preço",
-      value: parseNumero(item?.nossoPreco),
-    },
-    {
-      source: "worten",
-      label: "Worten",
-      value: parseNumero(item?.worten),
-    },
-    {
-      source: "radioPopular",
-      label: "Rádio Popular",
-      value: parseNumero(item?.radioPopular),
-    },
-  ];
-}
-
-function obterFontePrecoExtremo(item, tipo = "max") {
-  const candidatos = obterOpcoesPrecoShopping(item).filter(
-    (opcao) => Number.isFinite(opcao.value) && opcao.value > 0,
-  );
-
-  if (!candidatos.length) return "nossoPreco";
-
-  const valorExtremo =
-    tipo === "min"
-      ? Math.min(...candidatos.map((opcao) => opcao.value))
-      : Math.max(...candidatos.map((opcao) => opcao.value));
-
-  return (
-    candidatos.find((opcao) => opcao.value === valorExtremo)?.source ||
-    "nossoPreco"
-  );
-}
-
-function obterLabelFontePrecoShopping(source) {
-  return (
-    SHOPPING_PRICE_SOURCE_OPTIONS.find((opcao) => opcao.value === source)
-      ?.label || "Outro"
-  );
-}
-
-function obterValorPrecoConfigurado(item, tipo = "semDesconto") {
-  const isSemDesconto = tipo === "semDesconto";
-  const campoFonte = isSemDesconto
-    ? "precoSemDescontoFonte"
-    : "precoComDescontoFonte";
-  const campoManual = isSemDesconto
-    ? "precoSemDescontoManual"
-    : "precoComDescontoManual";
-  const fallbackFonte = obterFontePrecoExtremo(item, isSemDesconto ? "max" : "min");
-  const fonte = item?.[campoFonte] || fallbackFonte;
-
-  if (fonte === "manual") {
-    return parseNumero(item?.[campoManual]);
-  }
-
-  return parseNumero(item?.[fonte]);
 }
 
 function normalizarComparacaoShopping(valor, nossoPreco, menorConcorrente) {
@@ -452,7 +430,16 @@ function mapearLinhaExcelShopping(row, index) {
     menorConcorrente,
   );
 
-  const baseItem = {
+  const precoSemDescontoFonte = obterFontePrecoPredefinida(
+    { nossoPreco, worten, radioPopular },
+    "max",
+  );
+  const precoComDescontoFonte = obterFontePrecoPredefinida(
+    { nossoPreco, worten, radioPopular },
+    "min",
+  );
+
+  return recalcularSelecaoPrecosShopping({
     id: `excel-shopping-${index}`,
     tipo_registo: EXCEL_FORMATS.SHOPPING,
     codigo: normalizarCodigoTexto(
@@ -484,16 +471,12 @@ function mapearLinhaExcelShopping(row, index) {
     radioPopular,
     menorConcorrente,
     comparacao,
-    selecionado: false,
-  };
-
-  return {
-    ...baseItem,
-    precoSemDescontoFonte: obterFontePrecoExtremo(baseItem, "max"),
+    precoSemDescontoFonte,
     precoSemDescontoManual: "",
-    precoComDescontoFonte: obterFontePrecoExtremo(baseItem, "min"),
+    precoComDescontoFonte,
     precoComDescontoManual: "",
-  };
+    selecionado: false,
+  });
 }
 
 function mapearLinhaExcel(row, index, formato) {
@@ -607,43 +590,6 @@ function obterFormatoFinalEtiqueta(
   return obterFormatoAutomaticoEtiqueta(item.descricao);
 }
 
-function obterResumoComparacao(item) {
-  if (item.comparacao === "Preço mais baixo") {
-    return "O nosso preço está abaixo da concorrência.";
-  }
-
-  if (item.comparacao === "Preço mais alto") {
-    return "O nosso preço está acima do melhor valor encontrado.";
-  }
-
-  if (item.comparacao === "Igual") {
-    return "O nosso preço está alinhado com a melhor concorrência.";
-  }
-
-  return "Sem dados suficientes para comparação automática.";
-}
-
-function obterResumoConfiguracaoShopping(item) {
-  return `Sem desconto: ${obterLabelFontePrecoShopping(
-    item.precoSemDescontoFonte,
-  )} · Com desconto: ${obterLabelFontePrecoShopping(
-    item.precoComDescontoFonte,
-  )}`;
-}
-
-function obterBadgeEtiquetaShopping(precoSemDesconto, precoComDesconto) {
-  if (precoSemDesconto > 0 && precoComDesconto > 0) {
-    const diferenca = Math.max(0, precoSemDesconto - precoComDesconto);
-
-    if (diferenca > 0) {
-      return `Poupa ${formatarEuro(diferenca)}€`;
-    }
-
-    return "Sem diferença";
-  }
-
-  return "Preço configurado";
-}
 
 /* =========================================================
    COMPONENTE
@@ -918,9 +864,18 @@ export default function EtiquetasExcelPage() {
     );
   }
 
-  function atualizarCampoShopping(id, campo, valor) {
+  function atualizarPrecoShopping(id, atualizacoes) {
     setDados((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, [campo]: valor } : item)),
+      prev.map((item) => {
+        if (item.id !== id || item.tipo_registo !== EXCEL_FORMATS.SHOPPING) {
+          return item;
+        }
+
+        return recalcularSelecaoPrecosShopping({
+          ...item,
+          ...atualizacoes,
+        });
+      }),
     );
   }
 
@@ -1073,67 +1028,6 @@ export default function EtiquetasExcelPage() {
     await printDocument();
   }
 
-  function renderShoppingPriceSelector(item, tipo) {
-    const isSemDesconto = tipo === "semDesconto";
-    const campoFonte = isSemDesconto
-      ? "precoSemDescontoFonte"
-      : "precoComDescontoFonte";
-    const campoManual = isSemDesconto
-      ? "precoSemDescontoManual"
-      : "precoComDescontoManual";
-    const fonteSelecionada =
-      item[campoFonte] || obterFontePrecoExtremo(item, isSemDesconto ? "max" : "min");
-    const valorAtual = obterValorPrecoConfigurado(item, tipo);
-
-    return (
-      <div
-        className="shopping-selector-cell"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <select
-          className="shopping-selector-input"
-          value={fonteSelecionada}
-          onChange={(e) => atualizarCampoShopping(item.id, campoFonte, e.target.value)}
-        >
-          {SHOPPING_PRICE_SOURCE_OPTIONS.map((opcao) => (
-            <option key={`${tipo}-${opcao.value}`} value={opcao.value}>
-              {opcao.label}
-            </option>
-          ))}
-        </select>
-
-        {fonteSelecionada === "manual" ? (
-          <input
-            type="text"
-            inputMode="decimal"
-            className="shopping-selector-manual"
-            placeholder="Outro preço"
-            value={item[campoManual] || ""}
-            onChange={(e) =>
-              atualizarCampoShopping(item.id, campoManual, e.target.value)
-            }
-          />
-        ) : (
-          <small className="shopping-selector-value">
-            {formatarValorTabelaMoeda(valorAtual)}
-          </small>
-        )}
-      </div>
-    );
-  }
-
-  function renderSiteTableCell(item, col, formatoPrevisto = "") {
-    if (col.key === "precoSemDescontoSelecionado") {
-      return renderShoppingPriceSelector(item, "semDesconto");
-    }
-
-    if (col.key === "precoComDescontoSelecionado") {
-      return renderShoppingPriceSelector(item, "comDesconto");
-    }
-
-    return renderExcelTableCell(item, col.key, formatoPrevisto);
-  }
-
   function renderEtiquetaCampanha(item, formatoAtual) {
     const desconto = Math.max(0, item.antes - item.atual);
     const textoValidade = obterTextoValidade(item, anoValidade);
@@ -1252,124 +1146,73 @@ export default function EtiquetasExcelPage() {
     );
   }
 
-  function renderEtiquetaShoppingConteudo(item, formatoAtual) {
-    const hoje = new Date();
-    const resumoComparacao = obterResumoComparacao(item);
-    const resumoConfiguracao = obterResumoConfiguracaoShopping(item);
-    const precoSemDesconto = obterValorPrecoConfigurado(item, "semDesconto");
-    const precoComDesconto = obterValorPrecoConfigurado(item, "comDesconto");
-    const badgeShopping = obterBadgeEtiquetaShopping(
-      precoSemDesconto,
-      precoComDesconto,
-    );
-
-    return (
-      <>
-        <div className="topbar">
-          <img src={logo} alt="Expert" className="print-logo" />
-        </div>
-
-        <div className="content shopping-content">
-          <div className="topo">
-            <div className="codigo">{item.codigo}</div>
-            <div className="titulo">{titulo || "SHOPPING"}</div>
-            <DescricaoAuto
-              texto={item.descricao}
-              formatoEtiqueta={formatoAtual}
-            />
-          </div>
-
-          <div className="shopping-price-wrap">
-            <div className="shopping-price-label">PREÇO NA ETIQUETA</div>
-            <ShoppingBeforePriceAuto
-              valor={precoSemDesconto}
-              formatoEtiqueta={formatoAtual}
-            />
-            <ShoppingPriceAuto
-              valor={precoComDesconto}
-              formatoEtiqueta={formatoAtual}
-            />
-            <div className="shopping-selected-sources">{resumoConfiguracao}</div>
-          </div>
-
-          <div className="shopping-status-row">
-            <span className="shopping-status-badge">{badgeShopping}</span>
-          </div>
-
-          <div className="shopping-competitor-grid">
-            <div className="shopping-competitor-card">
-              <span>NOSSO PREÇO</span>
-              <ShoppingCardPriceAuto
-                valor={item.nossoPreco}
-                formatoEtiqueta={formatoAtual}
-              />
-            </div>
-
-            <div className="shopping-competitor-card">
-              <span>WORTEN</span>
-              <ShoppingCardPriceAuto
-                valor={item.worten}
-                formatoEtiqueta={formatoAtual}
-              />
-            </div>
-
-            <div className="shopping-competitor-card shopping-competitor-card-wide">
-              <span>RÁDIO POPULAR</span>
-              <ShoppingCardPriceAuto
-                valor={item.radioPopular}
-                formatoEtiqueta={formatoAtual}
-              />
-            </div>
-          </div>
-
-          <div className="shopping-summary">
-            {resumoComparacao} {resumoConfiguracao}.
-          </div>
-
-          <div className="rodape shopping-rodape">
-            <Barcode value={item.ean} />
-
-            <div className="validade">
-              COMPARATIVO RECOLHIDO EM {formatarDataCompleta(hoje)}
-            </div>
-
-            <div className="nota">
-              Etiqueta comparativa Shopping. Valores externos sujeitos a
-              atualização.
-            </div>
-          </div>
-        </div>
-      </>
-    );
+  function renderEtiqueta(item, formatoAtual) {
+    return renderEtiquetaCampanha(item, formatoAtual);
   }
 
-  function renderEtiquetaShopping(item, formatoAtual) {
+  function renderPrecoShoppingSelector(item, tipo) {
+    const isSemDesconto = tipo === "semDesconto";
+    const fonteAtual = isSemDesconto
+      ? item.precoSemDescontoFonte
+      : item.precoComDescontoFonte;
+    const valorManual = isSemDesconto
+      ? item.precoSemDescontoManual
+      : item.precoComDescontoManual;
+
     return (
-      <div
-        key={item.id}
-        className={`label shopping-label ${
-          formatoAtual === "a5" ? "label-a5" : "label-a6"
-        }`}
-      >
-        {formatoAtual === "a5" ? (
-          <div className="label-a5-rotator">
-            <div className="label-inner">
-              {renderEtiquetaShoppingConteudo(item, formatoAtual)}
-            </div>
-          </div>
-        ) : (
-          <div className="label-inner">
-            {renderEtiquetaShoppingConteudo(item, formatoAtual)}
-          </div>
-        )}
+      <div className="shopping-price-selector" onClick={(e) => e.stopPropagation()}>
+        <select
+          value={fonteAtual}
+          onChange={(e) =>
+            atualizarPrecoShopping(item.id, {
+              [isSemDesconto ? "precoSemDescontoFonte" : "precoComDescontoFonte"]:
+                e.target.value,
+            })
+          }
+        >
+          {SHOPPING_PRICE_SOURCE_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+
+        {fonteAtual === "manual" ? (
+          <input
+            type="text"
+            inputMode="decimal"
+            value={valorManual}
+            placeholder="0,00"
+            onChange={(e) =>
+              atualizarPrecoShopping(item.id, {
+                [isSemDesconto ? "precoSemDescontoManual" : "precoComDescontoManual"]:
+                  e.target.value,
+              })
+            }
+          />
+        ) : null}
+
+        <small>{formatarValorTabelaMoeda(isSemDesconto ? item.antes : item.atual)}</small>
       </div>
     );
   }
 
-  function renderEtiqueta(item, formatoAtual) {
-    return item.tipo_registo === EXCEL_FORMATS.SHOPPING
-      ? renderEtiquetaShopping(item, formatoAtual)
-      : renderEtiquetaCampanha(item, formatoAtual);
+  function renderTableCell(item, col, formatoPrevisto = "") {
+    if (
+      item.tipo_registo === EXCEL_FORMATS.SHOPPING &&
+      col.key === "precoSemDescontoSelecionado"
+    ) {
+      return renderPrecoShoppingSelector(item, "semDesconto");
+    }
+
+    if (
+      item.tipo_registo === EXCEL_FORMATS.SHOPPING &&
+      col.key === "precoComDescontoSelecionado"
+    ) {
+      return renderPrecoShoppingSelector(item, "comDesconto");
+    }
+
+    return renderExcelTableCell(item, col.key, formatoPrevisto);
   }
 
   return (
@@ -1405,7 +1248,6 @@ export default function EtiquetasExcelPage() {
                   value={anoValidade}
                   onChange={(e) => setAnoValidade(e.target.value)}
                   placeholder="2026"
-                  disabled={modeloImportado === EXCEL_FORMATS.SHOPPING}
                 />
 
                 <button
@@ -1619,11 +1461,7 @@ export default function EtiquetasExcelPage() {
 
                           {colunasTabelaAtivas.map((col) => (
                             <td key={`${item.id}-${col.key}`}>
-                              {renderSiteTableCell(
-                                item,
-                                col,
-                                formatoPrevisto,
-                              )}
+                              {renderTableCell(item, col, formatoPrevisto)}
                             </td>
                           ))}
                         </tr>
@@ -1719,7 +1557,7 @@ export default function EtiquetasExcelPage() {
 
                         {colunasResumoAtivas.map((col) => (
                           <td key={`${item.id}-${col.key}`}>
-                            {renderSiteTableCell(item, col)}
+                            {renderTableCell(item, col)}
                           </td>
                         ))}
                       </tr>
