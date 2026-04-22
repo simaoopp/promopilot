@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../components/ToastProvider";
@@ -11,17 +11,18 @@ import CampaignDetailsModal from "../components/home/CampaignDetailsModal";
 import ConfirmDeleteModal from "../components/home/ConfirmDeleteModal";
 import {
   enrichArtigoWithAi,
-  loadAllArtigos,
   mergeArtigoData,
   mergeArtigosIntoList,
-  searchArtigos,
   syncUpdatedArtigoToCache,
 } from "../services/artigosService";
 import {
-  filterAndRankPreparedArticles,
-  normalizeArticleCompact,
-  prepareArticlesForSearch,
-} from "../utils/articleSearch";
+  ensureCatalogoPesquisaPronto,
+  getCatalogoPesquisaSnapshot,
+  pesquisarNoCatalogoPreparado,
+  preloadCatalogoPesquisa,
+  syncUpdatedArtigoToCatalogoPesquisa,
+} from "../services/catalogoPesquisaService";
+import { normalizeArticleCompact } from "../utils/articleSearch";
 import { loadCampaignHistory, removeCampaignFromHistory } from "../utils/campaignHistory";
 import {
   formatarAutorCampanha,
@@ -34,20 +35,12 @@ import "../styles/styles.css";
 
 const HOME_SUGGESTIONS_LIMIT = 8;
 
-function scheduleIdleTask(task) {
-  if (typeof window !== "undefined" && typeof window.requestIdleCallback === "function") {
-    const id = window.requestIdleCallback(task, { timeout: 1500 });
-    return () => window.cancelIdleCallback(id);
-  }
-
-  const id = window.setTimeout(task, 700);
-  return () => window.clearTimeout(id);
-}
-
 export default function HomePage() {
   const navigate = useNavigate();
   const { profile } = useAuth();
   const toast = useToast();
+
+  const initialCatalogo = getCatalogoPesquisaSnapshot();
 
   const [pesquisa, setPesquisa] = useState("");
   const [pesquisaDebounced, setPesquisaDebounced] = useState("");
@@ -55,7 +48,7 @@ export default function HomePage() {
   const [sugestoesErro, setSugestoesErro] = useState("");
   const [sugestoes, setSugestoes] = useState([]);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
-  const [catalogoTotal, setCatalogoTotal] = useState(0);
+  const [catalogoTotal, setCatalogoTotal] = useState(initialCatalogo.total || 0);
   const [artigoSelecionado, setArtigoSelecionado] = useState(null);
   const [aiAberta, setAiAberta] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
@@ -64,33 +57,13 @@ export default function HomePage() {
   const [historicoCampanhas, setHistoricoCampanhas] = useState([]);
   const [campanhaSelecionada, setCampanhaSelecionada] = useState(null);
   const [campanhaPendenteRemocao, setCampanhaPendenteRemocao] = useState(null);
-  const [catalogoPesquisaPronto, setCatalogoPesquisaPronto] = useState(false);
-
-  const catalogoPreparadoRef = useRef([]);
-  const preloadPromiseRef = useRef(null);
-  const suggestionsSnapshotRef = useRef([]);
+  const [catalogoPesquisaPronto, setCatalogoPesquisaPronto] = useState(initialCatalogo.ready);
 
   const ensureCatalogoPesquisa = useCallback(async () => {
-    if (catalogoPreparadoRef.current.length > 0) {
-      return catalogoPreparadoRef.current;
-    }
-
-    if (!preloadPromiseRef.current) {
-      preloadPromiseRef.current = loadAllArtigos({ pageSize: 1000 })
-        .then((data) => {
-          const prepared = prepareArticlesForSearch(data?.items || []);
-          catalogoPreparadoRef.current = prepared;
-          setCatalogoTotal(Number(data?.total || prepared.length || 0));
-          setCatalogoPesquisaPronto(true);
-          return prepared;
-        })
-        .catch((error) => {
-          preloadPromiseRef.current = null;
-          throw error;
-        });
-    }
-
-    return preloadPromiseRef.current;
+    const snapshot = await ensureCatalogoPesquisaPronto({ pageSize: 1000 });
+    setCatalogoTotal(snapshot.total || 0);
+    setCatalogoPesquisaPronto(snapshot.ready);
+    return snapshot;
   }, []);
 
   useEffect(() => {
@@ -99,14 +72,15 @@ export default function HomePage() {
   }, [pesquisa]);
 
   useEffect(() => {
-    const cancelIdle = scheduleIdleTask(() => {
-      ensureCatalogoPesquisa().catch((error) => {
+    preloadCatalogoPesquisa({ pageSize: 1000 })
+      .then((snapshot) => {
+        setCatalogoTotal(snapshot.total || 0);
+        setCatalogoPesquisaPronto(snapshot.ready);
+      })
+      .catch((error) => {
         console.warn("Não foi possível preparar a pesquisa rápida do catálogo.", error);
       });
-    });
-
-    return cancelIdle;
-  }, [ensureCatalogoPesquisa]);
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -121,22 +95,7 @@ export default function HomePage() {
       }
     }
 
-    async function syncCatalogoResumo() {
-      try {
-        if (catalogoPreparadoRef.current.length > 0) {
-          if (isMounted) setCatalogoTotal(catalogoPreparadoRef.current.length);
-          return;
-        }
-
-        const data = await searchArtigos({ q: "", limit: 1, offset: 0 });
-        if (isMounted) setCatalogoTotal(Number(data?.total || 0));
-      } catch (error) {
-        console.warn("Não foi possível carregar o resumo do catálogo.", error);
-      }
-    }
-
     syncHistoricoCampanhas();
-    syncCatalogoResumo();
 
     return () => {
       isMounted = false;
@@ -155,64 +114,26 @@ export default function HomePage() {
     }
 
     let isMounted = true;
-    const controller = new AbortController();
-
-    if (catalogoPreparadoRef.current.length > 0) {
-      const locais = filterAndRankPreparedArticles(
-        catalogoPreparadoRef.current,
-        pesquisaDebounced,
-        { limit: HOME_SUGGESTIONS_LIMIT },
-      );
-
-      suggestionsSnapshotRef.current = locais;
-      setSugestoes(locais);
-      setHighlightedIndex(locais.length ? 0 : -1);
-      setSugestoesErro("");
-      setSuggestionsLoading(false);
-      return () => {
-        isMounted = false;
-      };
-    }
-
-    const snapshot = filterAndRankPreparedArticles(
-      suggestionsSnapshotRef.current,
-      pesquisaDebounced,
-      { limit: HOME_SUGGESTIONS_LIMIT },
-    );
-
-    if (snapshot.length > 0) {
-      setSugestoes(snapshot);
-      setHighlightedIndex(0);
-    }
 
     async function syncSugestoes() {
       setSuggestionsLoading(true);
       setSugestoesErro("");
 
       try {
-        ensureCatalogoPesquisa().catch(() => {});
-
-        const data = await searchArtigos({
-          q: pesquisaDebounced.trim(),
-          limit: 20,
-          offset: 0,
-          signal: controller.signal,
-        });
+        if (!catalogoPesquisaPronto) {
+          await ensureCatalogoPesquisa();
+        }
 
         if (!isMounted) return;
 
-        const prepared = prepareArticlesForSearch(data?.items || []);
-        const ranked = filterAndRankPreparedArticles(prepared, pesquisaDebounced, {
+        const ranked = pesquisarNoCatalogoPreparado(pesquisaDebounced, {
           limit: HOME_SUGGESTIONS_LIMIT,
         });
 
-        suggestionsSnapshotRef.current = ranked;
         setSugestoes(ranked);
         setHighlightedIndex(ranked.length ? 0 : -1);
       } catch (error) {
-        if (error?.name === "AbortError") {
-          return;
-        }
+        console.error("Erro ao carregar sugestões da homepage.", error);
 
         if (isMounted) {
           setSugestoes([]);
@@ -228,7 +149,6 @@ export default function HomePage() {
 
     return () => {
       isMounted = false;
-      controller.abort();
     };
   }, [catalogoPesquisaPronto, ensureCatalogoPesquisa, pesquisaDebounced]);
 
@@ -309,6 +229,7 @@ export default function HomePage() {
       setArtigoSelecionado(artigoAtualizado);
       setSugestoes((prev) => mergeArtigosIntoList(prev, artigoAtualizado));
       syncUpdatedArtigoToCache(artigoAtualizado);
+      syncUpdatedArtigoToCatalogoPesquisa(artigoAtualizado);
     } catch (error) {
       console.error("Erro completo AI:", error);
       setAiErro(error?.message || "Erro ao obter dados do artigo.");

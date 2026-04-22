@@ -2,12 +2,13 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { BrowserMultiFormatReader } from "@zxing/browser";
 import { createWorker } from "tesseract.js";
 import { useLocation, useSearchParams } from "react-router-dom";
-import { loadAllArtigos } from "../services/artigosService";
 import {
-  filterAndRankPreparedArticles,
-  normalizeArticleCompact,
-  prepareArticlesForSearch,
-} from "../utils/articleSearch";
+  ensureCatalogoPesquisaPronto,
+  getCatalogoPesquisaSnapshot,
+  procurarArtigoExatoNoCatalogo,
+  pesquisarNoCatalogoPreparado,
+} from "../services/catalogoPesquisaService";
+import { filterAndRankPreparedArticles, normalizeArticleCompact } from "../utils/articleSearch";
 import "../styles/styles.css";
 
 const LIMITE_RESULTADOS = 100;
@@ -56,8 +57,9 @@ export default function EtiquetasCampanhaExcelPage() {
   const [pesquisaDebounced, setPesquisaDebounced] = useState("");
   const [selecionados, setSelecionados] = useState({});
   const [mensagem, setMensagem] = useState("");
-  const [artigos, setArtigos] = useState([]);
-  const [artigosLoading, setArtigosLoading] = useState(true);
+  const catalogoInicial = getCatalogoPesquisaSnapshot();
+  const [artigos, setArtigos] = useState(catalogoInicial.items || []);
+  const [artigosLoading, setArtigosLoading] = useState(!catalogoInicial.ready);
 
   const [menuScanAberto, setMenuScanAberto] = useState(false);
   const [scannerAberto, setScannerAberto] = useState(false);
@@ -111,10 +113,10 @@ export default function EtiquetasCampanhaExcelPage() {
 
     async function syncArtigos() {
       try {
-        const data = await loadAllArtigos({ pageSize: 1000 });
+        const snapshot = await ensureCatalogoPesquisaPronto({ pageSize: 1000 });
 
         if (ativo) {
-          setArtigos(data.items || []);
+          setArtigos(snapshot.items || []);
         }
       } catch (error) {
         console.error("Não foi possível carregar artigos.", error);
@@ -136,7 +138,7 @@ export default function EtiquetasCampanhaExcelPage() {
     };
   }, []);
 
-  const artigosPreparados = useMemo(() => prepareArticlesForSearch(artigos), [artigos]);
+  const artigosPreparados = useMemo(() => artigos, [artigos]);
 
   function pararScanner() {
     try {
@@ -178,9 +180,11 @@ export default function EtiquetasCampanhaExcelPage() {
     (codigo) => {
       const codigoNormalizado = normalizeArticleCompact(codigo);
 
-      const encontrado = artigosPreparados.find(
-        (item) => item._searchIndex?.codigoBarras?.compact === codigoNormalizado,
-      );
+      const encontrado =
+        procurarArtigoExatoNoCatalogo(codigoNormalizado) ||
+        artigosPreparados.find(
+          (item) => item._searchIndex?.codigoBarras?.compact === codigoNormalizado,
+        );
 
       abrirResultado(codigo, encontrado || null);
     },
@@ -265,6 +269,12 @@ export default function EtiquetasCampanhaExcelPage() {
     const termoCompacto = normalizeArticleCompact(pesquisaDebounced);
 
     if (termoCompacto.length < 2) return [];
+
+    const resultadosCatalogo = pesquisarNoCatalogoPreparado(pesquisaDebounced);
+
+    if (resultadosCatalogo.length > 0) {
+      return resultadosCatalogo;
+    }
 
     return filterAndRankPreparedArticles(artigosPreparados, pesquisaDebounced);
   }, [pesquisaDebounced, artigosPreparados]);

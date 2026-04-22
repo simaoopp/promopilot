@@ -1389,8 +1389,9 @@ app.get("/api/artigos", requireAuth, async (req, res) => {
     const q = normalizeSearchValue(req.query.q || "");
     const limit = Math.min(parsePositiveInt(req.query.limit, 100), 500);
     const offset = parsePositiveInt(req.query.offset, 0);
+    const includeCount = String(req.query.includeCount || "1") !== "0";
 
-    const result = await listArticles({ q, limit, offset });
+    const result = await listArticles({ q, limit, offset, includeCount });
 
     return res.json({
       ok: true,

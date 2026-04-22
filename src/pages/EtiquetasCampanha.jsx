@@ -6,7 +6,11 @@ import { printDocument } from "../utils/print";
 
 import Barcode from "../components/Barcode";
 import FilterMenu from "../components/FilterMenu";
-import { loadAllArtigos } from "../services/artigosService";
+import {
+  ensureCatalogoPesquisaPronto,
+  getCatalogoPesquisaSnapshot,
+  pesquisarNoCatalogoPreparado,
+} from "../services/catalogoPesquisaService";
 import { PRIMARY_TABLE_COLUMNS, TABLE_COLUMNS } from "../data/tableColumns";
 import SyncedHorizontalScroll from "../components/SyncedHorizontalScroll";
 import logo from "../logo.png";
@@ -420,8 +424,9 @@ export default function EtiquetasPage() {
   const [campanhaDataInicio, setCampanhaDataInicio] = useState("");
   const [campanhaDataFim, setCampanhaDataFim] = useState("");
   const [erroCampanha, setErroCampanha] = useState("");
-  const [catalogoArtigos, setCatalogoArtigos] = useState([]);
-  const [catalogoLoading, setCatalogoLoading] = useState(true);
+  const catalogoInicial = getCatalogoPesquisaSnapshot();
+  const [catalogoArtigos, setCatalogoArtigos] = useState(catalogoInicial.items || []);
+  const [catalogoLoading, setCatalogoLoading] = useState(!catalogoInicial.ready);
   const [catalogoErro, setCatalogoErro] = useState("");
 
   const [filtroAberto, setFiltroAberto] = useState(null);
@@ -467,16 +472,15 @@ export default function EtiquetasPage() {
     setErroCampanha("");
   }, [campanhaAntes, campanhaAtual]);
 
-
   useEffect(() => {
     let ativo = true;
 
     async function syncCatalogo() {
       try {
-        const data = await loadAllArtigos({ pageSize: 500 });
+        const snapshot = await ensureCatalogoPesquisaPronto({ pageSize: 1000 });
 
         if (ativo) {
-          setCatalogoArtigos(data.items || []);
+          setCatalogoArtigos(snapshot.items || []);
           setCatalogoErro("");
         }
       } catch (error) {
@@ -503,6 +507,12 @@ export default function EtiquetasPage() {
     const termo = normalizarTexto(pesquisaCampanha);
     if (termo.length < 2) return [];
 
+    const resultadosCatalogo = pesquisarNoCatalogoPreparado(pesquisaCampanha, { limit: 10 });
+
+    if (resultadosCatalogo.length > 0) {
+      return resultadosCatalogo;
+    }
+
     return catalogoArtigos
       .filter((item) => {
         const artigo = normalizarTexto(item.artigo);
@@ -523,38 +533,6 @@ export default function EtiquetasPage() {
     const atual = converterPreco(campanhaAtual);
     return Math.max(0, antes - atual);
   }, [campanhaAntes, campanhaAtual]);
-
-
-  useEffect(() => {
-    let ativo = true;
-
-    async function syncCatalogo() {
-      try {
-        const data = await loadAllArtigos({ pageSize: 500 });
-
-        if (ativo) {
-          setCatalogoArtigos(data.items || []);
-          setCatalogoErro("");
-        }
-      } catch (error) {
-        console.error("Não foi possível carregar o catálogo da campanha.", error);
-
-        if (ativo) {
-          setCatalogoErro("Não foi possível carregar o catálogo de artigos.");
-        }
-      } finally {
-        if (ativo) {
-          setCatalogoLoading(false);
-        }
-      }
-    }
-
-    syncCatalogo();
-
-    return () => {
-      ativo = false;
-    };
-  }, []);
 
   const pvpBaseCampanha = useMemo(
     () => converterPreco(artigoCampanhaSelecionado?.pvp2 || ""),

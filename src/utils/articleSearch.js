@@ -80,6 +80,55 @@ export function prepareArticlesForSearch(items = []) {
   );
 }
 
+function addPreparedValueToIndex(map, value, item) {
+  if (!value || map.has(value)) {
+    return;
+  }
+
+  map.set(value, item);
+}
+
+export function buildPreparedArticlesIndex(items = []) {
+  const preparedItems = Array.isArray(items) ? items : [];
+  const byArtigo = new Map();
+  const byCodigoBarras = new Map();
+  const byModelo = new Map();
+
+  preparedItems.forEach((item, index) => {
+    const prepared = item?._searchIndex ? item : prepareArticleForSearch(item, index);
+
+    addPreparedValueToIndex(byArtigo, prepared?._searchIndex?.artigo?.compact, prepared);
+    addPreparedValueToIndex(byCodigoBarras, prepared?._searchIndex?.codigoBarras?.compact, prepared);
+    addPreparedValueToIndex(byModelo, prepared?._searchIndex?.modelo?.compact, prepared);
+  });
+
+  return {
+    byArtigo,
+    byCodigoBarras,
+    byModelo,
+  };
+}
+
+export function findPreparedArticleByExactLookup(indexOrItems, rawQuery = "") {
+  const compact = normalizeArticleCompact(rawQuery);
+
+  if (!compact) {
+    return null;
+  }
+
+  const index =
+    indexOrItems?.byArtigo && indexOrItems?.byCodigoBarras && indexOrItems?.byModelo
+      ? indexOrItems
+      : buildPreparedArticlesIndex(indexOrItems);
+
+  return (
+    index.byCodigoBarras.get(compact) ||
+    index.byArtigo.get(compact) ||
+    index.byModelo.get(compact) ||
+    null
+  );
+}
+
 export function scorePreparedArticle(item = {}, rawQuery = "") {
   const search = item._searchIndex || prepareArticleForSearch(item)._searchIndex;
   const normalized = normalizeArticleText(rawQuery);

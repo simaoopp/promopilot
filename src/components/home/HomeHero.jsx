@@ -50,6 +50,7 @@ export default function HomeHero({
               >
                 <strong>{item.artigo}</strong>
                 <span>{item.descricao}</span>
+                {item.codigoBarras && <small>EAN: {item.codigoBarras}</small>}
               </button>
             ))}
           </div>

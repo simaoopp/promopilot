@@ -1,9 +1,10 @@
-import React, { Suspense, lazy, useMemo, useState } from "react";
+import React, { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import Sidebar from "./components/Sidebar";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { useAuth } from "./context/AuthContext";
 import { resolveInitialRoute } from "./utils/accessControl";
+import { preloadCatalogoPesquisa } from "./services/catalogoPesquisaService";
 import logo from "./logo.png";
 import "./styles/styles.css";
 
@@ -21,6 +22,17 @@ export default function App() {
   const [menuAberto, setMenuAberto] = useState(false);
   const { user, loadingAuth, loadingProfile, onboardingRequired } = useAuth();
   const rotaInicial = useMemo(() => resolveInitialRoute({ user, onboardingRequired }), [user, onboardingRequired]);
+
+  useEffect(() => {
+    if (!user || onboardingRequired) {
+      return;
+    }
+
+    preloadCatalogoPesquisa({ pageSize: 1000 }).catch((error) => {
+      console.warn("Não foi possível pré-carregar o catálogo de artigos.", error);
+    });
+  }, [onboardingRequired, user]);
+
   if (loadingAuth || (user && loadingProfile)) return <PageFallback />;
   return <div className={user ? "app" : "app app-login"}>
     {user && !onboardingRequired && <Sidebar menuAberto={menuAberto} setMenuAberto={setMenuAberto} titulo="Expert Administração" />}
