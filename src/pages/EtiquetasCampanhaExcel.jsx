@@ -339,6 +339,28 @@ function normalizarComparacaoShopping(valor, nossoPreco, menorConcorrente) {
   return "Sem comparação";
 }
 
+function obterConcorrenciaReferenciaShopping(item) {
+  const valores = [item?.worten, item?.radioPopular]
+    .map((valor) => parseNumero(valor))
+    .filter((valor) => Number.isFinite(valor) && valor > 0);
+
+  if (!valores.length) return 0;
+  return Math.min(...valores);
+}
+
+function usaPaginaPredefinidaShopping(item) {
+  if (!item || item.tipo_registo !== EXCEL_FORMATS.SHOPPING) return true;
+
+  const nossoPreco = parseNumero(item.nossoPreco);
+  const concorrenciaReferencia = obterConcorrenciaReferenciaShopping(item);
+
+  if (!(nossoPreco > 0) || !(concorrenciaReferencia > 0)) {
+    return false;
+  }
+
+  return concorrenciaReferencia >= nossoPreco;
+}
+
 function detetarFormatoExcel(rows = []) {
   if (!rows.length) return EXCEL_FORMATS.CAMPANHA;
 
@@ -825,8 +847,18 @@ export default function EtiquetasExcelPage() {
     [dados],
   );
 
+  const selecionadosElegiveisImpressao = useMemo(
+    () =>
+      selecionados.filter(
+        (item) =>
+          item.tipo_registo !== EXCEL_FORMATS.SHOPPING ||
+          usaPaginaPredefinidaShopping(item),
+      ),
+    [selecionados],
+  );
+
   const selecionadosComFormato = useMemo(() => {
-    return selecionados.map((item) => ({
+    return selecionadosElegiveisImpressao.map((item) => ({
       ...item,
       formato_final: obterFormatoFinalEtiqueta(
         item,
@@ -834,7 +866,11 @@ export default function EtiquetasExcelPage() {
         formatoEtiqueta,
       ),
     }));
-  }, [selecionados, formatoAutomaticoAtivo, formatoEtiqueta]);
+  }, [
+    selecionadosElegiveisImpressao,
+    formatoAutomaticoAtivo,
+    formatoEtiqueta,
+  ]);
 
   const selecionadosA5 = useMemo(
     () => selecionadosComFormato.filter((item) => item.formato_final === "a5"),
@@ -1022,6 +1058,23 @@ export default function EtiquetasExcelPage() {
         setPopupArtigosInvalidosAberto(true);
         return;
       }
+    }
+
+    if (modeloImportado === EXCEL_FORMATS.SHOPPING) {
+      const invalidos = selecionados.filter(
+        (item) => !usaPaginaPredefinidaShopping(item),
+      );
+
+      if (invalidos.length > 0) {
+        setArtigosInvalidosPopup(invalidos);
+        setPopupArtigosInvalidosAberto(true);
+        return;
+      }
+    }
+
+    if (selecionadosElegiveisImpressao.length === 0) {
+      toast.warning("Não existem etiquetas válidas para imprimir.");
+      return;
     }
 
     await guardarCampanhaNoHistorico("impressao");
@@ -1578,8 +1631,9 @@ export default function EtiquetasExcelPage() {
             </div>
 
             <p className="popup-text">
-              Os artigos abaixo foram selecionados para impressão, mas têm o
-              PVP2 atual maior ou igual ao PVP2 antes.
+              {modeloImportado === EXCEL_FORMATS.SHOPPING
+                ? "Os artigos abaixo não entram na página predefinida porque o menor preço da concorrência está abaixo do nosso preço."
+                : "Os artigos abaixo foram selecionados para impressão, mas têm o PVP2 atual maior ou igual ao PVP2 antes."}
             </p>
 
             <div className="popup-actions">
@@ -1606,8 +1660,16 @@ export default function EtiquetasExcelPage() {
                   <tr>
                     <th>Código</th>
                     <th>Designação</th>
-                    <th>PVP2 Antes</th>
-                    <th>PVP2 Atual</th>
+                    <th>
+                      {modeloImportado === EXCEL_FORMATS.SHOPPING
+                        ? "Nosso preço"
+                        : "PVP2 Antes"}
+                    </th>
+                    <th>
+                      {modeloImportado === EXCEL_FORMATS.SHOPPING
+                        ? "Menor concorrência"
+                        : "PVP2 Atual"}
+                    </th>
                   </tr>
                 </thead>
 
@@ -1616,8 +1678,20 @@ export default function EtiquetasExcelPage() {
                     <tr key={item.id}>
                       <td>{item.codigo}</td>
                       <td>{item.descricao}</td>
-                      <td>{formatarEuro(item.antes)}€</td>
-                      <td>{formatarEuro(item.atual)}€</td>
+                      <td>
+                        {formatarEuro(
+                          modeloImportado === EXCEL_FORMATS.SHOPPING
+                            ? item.nossoPreco
+                            : item.antes,
+                        )}€
+                      </td>
+                      <td>
+                        {formatarEuro(
+                          modeloImportado === EXCEL_FORMATS.SHOPPING
+                            ? obterConcorrenciaReferenciaShopping(item)
+                            : item.atual,
+                        )}€
+                      </td>
                     </tr>
                   ))}
                 </tbody>
