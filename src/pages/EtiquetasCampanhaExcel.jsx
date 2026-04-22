@@ -19,8 +19,71 @@ import {
   compararNumero,
   dividirEmPaginas,
 } from "../utils/filters";
-import { PRIMARY_TABLE_COLUMNS, TABLE_COLUMNS } from "../data/tableColumns";
 import SyncedHorizontalScroll from "../components/SyncedHorizontalScroll";
+
+const EXCEL_FORMATS = {
+  CAMPANHA: "campanha",
+  SHOPPING: "shopping",
+};
+
+const SHOPPING_PRICE_SOURCE_OPTIONS = [
+  { value: "nossoPreco", label: "Nosso preço" },
+  { value: "worten", label: "Worten" },
+  { value: "radioPopular", label: "Rádio Popular" },
+  { value: "manual", label: "Outro" },
+];
+
+const CAMPANHA_TABLE_COLUMNS = [
+  { key: "codigo", label: "CÓDIGO", tipo: "text" },
+  { key: "descricao", label: "DESCRIÇÃO", tipo: "text" },
+  { key: "pn", label: "PN", tipo: "text" },
+  { key: "ean", label: "EAN" },
+  { key: "antes", label: "PVP2 ANTES", tipo: "number" },
+  { key: "atual", label: "PVP2 ATUAL", tipo: "number" },
+  { key: "pv3", label: "PV3" },
+  { key: "estado", label: "ESTADO", tipo: "text" },
+  { key: "ae", label: "AE", tipo: "number" },
+  { key: "aea", label: "AEA", tipo: "number" },
+  { key: "aev", label: "AEV", tipo: "number" },
+  { key: "a10", label: "A10", tipo: "number" },
+  { key: "a1e", label: "A1E", tipo: "number" },
+  { key: "data", label: "DATA" },
+  { key: "dataInicio", label: "DATA INÍCIO" },
+  { key: "dataFim", label: "DATA FIM" },
+  { key: "alterado", label: "ALTERADO PRIMAVERA" },
+  { key: "info", label: "INFORMAÇÃO", tipo: "text" },
+];
+
+const CAMPANHA_PRIMARY_COLUMNS = [
+  { key: "codigo", label: "ARTIGO", tipo: "text" },
+  { key: "descricao", label: "DESCRIÇÃO", tipo: "text" },
+  { key: "antes", label: "PVP ANTES", tipo: "number" },
+  { key: "atual", label: "PVP ATUAL", tipo: "number" },
+  { key: "dataInicio", label: "DATA INÍCIO" },
+  { key: "dataFim", label: "DATA FIM" },
+];
+
+const SHOPPING_TABLE_COLUMNS = [
+  { key: "codigo", label: "NOSSO CÓDIGO", tipo: "text" },
+  { key: "descricao", label: "DESCRIÇÃO", tipo: "text" },
+  { key: "ean", label: "EAN" },
+  { key: "nossoPreco", label: "NOSSO PREÇO", tipo: "number" },
+  { key: "worten", label: "WORTEN", tipo: "number" },
+  { key: "radioPopular", label: "RÁDIO POPULAR", tipo: "number" },
+  { key: "precoSemDescontoSelecionado", label: "PREÇO SEM DESCONTO" },
+  { key: "precoComDescontoSelecionado", label: "PREÇO COM DESCONTO" },
+  { key: "menorConcorrente", label: "MENOR CONCORRÊNCIA", tipo: "number" },
+  { key: "comparacao", label: "COMPARAÇÃO", tipo: "text" },
+];
+
+const SHOPPING_PRIMARY_COLUMNS = [
+  { key: "codigo", label: "ARTIGO", tipo: "text" },
+  { key: "descricao", label: "DESCRIÇÃO", tipo: "text" },
+  { key: "nossoPreco", label: "NOSSO PREÇO", tipo: "number" },
+  { key: "precoSemDescontoSelecionado", label: "PREÇO SEM DESCONTO" },
+  { key: "precoComDescontoSelecionado", label: "PREÇO COM DESCONTO" },
+  { key: "comparacao", label: "COMPARAÇÃO", tipo: "text" },
+];
 
 /* =========================================================
    AUTO TEXT
@@ -87,6 +150,39 @@ function PrecoAtualAuto({ valor, formatoEtiqueta }) {
   );
 }
 
+function ShoppingPriceAuto({ valor, formatoEtiqueta }) {
+  return (
+    <AutoText
+      texto={`${formatarEuro(valor)}€`}
+      className="shopping-main-price"
+      min={formatoEtiqueta === "a5" ? 62 : 42}
+      max={formatoEtiqueta === "a5" ? 88 : 64}
+    />
+  );
+}
+
+function ShoppingBeforePriceAuto({ valor, formatoEtiqueta }) {
+  return (
+    <AutoText
+      texto={valor > 0 ? `${formatarEuro(valor)}€` : "—"}
+      className="shopping-before-price"
+      min={formatoEtiqueta === "a5" ? 34 : 24}
+      max={formatoEtiqueta === "a5" ? 48 : 34}
+    />
+  );
+}
+
+function ShoppingCardPriceAuto({ valor, formatoEtiqueta }) {
+  return (
+    <AutoText
+      texto={valor > 0 ? `${formatarEuro(valor)}€` : "—"}
+      className="shopping-card-price"
+      min={formatoEtiqueta === "a5" ? 22 : 16}
+      max={formatoEtiqueta === "a5" ? 34 : 24}
+    />
+  );
+}
+
 /* =========================================================
    HELPERS
    ========================================================= */
@@ -97,7 +193,8 @@ function normalizarCabecalho(texto) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/\s+/g, " ")
-    .replace(/_/g, " ");
+    .replace(/_/g, " ")
+    .trim();
 }
 
 function normalizarTexto(texto) {
@@ -117,11 +214,27 @@ function obterValor(normalizado, chaves = [], fallback = "") {
   return fallback;
 }
 
+function formatarValorTabelaMoeda(valor) {
+  return Number(valor) > 0 ? `${formatarEuro(valor)}€` : "—";
+}
+
 function renderExcelTableCell(item, columnKey, formatoPrevisto = "") {
   switch (columnKey) {
     case "antes":
     case "atual":
-      return `${formatarEuro(item[columnKey])}€`;
+    case "nossoPreco":
+    case "worten":
+    case "radioPopular":
+    case "menorConcorrente":
+      return formatarValorTabelaMoeda(item[columnKey]);
+    case "precoSemDescontoSelecionado":
+      return formatarValorTabelaMoeda(
+        obterValorPrecoConfigurado(item, "semDesconto"),
+      );
+    case "precoComDescontoSelecionado":
+      return formatarValorTabelaMoeda(
+        obterValorPrecoConfigurado(item, "comDesconto"),
+      );
     case "info": {
       const infoBase = item.info || "";
       return `${infoBase}${infoBase ? " · " : ""}${formatoPrevisto.toUpperCase()}`;
@@ -131,14 +244,142 @@ function renderExcelTableCell(item, columnKey, formatoPrevisto = "") {
   }
 }
 
-
 function formatarDataDiaMes(data) {
   const dia = String(data.getDate()).padStart(2, "0");
   const mes = String(data.getMonth() + 1).padStart(2, "0");
   return `${dia}/${mes}`;
 }
 
-function mapearLinhaExcel(row, index) {
+function formatarDataCompleta(data) {
+  return `${formatarDataDiaMes(data)}/${data.getFullYear()}`;
+}
+
+function normalizarCodigoTexto(valor) {
+  if (valor === null || valor === undefined) return "";
+  return String(valor).trim();
+}
+
+function normalizarEan(valor) {
+  if (valor === null || valor === undefined || valor === "") return "";
+  if (typeof valor === "number") {
+    return String(Math.trunc(valor));
+  }
+  return String(valor).replace(/\D/g, "");
+}
+
+function limparComparador(valor) {
+  const texto = normalizarTexto(valor);
+  if (!texto || texto === "x" || texto === "-") return 0;
+  return parseNumero(valor);
+}
+
+function obterMenorPrecoConcorrencia(...valores) {
+  const numeros = valores
+    .map((valor) => parseNumero(valor))
+    .filter((valor) => Number.isFinite(valor) && valor > 0);
+
+  if (!numeros.length) return 0;
+  return Math.min(...numeros);
+}
+
+function obterOpcoesPrecoShopping(item) {
+  return [
+    {
+      source: "nossoPreco",
+      label: "Nosso preço",
+      value: parseNumero(item?.nossoPreco),
+    },
+    {
+      source: "worten",
+      label: "Worten",
+      value: parseNumero(item?.worten),
+    },
+    {
+      source: "radioPopular",
+      label: "Rádio Popular",
+      value: parseNumero(item?.radioPopular),
+    },
+  ];
+}
+
+function obterFontePrecoExtremo(item, tipo = "max") {
+  const candidatos = obterOpcoesPrecoShopping(item).filter(
+    (opcao) => Number.isFinite(opcao.value) && opcao.value > 0,
+  );
+
+  if (!candidatos.length) return "nossoPreco";
+
+  const valorExtremo =
+    tipo === "min"
+      ? Math.min(...candidatos.map((opcao) => opcao.value))
+      : Math.max(...candidatos.map((opcao) => opcao.value));
+
+  return (
+    candidatos.find((opcao) => opcao.value === valorExtremo)?.source ||
+    "nossoPreco"
+  );
+}
+
+function obterLabelFontePrecoShopping(source) {
+  return (
+    SHOPPING_PRICE_SOURCE_OPTIONS.find((opcao) => opcao.value === source)
+      ?.label || "Outro"
+  );
+}
+
+function obterValorPrecoConfigurado(item, tipo = "semDesconto") {
+  const isSemDesconto = tipo === "semDesconto";
+  const campoFonte = isSemDesconto
+    ? "precoSemDescontoFonte"
+    : "precoComDescontoFonte";
+  const campoManual = isSemDesconto
+    ? "precoSemDescontoManual"
+    : "precoComDescontoManual";
+  const fallbackFonte = obterFontePrecoExtremo(item, isSemDesconto ? "max" : "min");
+  const fonte = item?.[campoFonte] || fallbackFonte;
+
+  if (fonte === "manual") {
+    return parseNumero(item?.[campoManual]);
+  }
+
+  return parseNumero(item?.[fonte]);
+}
+
+function normalizarComparacaoShopping(valor, nossoPreco, menorConcorrente) {
+  const texto = normalizarTexto(valor);
+
+  if (texto.includes("mais baixo")) return "Preço mais baixo";
+  if (texto.includes("mais alto")) return "Preço mais alto";
+  if (texto.includes("igual")) return "Igual";
+
+  if (nossoPreco > 0 && menorConcorrente > 0) {
+    if (nossoPreco < menorConcorrente) return "Preço mais baixo";
+    if (nossoPreco > menorConcorrente) return "Preço mais alto";
+    return "Igual";
+  }
+
+  return "Sem comparação";
+}
+
+function detetarFormatoExcel(rows = []) {
+  if (!rows.length) return EXCEL_FORMATS.CAMPANHA;
+
+  const cabecalhos = Object.keys(rows[0] || {}).map((key) =>
+    normalizarCabecalho(key),
+  );
+
+  const temCabecalhoShopping =
+    cabecalhos.includes("NOSSO CODIGO") ||
+    cabecalhos.includes("NOSSO PRECO") ||
+    cabecalhos.includes("WORTEN") ||
+    cabecalhos.includes("RADIO POPULAR");
+
+  return temCabecalhoShopping
+    ? EXCEL_FORMATS.SHOPPING
+    : EXCEL_FORMATS.CAMPANHA;
+}
+
+function mapearLinhaExcelCampanha(row, index) {
   const normalizado = {};
 
   Object.keys(row || {}).forEach((key) => {
@@ -146,7 +387,8 @@ function mapearLinhaExcel(row, index) {
   });
 
   return {
-    id: `excel-${index}`,
+    id: `excel-campanha-${index}`,
+    tipo_registo: EXCEL_FORMATS.CAMPANHA,
     codigo: obterValor(normalizado, ["CODIGO", "CÓDIGO", "ARTIGO"], ""),
     descricao: obterValor(
       normalizado,
@@ -189,16 +431,87 @@ function mapearLinhaExcel(row, index) {
   };
 }
 
+function mapearLinhaExcelShopping(row, index) {
+  const normalizado = {};
+
+  Object.keys(row || {}).forEach((key) => {
+    normalizado[normalizarCabecalho(key)] = row[key];
+  });
+
+  const nossoPreco = parseNumero(
+    obterValor(normalizado, ["NOSSO PRECO", "NOSSO PREÇO"], 0),
+  );
+  const worten = limparComparador(obterValor(normalizado, ["WORTEN"], 0));
+  const radioPopular = limparComparador(
+    obterValor(normalizado, ["RADIO POPULAR", "RÁDIO POPULAR"], 0),
+  );
+  const menorConcorrente = obterMenorPrecoConcorrencia(worten, radioPopular);
+  const comparacao = normalizarComparacaoShopping(
+    obterValor(normalizado, ["OBSERVACOES", "OBSERVAÇÕES", "EMPTY 9", "EMPTY 8"], ""),
+    nossoPreco,
+    menorConcorrente,
+  );
+
+  const baseItem = {
+    id: `excel-shopping-${index}`,
+    tipo_registo: EXCEL_FORMATS.SHOPPING,
+    codigo: normalizarCodigoTexto(
+      obterValor(normalizado, ["NOSSO CODIGO", "NOSSO CÓDIGO", "CODIGO"], ""),
+    ),
+    descricao: obterValor(
+      normalizado,
+      ["DESCRICAO", "DESCRIÇÃO", "DESIGNACAO", "DESIGNAÇÃO"],
+      "",
+    ),
+    pn: "",
+    ean: normalizarEan(obterValor(normalizado, ["EAN"], "")),
+    antes: 0,
+    atual: 0,
+    pv3: "",
+    estado: "",
+    ae: 0,
+    aea: 0,
+    aev: 0,
+    a10: 0,
+    a1e: 0,
+    data: "",
+    dataInicio: "",
+    dataFim: "",
+    alterado: "",
+    info: "SHOPPING",
+    nossoPreco,
+    worten,
+    radioPopular,
+    menorConcorrente,
+    comparacao,
+    selecionado: false,
+  };
+
+  return {
+    ...baseItem,
+    precoSemDescontoFonte: obterFontePrecoExtremo(baseItem, "max"),
+    precoSemDescontoManual: "",
+    precoComDescontoFonte: obterFontePrecoExtremo(baseItem, "min"),
+    precoComDescontoManual: "",
+  };
+}
+
+function mapearLinhaExcel(row, index, formato) {
+  return formato === EXCEL_FORMATS.SHOPPING
+    ? mapearLinhaExcelShopping(row, index)
+    : mapearLinhaExcelCampanha(row, index);
+}
+
 function obterFormatoAutomaticoEtiqueta(descricao = "") {
   const texto = normalizarTexto(descricao);
 
   const palavrasA5 = [
-     "Máq. Lavar Loiça",
-    "Máq. Lavar Louça",
-    "Máq. Secar Roupa",
-    "Máq. Secar",
-    "Máq. Lavar Roupa",
-    "Máq. Lavar",
+    "máq. lavar loiça",
+    "máq. lavar louça",
+    "máq. secar roupa",
+    "máq. secar",
+    "máq. lavar roupa",
+    "máq. lavar",
     "maquina de lavar",
     "maquinas de lavar",
     "máquina de lavar",
@@ -294,6 +607,44 @@ function obterFormatoFinalEtiqueta(
   return obterFormatoAutomaticoEtiqueta(item.descricao);
 }
 
+function obterResumoComparacao(item) {
+  if (item.comparacao === "Preço mais baixo") {
+    return "O nosso preço está abaixo da concorrência.";
+  }
+
+  if (item.comparacao === "Preço mais alto") {
+    return "O nosso preço está acima do melhor valor encontrado.";
+  }
+
+  if (item.comparacao === "Igual") {
+    return "O nosso preço está alinhado com a melhor concorrência.";
+  }
+
+  return "Sem dados suficientes para comparação automática.";
+}
+
+function obterResumoConfiguracaoShopping(item) {
+  return `Sem desconto: ${obterLabelFontePrecoShopping(
+    item.precoSemDescontoFonte,
+  )} · Com desconto: ${obterLabelFontePrecoShopping(
+    item.precoComDescontoFonte,
+  )}`;
+}
+
+function obterBadgeEtiquetaShopping(precoSemDesconto, precoComDesconto) {
+  if (precoSemDesconto > 0 && precoComDesconto > 0) {
+    const diferenca = Math.max(0, precoSemDesconto - precoComDesconto);
+
+    if (diferenca > 0) {
+      return `Poupa ${formatarEuro(diferenca)}€`;
+    }
+
+    return "Sem diferença";
+  }
+
+  return "Preço configurado";
+}
+
 /* =========================================================
    COMPONENTE
    ========================================================= */
@@ -307,6 +658,7 @@ export default function EtiquetasExcelPage() {
   const [nomeFicheiro, setNomeFicheiro] = useState("");
   const [formatoEtiqueta, setFormatoEtiqueta] = useState("a6");
   const [formatoAutomaticoAtivo, setFormatoAutomaticoAtivo] = useState(false);
+  const [modeloImportado, setModeloImportado] = useState(EXCEL_FORMATS.CAMPANHA);
 
   const [popupArtigosInvalidosAberto, setPopupArtigosInvalidosAberto] =
     useState(false);
@@ -324,15 +676,37 @@ export default function EtiquetasExcelPage() {
     pn: { contains: "", equals: "" },
     estado: { contains: "", equals: "" },
     info: { contains: "", equals: "" },
+    comparacao: { contains: "", equals: "" },
     ae: { op: "", valor: "" },
     aea: { op: "", valor: "" },
     aev: { op: "", valor: "" },
     a10: { op: "", valor: "" },
     a1e: { op: "", valor: "" },
+    antes: { op: "", valor: "" },
+    atual: { op: "", valor: "" },
+    nossoPreco: { op: "", valor: "" },
+    worten: { op: "", valor: "" },
+    radioPopular: { op: "", valor: "" },
+    menorConcorrente: { op: "", valor: "" },
   });
   const [mostrarTabelaCompleta, setMostrarTabelaCompleta] = useState(false);
   const filterButtonRefs = useRef({});
 
+  const colunasTabelaAtivas = useMemo(
+    () =>
+      modeloImportado === EXCEL_FORMATS.SHOPPING
+        ? SHOPPING_TABLE_COLUMNS
+        : CAMPANHA_TABLE_COLUMNS,
+    [modeloImportado],
+  );
+
+  const colunasResumoAtivas = useMemo(
+    () =>
+      modeloImportado === EXCEL_FORMATS.SHOPPING
+        ? SHOPPING_PRIMARY_COLUMNS
+        : CAMPANHA_PRIMARY_COLUMNS,
+    [modeloImportado],
+  );
 
   function atualizarFiltroPopup(campo, chave, valor) {
     setFiltros((prev) => ({
@@ -353,35 +727,35 @@ export default function EtiquetasExcelPage() {
   }
 
   const ordenarLista = useCallback(
-  (lista) => {
-    if (!ordenacao.coluna || !ordenacao.direcao) return lista;
+    (lista) => {
+      if (!ordenacao.coluna || !ordenacao.direcao) return lista;
 
-    const copia = [...lista];
+      const copia = [...lista];
 
-    copia.sort((a, b) => {
-      const va = a[ordenacao.coluna];
-      const vb = b[ordenacao.coluna];
+      copia.sort((a, b) => {
+        const va = a[ordenacao.coluna];
+        const vb = b[ordenacao.coluna];
 
-      const aNum = Number(va);
-      const bNum = Number(vb);
-      const ambosNumeros = !Number.isNaN(aNum) && !Number.isNaN(bNum);
+        const aNum = Number(va);
+        const bNum = Number(vb);
+        const ambosNumeros = !Number.isNaN(aNum) && !Number.isNaN(bNum);
 
-      if (ambosNumeros) {
-        return ordenacao.direcao === "asc" ? aNum - bNum : bNum - aNum;
-      }
+        if (ambosNumeros) {
+          return ordenacao.direcao === "asc" ? aNum - bNum : bNum - aNum;
+        }
 
-      const aText = String(va || "").toLowerCase();
-      const bText = String(vb || "").toLowerCase();
+        const aText = String(va || "").toLowerCase();
+        const bText = String(vb || "").toLowerCase();
 
-      return ordenacao.direcao === "asc"
-        ? aText.localeCompare(bText, "pt")
-        : bText.localeCompare(aText, "pt");
-    });
+        return ordenacao.direcao === "asc"
+          ? aText.localeCompare(bText, "pt")
+          : bText.localeCompare(aText, "pt");
+      });
 
-    return copia;
-  },
-  [ordenacao],
-);
+      return copia;
+    },
+    [ordenacao],
+  );
 
   async function carregarExcel(event) {
     try {
@@ -401,16 +775,27 @@ export default function EtiquetasExcelPage() {
 
       const sheet = workbook.Sheets[nomeSheet];
       const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+      const formatoExcel = detetarFormatoExcel(rows);
 
       const linhas = rows
-        .map((row, index) => mapearLinhaExcel(row, index))
+        .map((row, index) => mapearLinhaExcel(row, index, formatoExcel))
         .filter((item) => item.codigo || item.descricao || item.ean);
 
       if (!linhas.length) {
         throw new Error("Sem linhas válidas");
       }
 
+      setModeloImportado(formatoExcel);
+      setMostrarTabelaCompleta(false);
+      setOrdenacao({ coluna: "", direcao: "" });
+      setFiltroAberto(null);
       setDados(linhas);
+
+      toast.success(
+        formatoExcel === EXCEL_FORMATS.SHOPPING
+          ? "Excel Shopping importado com sucesso."
+          : "Excel de campanha importado com sucesso.",
+      );
     } catch (error) {
       console.error("Erro ao ler Excel:", error);
       toast.error("Não foi possível ler o ficheiro Excel.");
@@ -421,35 +806,73 @@ export default function EtiquetasExcelPage() {
   }
 
   const dadosFiltrados = useMemo(() => {
-  const filtrados = dados.filter((item) => {
-    const codigoOk = aplicarFiltroTexto(item.codigo, filtros.codigo);
-    const descricaoOk = aplicarFiltroTexto(item.descricao, filtros.descricao);
-    const pnOk = aplicarFiltroTexto(item.pn, filtros.pn);
-    const estadoOk = aplicarFiltroTexto(item.estado, filtros.estado);
-    const infoOk = aplicarFiltroTexto(item.info, filtros.info);
+    const filtrados = dados.filter((item) => {
+      const codigoOk = aplicarFiltroTexto(item.codigo, filtros.codigo);
+      const descricaoOk = aplicarFiltroTexto(item.descricao, filtros.descricao);
 
-    const aeOk = compararNumero(item.ae, filtros.ae.op, filtros.ae.valor);
-    const aeaOk = compararNumero(item.aea, filtros.aea.op, filtros.aea.valor);
-    const aevOk = compararNumero(item.aev, filtros.aev.op, filtros.aev.valor);
-    const a10Ok = compararNumero(item.a10, filtros.a10.op, filtros.a10.valor);
-    const a1eOk = compararNumero(item.a1e, filtros.a1e.op, filtros.a1e.valor);
+      if (modeloImportado === EXCEL_FORMATS.SHOPPING) {
+        const comparacaoOk = aplicarFiltroTexto(
+          item.comparacao,
+          filtros.comparacao,
+        );
+        const nossoPrecoOk = compararNumero(
+          item.nossoPreco,
+          filtros.nossoPreco.op,
+          filtros.nossoPreco.valor,
+        );
+        const wortenOk = compararNumero(
+          item.worten,
+          filtros.worten.op,
+          filtros.worten.valor,
+        );
+        const radioPopularOk = compararNumero(
+          item.radioPopular,
+          filtros.radioPopular.op,
+          filtros.radioPopular.valor,
+        );
+        const menorConcorrenteOk = compararNumero(
+          item.menorConcorrente,
+          filtros.menorConcorrente.op,
+          filtros.menorConcorrente.valor,
+        );
 
-    return (
-      codigoOk &&
-      descricaoOk &&
-      pnOk &&
-      estadoOk &&
-      infoOk &&
-      aeOk &&
-      aeaOk &&
-      aevOk &&
-      a10Ok &&
-      a1eOk
-    );
-  });
+        return (
+          codigoOk &&
+          descricaoOk &&
+          comparacaoOk &&
+          nossoPrecoOk &&
+          wortenOk &&
+          radioPopularOk &&
+          menorConcorrenteOk
+        );
+      }
 
-  return ordenarLista(filtrados);
-}, [dados, filtros, ordenarLista]);
+      const pnOk = aplicarFiltroTexto(item.pn, filtros.pn);
+      const estadoOk = aplicarFiltroTexto(item.estado, filtros.estado);
+      const infoOk = aplicarFiltroTexto(item.info, filtros.info);
+
+      const aeOk = compararNumero(item.ae, filtros.ae.op, filtros.ae.valor);
+      const aeaOk = compararNumero(item.aea, filtros.aea.op, filtros.aea.valor);
+      const aevOk = compararNumero(item.aev, filtros.aev.op, filtros.aev.valor);
+      const a10Ok = compararNumero(item.a10, filtros.a10.op, filtros.a10.valor);
+      const a1eOk = compararNumero(item.a1e, filtros.a1e.op, filtros.a1e.valor);
+
+      return (
+        codigoOk &&
+        descricaoOk &&
+        pnOk &&
+        estadoOk &&
+        infoOk &&
+        aeOk &&
+        aeaOk &&
+        aevOk &&
+        a10Ok &&
+        a1eOk
+      );
+    });
+
+    return ordenarLista(filtrados);
+  }, [dados, filtros, modeloImportado, ordenarLista]);
 
   const selecionados = useMemo(
     () => dados.filter((item) => item.selecionado),
@@ -492,6 +915,12 @@ export default function EtiquetasExcelPage() {
       prev.map((item) =>
         item.id === id ? { ...item, selecionado: !item.selecionado } : item,
       ),
+    );
+  }
+
+  function atualizarCampoShopping(id, campo, valor) {
+    setDados((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, [campo]: valor } : item)),
     );
   }
 
@@ -551,7 +980,7 @@ export default function EtiquetasExcelPage() {
       dados: itensSelecionados,
       anoValidade,
       formatoEtiqueta,
-      origem,
+      origem: `${origem}-${modeloImportado}`,
       createdBy: nomeCompleto || "Utilizador",
       createdByEmail: user?.email || "",
       store,
@@ -618,30 +1047,94 @@ export default function EtiquetasExcelPage() {
 
     await printDocument();
   }
+
   async function imprimirSelecionados() {
     if (selecionados.length === 0) {
       toast.warning("Seleciona pelo menos um artigo.");
       return;
     }
 
-    const invalidos = selecionados.filter(
-      (item) =>
-        Number(item.antes) > 0 &&
-        Number(item.atual) > 0 &&
-        Number(item.antes) <= Number(item.atual),
-    );
+    if (modeloImportado === EXCEL_FORMATS.CAMPANHA) {
+      const invalidos = selecionados.filter(
+        (item) =>
+          Number(item.antes) > 0 &&
+          Number(item.atual) > 0 &&
+          Number(item.antes) <= Number(item.atual),
+      );
 
-    if (invalidos.length > 0) {
-      setArtigosInvalidosPopup(invalidos);
-      setPopupArtigosInvalidosAberto(true);
-      return;
+      if (invalidos.length > 0) {
+        setArtigosInvalidosPopup(invalidos);
+        setPopupArtigosInvalidosAberto(true);
+        return;
+      }
     }
 
     await guardarCampanhaNoHistorico("impressao");
     await printDocument();
   }
 
-  function renderEtiqueta(item, formatoAtual) {
+  function renderShoppingPriceSelector(item, tipo) {
+    const isSemDesconto = tipo === "semDesconto";
+    const campoFonte = isSemDesconto
+      ? "precoSemDescontoFonte"
+      : "precoComDescontoFonte";
+    const campoManual = isSemDesconto
+      ? "precoSemDescontoManual"
+      : "precoComDescontoManual";
+    const fonteSelecionada =
+      item[campoFonte] || obterFontePrecoExtremo(item, isSemDesconto ? "max" : "min");
+    const valorAtual = obterValorPrecoConfigurado(item, tipo);
+
+    return (
+      <div
+        className="shopping-selector-cell"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <select
+          className="shopping-selector-input"
+          value={fonteSelecionada}
+          onChange={(e) => atualizarCampoShopping(item.id, campoFonte, e.target.value)}
+        >
+          {SHOPPING_PRICE_SOURCE_OPTIONS.map((opcao) => (
+            <option key={`${tipo}-${opcao.value}`} value={opcao.value}>
+              {opcao.label}
+            </option>
+          ))}
+        </select>
+
+        {fonteSelecionada === "manual" ? (
+          <input
+            type="text"
+            inputMode="decimal"
+            className="shopping-selector-manual"
+            placeholder="Outro preço"
+            value={item[campoManual] || ""}
+            onChange={(e) =>
+              atualizarCampoShopping(item.id, campoManual, e.target.value)
+            }
+          />
+        ) : (
+          <small className="shopping-selector-value">
+            {formatarValorTabelaMoeda(valorAtual)}
+          </small>
+        )}
+      </div>
+    );
+  }
+
+  function renderSiteTableCell(item, col, formatoPrevisto = "") {
+    if (col.key === "precoSemDescontoSelecionado") {
+      return renderShoppingPriceSelector(item, "semDesconto");
+    }
+
+    if (col.key === "precoComDescontoSelecionado") {
+      return renderShoppingPriceSelector(item, "comDesconto");
+    }
+
+    return renderExcelTableCell(item, col.key, formatoPrevisto);
+  }
+
+  function renderEtiquetaCampanha(item, formatoAtual) {
     const desconto = Math.max(0, item.antes - item.atual);
     const textoValidade = obterTextoValidade(item, anoValidade);
 
@@ -759,6 +1252,126 @@ export default function EtiquetasExcelPage() {
     );
   }
 
+  function renderEtiquetaShoppingConteudo(item, formatoAtual) {
+    const hoje = new Date();
+    const resumoComparacao = obterResumoComparacao(item);
+    const resumoConfiguracao = obterResumoConfiguracaoShopping(item);
+    const precoSemDesconto = obterValorPrecoConfigurado(item, "semDesconto");
+    const precoComDesconto = obterValorPrecoConfigurado(item, "comDesconto");
+    const badgeShopping = obterBadgeEtiquetaShopping(
+      precoSemDesconto,
+      precoComDesconto,
+    );
+
+    return (
+      <>
+        <div className="topbar">
+          <img src={logo} alt="Expert" className="print-logo" />
+        </div>
+
+        <div className="content shopping-content">
+          <div className="topo">
+            <div className="codigo">{item.codigo}</div>
+            <div className="titulo">{titulo || "SHOPPING"}</div>
+            <DescricaoAuto
+              texto={item.descricao}
+              formatoEtiqueta={formatoAtual}
+            />
+          </div>
+
+          <div className="shopping-price-wrap">
+            <div className="shopping-price-label">PREÇO NA ETIQUETA</div>
+            <ShoppingBeforePriceAuto
+              valor={precoSemDesconto}
+              formatoEtiqueta={formatoAtual}
+            />
+            <ShoppingPriceAuto
+              valor={precoComDesconto}
+              formatoEtiqueta={formatoAtual}
+            />
+            <div className="shopping-selected-sources">{resumoConfiguracao}</div>
+          </div>
+
+          <div className="shopping-status-row">
+            <span className="shopping-status-badge">{badgeShopping}</span>
+          </div>
+
+          <div className="shopping-competitor-grid">
+            <div className="shopping-competitor-card">
+              <span>NOSSO PREÇO</span>
+              <ShoppingCardPriceAuto
+                valor={item.nossoPreco}
+                formatoEtiqueta={formatoAtual}
+              />
+            </div>
+
+            <div className="shopping-competitor-card">
+              <span>WORTEN</span>
+              <ShoppingCardPriceAuto
+                valor={item.worten}
+                formatoEtiqueta={formatoAtual}
+              />
+            </div>
+
+            <div className="shopping-competitor-card shopping-competitor-card-wide">
+              <span>RÁDIO POPULAR</span>
+              <ShoppingCardPriceAuto
+                valor={item.radioPopular}
+                formatoEtiqueta={formatoAtual}
+              />
+            </div>
+          </div>
+
+          <div className="shopping-summary">
+            {resumoComparacao} {resumoConfiguracao}.
+          </div>
+
+          <div className="rodape shopping-rodape">
+            <Barcode value={item.ean} />
+
+            <div className="validade">
+              COMPARATIVO RECOLHIDO EM {formatarDataCompleta(hoje)}
+            </div>
+
+            <div className="nota">
+              Etiqueta comparativa Shopping. Valores externos sujeitos a
+              atualização.
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  function renderEtiquetaShopping(item, formatoAtual) {
+    return (
+      <div
+        key={item.id}
+        className={`label shopping-label ${
+          formatoAtual === "a5" ? "label-a5" : "label-a6"
+        }`}
+      >
+        {formatoAtual === "a5" ? (
+          <div className="label-a5-rotator">
+            <div className="label-inner">
+              {renderEtiquetaShoppingConteudo(item, formatoAtual)}
+            </div>
+          </div>
+        ) : (
+          <div className="label-inner">
+            {renderEtiquetaShoppingConteudo(item, formatoAtual)}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function renderEtiqueta(item, formatoAtual) {
+    return item.tipo_registo === EXCEL_FORMATS.SHOPPING
+      ? renderEtiquetaShopping(item, formatoAtual)
+      : renderEtiquetaCampanha(item, formatoAtual);
+  }
+
   return (
     <>
       <div className="page-content no-print">
@@ -766,8 +1379,8 @@ export default function EtiquetasExcelPage() {
           <div>
             <h1 className="page-title">Etiquetas de Campanha em Excel</h1>
             <p className="page-subtitle">
-              Importa um ficheiro Excel, filtra os artigos e imprime apenas as
-              etiquetas selecionadas.
+              Importa ficheiros Excel em formato Campanha ou Shopping, filtra os
+              artigos e imprime apenas as etiquetas selecionadas.
             </p>
           </div>
         </div>
@@ -780,7 +1393,7 @@ export default function EtiquetasExcelPage() {
                 type="text"
                 value={titulo}
                 onChange={(e) => setTitulo(e.target.value)}
-                placeholder="Ex: ASUS PROMO"
+                placeholder="Ex: ASUS PROMO / SHOPPING"
               />
             </label>
 
@@ -792,6 +1405,7 @@ export default function EtiquetasExcelPage() {
                   value={anoValidade}
                   onChange={(e) => setAnoValidade(e.target.value)}
                   placeholder="2026"
+                  disabled={modeloImportado === EXCEL_FORMATS.SHOPPING}
                 />
 
                 <button
@@ -829,6 +1443,39 @@ export default function EtiquetasExcelPage() {
             {loading ? <small>A carregar Excel...</small> : null}
           </div>
 
+          <div className="resumo-cards">
+            <div className="resumo-card">
+              <span className="resumo-label">Formato detetado</span>
+              <strong>
+                {modeloImportado === EXCEL_FORMATS.SHOPPING
+                  ? "Shopping"
+                  : "Campanha"}
+              </strong>
+            </div>
+
+            <div className="resumo-card">
+              <span className="resumo-label">Total artigos</span>
+              <strong>{dados.length}</strong>
+            </div>
+
+            <div className="resumo-card">
+              <span className="resumo-label">Filtrados</span>
+              <strong>{dadosFiltrados.length}</strong>
+            </div>
+
+            <div className="resumo-card">
+              <span className="resumo-label">Selecionados</span>
+              <strong>{selecionados.length}</strong>
+            </div>
+
+            <div className="resumo-card">
+              <span className="resumo-label">Modo formato</span>
+              <strong>
+                {formatoAutomaticoAtivo ? "Automático" : "Manual"}
+              </strong>
+            </div>
+          </div>
+
           <div className="toolbar-actions">
             <button
               type="button"
@@ -862,30 +1509,6 @@ export default function EtiquetasExcelPage() {
               Imprimir selecionados
             </button>
           </div>
-
-          <div className="resumo-cards">
-            <div className="resumo-card">
-              <span className="resumo-label">Total artigos</span>
-              <strong>{dados.length}</strong>
-            </div>
-
-            <div className="resumo-card">
-              <span className="resumo-label">Filtrados</span>
-              <strong>{dadosFiltrados.length}</strong>
-            </div>
-
-            <div className="resumo-card">
-              <span className="resumo-label">Selecionados</span>
-              <strong>{selecionados.length}</strong>
-            </div>
-
-            <div className="resumo-card">
-              <span className="resumo-label">Modo formato</span>
-              <strong>
-                {formatoAutomaticoAtivo ? "Automático" : "Manual"}
-              </strong>
-            </div>
-          </div>
         </div>
 
         <div className="table-card">
@@ -894,7 +1517,9 @@ export default function EtiquetasExcelPage() {
 
             <button
               type="button"
-              className={`btn ${mostrarTabelaCompleta ? "btn-secondary" : "btn-primary"}`}
+              className={`btn ${
+                mostrarTabelaCompleta ? "btn-secondary" : "btn-primary"
+              }`}
               onClick={() => setMostrarTabelaCompleta((prev) => !prev)}
             >
               {mostrarTabelaCompleta
@@ -905,193 +1530,203 @@ export default function EtiquetasExcelPage() {
 
           {mostrarTabelaCompleta ? (
             <SyncedHorizontalScroll className="table-panel table-panel-complete">
-                <table className="full-table full-campaign-table">
-                  <thead>
-                    <tr>
-                      <th>Selecionar</th>
+              <table className="full-table full-campaign-table">
+                <thead>
+                  <tr>
+                    <th>Selecionar</th>
 
-                      {TABLE_COLUMNS.map((col) => (
-                        <th
-                          key={col.key}
-                          className={col.tipo ? "filter-th" : undefined}
-                        >
-                          {col.tipo ? (
-                            <>
-                              <button
-                                type="button"
-                                ref={(node) => {
-                                  filterButtonRefs.current[col.key] = node;
-                                }}
-                                className="filter-button"
-                                aria-expanded={filtroAberto === col.key}
-                                onClick={() =>
-                                  setFiltroAberto(
-                                    filtroAberto === col.key ? null : col.key,
-                                  )
-                                }
-                              >
-                                {col.label}
-                              </button>
-
-                              <FilterMenu
-                                coluna={col.label}
-                                tipo={col.tipo}
-                                aberto={filtroAberto === col.key}
-                                filtro={filtros[col.key]}
-                                anchorEl={filterButtonRefs.current[col.key]}
-                                onClose={() => setFiltroAberto(null)}
-                                onUpdate={(chave, valor) =>
-                                  atualizarFiltroPopup(col.key, chave, valor)
-                                }
-                                onSort={(direcao) =>
-                                  setOrdenacao({ coluna: col.key, direcao })
-                                }
-                                onClear={() => limparFiltro(col.key, col.tipo)}
-                              />
-                            </>
-                          ) : (
-                            col.label
-                          )}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    {dadosFiltrados.length === 0 ? (
-                      <tr>
-                        <td colSpan={TABLE_COLUMNS.length + 1} className="empty-cell">
-                          Importa um ficheiro Excel para carregar os artigos.
-                        </td>
-                      </tr>
-                    ) : (
-                      dadosFiltrados.map((item) => {
-                        const formatoPrevisto = obterFormatoFinalEtiqueta(
-                          item,
-                          formatoAutomaticoAtivo,
-                          formatoEtiqueta,
-                        );
-
-                        return (
-                          <tr
-                            key={`full-${item.id}`}
-                            className={item.selecionado ? "linha-selecionada" : ""}
-                            onClick={() => alternarSelecionado(item.id)}
-                          >
-                            <td
-                              className="col-select"
-                              onClick={(e) => e.stopPropagation()}
+                    {colunasTabelaAtivas.map((col) => (
+                      <th
+                        key={col.key}
+                        className={col.tipo ? "filter-th" : undefined}
+                      >
+                        {col.tipo ? (
+                          <>
+                            <button
+                              type="button"
+                              ref={(node) => {
+                                filterButtonRefs.current[col.key] = node;
+                              }}
+                              className="filter-button"
+                              aria-expanded={filtroAberto === col.key}
+                              onClick={() =>
+                                setFiltroAberto(
+                                  filtroAberto === col.key ? null : col.key,
+                                )
+                              }
                             >
-                              <input
-                                type="checkbox"
-                                checked={!!item.selecionado}
-                                readOnly
-                              />
-                            </td>
+                              {col.label}
+                            </button>
 
-                            {TABLE_COLUMNS.map((col) => (
-                              <td key={`${item.id}-${col.key}`}>
-                                {renderExcelTableCell(item, col.key, formatoPrevisto)}
-                              </td>
-                            ))}
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
+                            <FilterMenu
+                              coluna={col.label}
+                              tipo={col.tipo}
+                              aberto={filtroAberto === col.key}
+                              filtro={filtros[col.key]}
+                              anchorEl={filterButtonRefs.current[col.key]}
+                              onClose={() => setFiltroAberto(null)}
+                              onUpdate={(chave, valor) =>
+                                atualizarFiltroPopup(col.key, chave, valor)
+                              }
+                              onSort={(direcao) =>
+                                setOrdenacao({ coluna: col.key, direcao })
+                              }
+                              onClear={() => limparFiltro(col.key, col.tipo)}
+                            />
+                          </>
+                        ) : (
+                          col.label
+                        )}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {dadosFiltrados.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={colunasTabelaAtivas.length + 1}
+                        className="empty-cell"
+                      >
+                        Importa um ficheiro Excel para carregar os artigos.
+                      </td>
+                    </tr>
+                  ) : (
+                    dadosFiltrados.map((item) => {
+                      const formatoPrevisto = obterFormatoFinalEtiqueta(
+                        item,
+                        formatoAutomaticoAtivo,
+                        formatoEtiqueta,
+                      );
+
+                      return (
+                        <tr
+                          key={`full-${item.id}`}
+                          className={item.selecionado ? "linha-selecionada" : ""}
+                          onClick={() => alternarSelecionado(item.id)}
+                        >
+                          <td
+                            className="col-select"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={!!item.selecionado}
+                              readOnly
+                            />
+                          </td>
+
+                          {colunasTabelaAtivas.map((col) => (
+                            <td key={`${item.id}-${col.key}`}>
+                              {renderSiteTableCell(
+                                item,
+                                col,
+                                formatoPrevisto,
+                              )}
+                            </td>
+                          ))}
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
             </SyncedHorizontalScroll>
           ) : null}
 
           {!mostrarTabelaCompleta ? (
             <div className="table-panel table-panel-summary">
               <table className="compact-table compact-campaign-table compact-campaign-table--summary">
-              <thead>
-                <tr>
-                  <th>Selecionar</th>
-
-                  {PRIMARY_TABLE_COLUMNS.map((col) => (
-                    <th
-                      key={col.key}
-                      className={col.tipo ? "filter-th" : undefined}
-                    >
-                      {col.tipo ? (
-                        <>
-                          <button
-                            type="button"
-                            ref={(node) => {
-                              filterButtonRefs.current[col.key] = node;
-                            }}
-                            className="filter-button"
-                            aria-expanded={filtroAberto === col.key}
-                            onClick={() =>
-                              setFiltroAberto(
-                                filtroAberto === col.key ? null : col.key,
-                              )
-                            }
-                          >
-                            {col.label}
-                          </button>
-
-                          <FilterMenu
-                            coluna={col.label}
-                            tipo={col.tipo}
-                            aberto={filtroAberto === col.key}
-                            filtro={filtros[col.key]}
-                            anchorEl={filterButtonRefs.current[col.key]}
-                            onClose={() => setFiltroAberto(null)}
-                            onUpdate={(chave, valor) =>
-                              atualizarFiltroPopup(col.key, chave, valor)
-                            }
-                            onSort={(direcao) =>
-                              setOrdenacao({ coluna: col.key, direcao })
-                            }
-                            onClear={() => limparFiltro(col.key, col.tipo)}
-                          />
-                        </>
-                      ) : (
-                        col.label
-                      )}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-
-              <tbody>
-                {dadosFiltrados.length === 0 ? (
+                <thead>
                   <tr>
-                    <td colSpan={PRIMARY_TABLE_COLUMNS.length + 1} className="empty-cell">
-                      Importa um ficheiro Excel para carregar os artigos.
-                    </td>
-                  </tr>
-                ) : (
-                  dadosFiltrados.map((item) => (
-                    <tr
-                      key={item.id}
-                      className={item.selecionado ? "linha-selecionada" : ""}
-                      onClick={() => alternarSelecionado(item.id)}
-                    >
-                      <td
-                        className="col-select"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={!!item.selecionado}
-                          readOnly
-                        />
-                      </td>
+                    <th>Selecionar</th>
 
-                      {PRIMARY_TABLE_COLUMNS.map((col) => (
-                        <td key={`${item.id}-${col.key}`}>
-                          {renderExcelTableCell(item, col.key)}
-                        </td>
-                      ))}
+                    {colunasResumoAtivas.map((col) => (
+                      <th
+                        key={col.key}
+                        className={col.tipo ? "filter-th" : undefined}
+                      >
+                        {col.tipo ? (
+                          <>
+                            <button
+                              type="button"
+                              ref={(node) => {
+                                filterButtonRefs.current[col.key] = node;
+                              }}
+                              className="filter-button"
+                              aria-expanded={filtroAberto === col.key}
+                              onClick={() =>
+                                setFiltroAberto(
+                                  filtroAberto === col.key ? null : col.key,
+                                )
+                              }
+                            >
+                              {col.label}
+                            </button>
+
+                            <FilterMenu
+                              coluna={col.label}
+                              tipo={col.tipo}
+                              aberto={filtroAberto === col.key}
+                              filtro={filtros[col.key]}
+                              anchorEl={filterButtonRefs.current[col.key]}
+                              onClose={() => setFiltroAberto(null)}
+                              onUpdate={(chave, valor) =>
+                                atualizarFiltroPopup(col.key, chave, valor)
+                              }
+                              onSort={(direcao) =>
+                                setOrdenacao({ coluna: col.key, direcao })
+                              }
+                              onClear={() => limparFiltro(col.key, col.tipo)}
+                            />
+                          </>
+                        ) : (
+                          col.label
+                        )}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {dadosFiltrados.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={colunasResumoAtivas.length + 1}
+                        className="empty-cell"
+                      >
+                        Importa um ficheiro Excel para carregar os artigos.
+                      </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  ) : (
+                    dadosFiltrados.map((item) => (
+                      <tr
+                        key={item.id}
+                        className={item.selecionado ? "linha-selecionada" : ""}
+                        onClick={() => alternarSelecionado(item.id)}
+                      >
+                        <td
+                          className="col-select"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={!!item.selecionado}
+                            readOnly
+                          />
+                        </td>
+
+                        {colunasResumoAtivas.map((col) => (
+                          <td key={`${item.id}-${col.key}`}>
+                            {renderSiteTableCell(item, col)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           ) : null}
         </div>
