@@ -281,22 +281,34 @@
     right: -10px;
     width: 10px;
     height: 10px;
-    border-radius: 999px;
     transform: translateY(-50%);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     background: transparent;
     pointer-events: none;
+    color: transparent;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  
+  .shopping-price-dot::before {
+    content: "●";
+    font-size: 12px;
+    line-height: 1;
+    color: currentColor;
   }
   
   .shopping-price-dot--radio-popular {
-    background: #2563eb;
+    color: #2563eb;
   }
   
   .shopping-price-dot--worten {
-    background: #f97316;
+    color: #f97316;
   }
   
   .shopping-price-dot--nosso-preco {
-    opacity: 0;
+    color: transparent;
   }
   
   .nota {
@@ -380,6 +392,10 @@
     right: -14px;
     width: 14px;
     height: 14px;
+  }
+  
+  .label.label-a5 .shopping-price-dot::before {
+    font-size: 16px;
   }
   
   .label.label-a5 .nota {
