@@ -271,6 +271,20 @@ function formatarSelecaoPrecoShopping(item, tipo) {
   return `${label}: ${formatarValorTabelaMoeda(valor)}`;
 }
 
+function obterClasseIndicadorShopping(item) {
+  if (item.tipo_registo !== EXCEL_FORMATS.SHOPPING) return "";
+
+  switch (item.precoComDescontoFonte) {
+    case "radioPopular":
+      return "shopping-price-dot--radio-popular";
+    case "worten":
+      return "shopping-price-dot--worten";
+    case "nossoPreco":
+    default:
+      return "shopping-price-dot--nosso-preco";
+  }
+}
+
 function obterOpcoesSelectShopping(item) {
   return SHOPPING_PRICE_SOURCE_OPTIONS.map((option) => {
     const valor =
@@ -1105,7 +1119,15 @@ export default function EtiquetasExcelPage() {
                 <div className="rodape">
                   <Barcode value={item.ean} />
 
-                  <div className="validade">{textoValidade}</div>
+                  <div className="validade-row">
+                    <div className="validade">{textoValidade}</div>
+                    {item.tipo_registo === EXCEL_FORMATS.SHOPPING ? (
+                      <span
+                        className={`shopping-price-dot ${obterClasseIndicadorShopping(item)}`}
+                        aria-hidden="true"
+                      />
+                    ) : null}
+                  </div>
 
                   <div className="nota">
                     VÁLIDO ENQUANTO DURAR O STOCK. Limitado ao stock existente e
@@ -1157,7 +1179,15 @@ export default function EtiquetasExcelPage() {
               <div className="rodape">
                 <Barcode value={item.ean} />
 
-                <div className="validade">{textoValidade}</div>
+                <div className="validade-row">
+                  <div className="validade">{textoValidade}</div>
+                  {item.tipo_registo === EXCEL_FORMATS.SHOPPING ? (
+                    <span
+                      className={`shopping-price-dot ${obterClasseIndicadorShopping(item)}`}
+                      aria-hidden="true"
+                    />
+                  ) : null}
+                </div>
 
                 <div className="nota">
                   VÁLIDO ENQUANTO DURAR O STOCK. Limitado ao stock existente e
