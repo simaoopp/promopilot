@@ -28,15 +28,21 @@ const ai = GEMINI_API_KEY
   : null;
 
 if (!ai) {
-  console.warn("[BOOT] GEMINI_API_KEY não configurada. Rotas de IA ficam desativadas.");
+  console.warn(
+    "[BOOT] GEMINI_API_KEY não configurada. Rotas de IA ficam desativadas.",
+  );
 }
 
 if (!hasSupabaseAuthConfig()) {
-  console.warn("[BOOT] SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY não configuradas. Rotas autenticadas ficam indisponíveis.");
+  console.warn(
+    "[BOOT] SUPABASE_URL / SUPABASE_PUBLISHABLE_KEY não configuradas. Rotas autenticadas ficam indisponíveis.",
+  );
 }
 
 if (!hasSupabaseAdminConfig()) {
-  console.warn("[BOOT] SUPABASE_SERVICE_ROLE_KEY em falta. A base de dados de artigos fica indisponível.");
+  console.warn(
+    "[BOOT] SUPABASE_SERVICE_ROLE_KEY em falta. A base de dados de artigos fica indisponível.",
+  );
 }
 
 const app = express();
@@ -46,10 +52,21 @@ function normalizeOrigin(value = "") {
   return String(value).trim().replace(/\/+$/, "");
 }
 
-const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS || "")
-  .split(",")
-  .map(normalizeOrigin)
-  .filter(Boolean);
+const DEFAULT_ALLOWED_ORIGINS = [
+  "https://expertadmin.netlify.app",
+  "http://localhost:3000",
+  "http://localhost:8888",
+];
+
+const ALLOWED_ORIGINS = Array.from(
+  new Set([
+    ...DEFAULT_ALLOWED_ORIGINS,
+    ...(process.env.CORS_ORIGINS || "")
+      .split(",")
+      .map(normalizeOrigin)
+      .filter(Boolean),
+  ]),
+);
 
 const corsOptions = {
   origin(origin, callback) {
@@ -71,12 +88,12 @@ const corsOptions = {
   methods: ["GET", "POST", "OPTIONS"],
   allowedHeaders: ["Authorization", "Content-Type"],
   optionsSuccessStatus: 204,
+  maxAge: 86400,
 };
 
 app.use(cors(corsOptions));
 app.options('/{*splat}', cors(corsOptions));
 app.use(express.json({ limit: "1mb" }));
-
 /* =========================================================
    CONFIG
    ========================================================= */
@@ -129,8 +146,14 @@ function logRuntimeInfo(tag = "BOOT") {
   console.log(`[${tag}] ARTICLES_TABLE=`, ARTICLES_TABLE);
   console.log(`[${tag}] GEMINI_API_KEY exists=`, !!GEMINI_API_KEY);
   console.log(`[${tag}] SUPABASE_URL exists=`, !!SUPABASE_URL);
-  console.log(`[${tag}] SUPABASE_PUBLISHABLE_KEY exists=`, !!SUPABASE_PUBLISHABLE_KEY);
-  console.log(`[${tag}] SUPABASE_ADMIN_CONFIG exists=`, hasSupabaseAdminConfig());
+  console.log(
+    `[${tag}] SUPABASE_PUBLISHABLE_KEY exists=`,
+    !!SUPABASE_PUBLISHABLE_KEY,
+  );
+  console.log(
+    `[${tag}] SUPABASE_ADMIN_CONFIG exists=`,
+    hasSupabaseAdminConfig(),
+  );
   console.log(`[${tag}] ALLOWED_ORIGINS=`, ALLOWED_ORIGINS);
   console.log(`[${tag}] NODE_ENV=`, process.env.NODE_ENV || "");
   console.log(`[${tag}] NETLIFY=`, process.env.NETLIFY || "");
@@ -144,7 +167,9 @@ function debug(...args) {
 
 function ensureAiEnabled() {
   if (!ai) {
-    const error = new Error("Funcionalidade de IA indisponível: falta GEMINI_API_KEY.");
+    const error = new Error(
+      "Funcionalidade de IA indisponível: falta GEMINI_API_KEY.",
+    );
     error.statusCode = 503;
     throw error;
   }
@@ -165,7 +190,8 @@ async function requireAuth(req, res, next) {
     if (!hasSupabaseAuthConfig()) {
       return res.status(503).json({
         ok: false,
-        error: "Autenticação indisponível: Supabase não configurado no servidor.",
+        error:
+          "Autenticação indisponível: Supabase não configurado no servidor.",
       });
     }
 
@@ -1363,8 +1389,9 @@ app.get("/api/artigos", requireAuth, async (req, res) => {
     const q = normalizeSearchValue(req.query.q || "");
     const limit = Math.min(parsePositiveInt(req.query.limit, 100), 500);
     const offset = parsePositiveInt(req.query.offset, 0);
+    const includeCount = String(req.query.includeCount || "1") !== "0";
 
-    const result = await listArticles({ q, limit, offset });
+    const result = await listArticles({ q, limit, offset, includeCount });
 
     return res.json({
       ok: true,
@@ -1436,7 +1463,6 @@ app.post("/api/ai-produto", requireAuth, aiRateLimit, async (req, res) => {
   }
 });
 
-
 function parsePositiveInt(value, fallback) {
   const parsed = Number.parseInt(value, 10);
 
@@ -1447,15 +1473,18 @@ function parsePositiveInt(value, fallback) {
   return parsed;
 }
 
-setInterval(() => {
-  const now = Date.now();
+setInterval(
+  () => {
+    const now = Date.now();
 
-  for (const [ip, entry] of aiRateLimitStore.entries()) {
-    if (now > entry.resetAt) {
-      aiRateLimitStore.delete(ip);
+    for (const [ip, entry] of aiRateLimitStore.entries()) {
+      if (now > entry.resetAt) {
+        aiRateLimitStore.delete(ip);
+      }
     }
-  }
-}, 5 * 60 * 1000);
+  },
+  5 * 60 * 1000,
+);
 
 const PORT = process.env.PORT || 3001;
 

@@ -6,9 +6,10 @@ const API_BASE_URL =
     ? "http://localhost:3001"
     : "");
 
-const CACHE_TTL_MS = 60 * 1000;
+const CACHE_TTL_MS = 5 * 60 * 1000;
 const ALL_ARTIGOS_CACHE_KEY = "all-artigos";
 const artigosCache = new Map();
+const artigosPendingRequests = new Map();
 
 function buildApiUrl(path) {
   return `${API_BASE_URL}${path}`;
@@ -34,6 +35,21 @@ function cacheSet(key, value) {
   });
 
   return value;
+}
+
+function getPendingRequest(key) {
+  return artigosPendingRequests.get(key) || null;
+}
+
+function setPendingRequest(key, promise) {
+  artigosPendingRequests.set(key, promise);
+  return promise;
+}
+
+function clearPendingRequest(key, promise) {
+  if (artigosPendingRequests.get(key) === promise) {
+    artigosPendingRequests.delete(key);
+  }
 }
 
 async function readJsonResponse(response) {
@@ -101,18 +117,29 @@ export function normalizeArtigosApiResponse(data, fallbackLimit = 100, fallbackO
   };
 }
 
-export async function fetchArtigosPage({ q = "", limit = 100, offset = 0 } = {}) {
+export async function fetchArtigosPage({
+  q = "",
+  limit = 100,
+  offset = 0,
+  signal,
+  includeCount = true,
+} = {}) {
   const params = new URLSearchParams();
 
   if (q) params.set("q", q);
   params.set("limit", String(limit));
   params.set("offset", String(offset));
 
+  if (!includeCount) {
+    params.set("includeCount", "0");
+  }
+
   const token = await getAccessToken();
   const response = await fetch(buildApiUrl(`/api/artigos?${params.toString()}`), {
     headers: {
       Authorization: `Bearer ${token}`,
     },
+    signal,
   });
 
   const data = await readJsonResponse(response);
@@ -124,6 +151,10 @@ export async function fetchArtigosPage({ q = "", limit = 100, offset = 0 } = {})
   return normalizeArtigosApiResponse(data, limit, offset);
 }
 
+export function getCachedAllArtigosSnapshot() {
+  return cacheGet(ALL_ARTIGOS_CACHE_KEY);
+}
+
 export async function loadAllArtigos({ forceRefresh = false, pageSize = 500 } = {}) {
   const cached = !forceRefresh ? cacheGet(ALL_ARTIGOS_CACHE_KEY) : null;
 
@@ -131,39 +162,93 @@ export async function loadAllArtigos({ forceRefresh = false, pageSize = 500 } = 
     return cached;
   }
 
-  const allItems = [];
-  let offset = 0;
+  const pendingKey = `${ALL_ARTIGOS_CACHE_KEY}:${pageSize}`;
+  const pending = !forceRefresh ? getPendingRequest(pendingKey) : null;
 
-  while (true) {
-    const page = await fetchArtigosPage({
-      q: "",
-      limit: pageSize,
-      offset,
-    });
+  if (pending) {
+    return pending;
+  }
 
-    allItems.push(...page.items);
+  const request = (async () => {
+    const allItems = [];
+    let offset = 0;
 
-    if (!page.hasMore || page.items.length === 0) {
-      const result = {
-        ok: true,
-        items: allItems,
-        artigos: allItems,
-        total: allItems.length,
-        limit: allItems.length,
-        offset: 0,
-        hasMore: false,
+    while (true) {
+      const page = await fetchArtigosPage({
         q: "",
-      };
+        limit: pageSize,
+        offset,
+        includeCount: false,
+      });
 
-      return cacheSet(ALL_ARTIGOS_CACHE_KEY, result);
+      allItems.push(...page.items);
+
+      if (!page.hasMore || page.items.length === 0) {
+        const result = {
+          ok: true,
+          items: allItems,
+          artigos: allItems,
+          total: allItems.length,
+          limit: allItems.length,
+          offset: 0,
+          hasMore: false,
+          q: "",
+        };
+
+        return cacheSet(ALL_ARTIGOS_CACHE_KEY, result);
+      }
+
+      offset += page.items.length;
     }
+  })();
 
-    offset += page.items.length;
+  setPendingRequest(pendingKey, request);
+
+  try {
+    return await request;
+  } finally {
+    clearPendingRequest(pendingKey, request);
   }
 }
 
-export async function searchArtigos({ q = "", limit = 20, offset = 0 } = {}) {
-  return fetchArtigosPage({ q, limit, offset });
+export function preloadAllArtigos(options) {
+  return loadAllArtigos(options);
+}
+
+function buildSearchCacheKey({ q = "", limit = 20, offset = 0 } = {}) {
+  const normalizedQ = String(q || "").trim().toLowerCase();
+  return `search:${normalizedQ}:${limit}:${offset}`;
+}
+
+export async function searchArtigos({ q = "", limit = 20, offset = 0, signal } = {}) {
+  const cacheKey = buildSearchCacheKey({ q, limit, offset });
+  const cached = cacheGet(cacheKey);
+
+  if (cached) {
+    return cached;
+  }
+
+  const pending = !signal ? getPendingRequest(cacheKey) : null;
+
+  if (pending) {
+    return pending;
+  }
+
+  const request = fetchArtigosPage({ q, limit, offset, signal }).then((result) =>
+    cacheSet(cacheKey, result),
+  );
+
+  if (!signal) {
+    setPendingRequest(cacheKey, request);
+  }
+
+  try {
+    return await request;
+  } finally {
+    if (!signal) {
+      clearPendingRequest(cacheKey, request);
+    }
+  }
 }
 
 export async function enrichArtigoWithAi(payload) {
@@ -228,4 +313,5 @@ export function syncUpdatedArtigoToCache(updatedArtigo = {}) {
 
 export function __clearArtigosCacheForTests() {
   artigosCache.clear();
+  artigosPendingRequests.clear();
 }

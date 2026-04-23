@@ -20,3 +20,12 @@ export const TABLE_COLUMNS = [
 ];
 
 export const FILTERABLE_COLUMNS = TABLE_COLUMNS.filter((col) => col.tipo);
+
+export const PRIMARY_TABLE_COLUMNS = [
+  { key: "codigo", label: "ARTIGO", tipo: "text" },
+  { key: "descricao", label: "DESCRIÇÃO", tipo: "text" },
+  { key: "antes", label: "PVP ANTES", tipo: "number" },
+  { key: "atual", label: "PVP ATUAL", tipo: "number" },
+  { key: "dataInicio", label: "DATA INÍCIO" },
+  { key: "dataFim", label: "DATA FIM" },
+];

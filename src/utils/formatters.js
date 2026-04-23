@@ -7,21 +7,35 @@ export function parseNumero(valor) {
   if (!texto) return 0;
 
   texto = texto
-    .replace(/\u00A0/g, "") // espaço não separável
+    .replace(/\u00A0/g, "")
     .replace(/\s/g, "")
-    .replace(/€/g, "");
+    .replace(/€/g, "")
+    .replace(/[^0-9,.-]/g, "");
 
-  if (texto.includes(",") && texto.includes(".")) {
-    const ultimaVirgula = texto.lastIndexOf(",");
-    const ultimoPonto = texto.lastIndexOf(".");
+  if (!texto) return 0;
 
-    if (ultimaVirgula > ultimoPonto) {
-      texto = texto.replace(/\./g, "").replace(",", ".");
+  const negativo = texto.startsWith("-");
+  texto = texto.replace(/-/g, "");
+
+  const ultimaVirgula = texto.lastIndexOf(",");
+  const ultimoPonto = texto.lastIndexOf(".");
+  const ultimaPontuacao = Math.max(ultimaVirgula, ultimoPonto);
+
+  if (ultimaPontuacao !== -1) {
+    const parteInteira = texto.slice(0, ultimaPontuacao).replace(/[.,]/g, "");
+    const parteDecimal = texto.slice(ultimaPontuacao + 1).replace(/[.,]/g, "");
+
+    if (!parteDecimal) {
+      texto = parteInteira;
+    } else if (parteDecimal.length <= 2) {
+      texto = `${parteInteira || "0"}.${parteDecimal}`;
     } else {
-      texto = texto.replace(/,/g, "");
+      texto = texto.replace(/[.,]/g, "");
     }
-  } else if (texto.includes(",")) {
-    texto = texto.replace(",", ".");
+  }
+
+  if (negativo) {
+    texto = `-${texto}`;
   }
 
   const numero = Number(texto);

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../components/ToastProvider";
@@ -6,8 +6,13 @@ import { printDocument } from "../utils/print";
 
 import Barcode from "../components/Barcode";
 import FilterMenu from "../components/FilterMenu";
-import { loadAllArtigos } from "../services/artigosService";
-import { TABLE_COLUMNS } from "../data/tableColumns";
+import {
+  ensureCatalogoPesquisaPronto,
+  getCatalogoPesquisaSnapshot,
+  pesquisarNoCatalogoPreparado,
+} from "../services/catalogoPesquisaService";
+import { PRIMARY_TABLE_COLUMNS, TABLE_COLUMNS } from "../data/tableColumns";
+import SyncedHorizontalScroll from "../components/SyncedHorizontalScroll";
 import logo from "../logo.png";
 import "../styles/styles.css";
 import {
@@ -110,6 +115,17 @@ function ResumoCard({ label, value }) {
     </div>
   );
 }
+
+function renderCampaignTableCell(item, columnKey) {
+  switch (columnKey) {
+    case "antes":
+    case "atual":
+      return `${formatarEuro(item[columnKey])}€`;
+    default:
+      return item[columnKey] ?? "";
+  }
+}
+
 
 function EtiquetaConteudo({ item, formatoAtual, titulo, textoValidade }) {
   const desconto = Math.max(0, Number(item.antes) - Number(item.atual));
@@ -408,13 +424,16 @@ export default function EtiquetasPage() {
   const [campanhaDataInicio, setCampanhaDataInicio] = useState("");
   const [campanhaDataFim, setCampanhaDataFim] = useState("");
   const [erroCampanha, setErroCampanha] = useState("");
-  const [catalogoArtigos, setCatalogoArtigos] = useState([]);
-  const [catalogoLoading, setCatalogoLoading] = useState(true);
+  const catalogoInicial = getCatalogoPesquisaSnapshot();
+  const [catalogoArtigos, setCatalogoArtigos] = useState(catalogoInicial.items || []);
+  const [catalogoLoading, setCatalogoLoading] = useState(!catalogoInicial.ready);
   const [catalogoErro, setCatalogoErro] = useState("");
 
   const [filtroAberto, setFiltroAberto] = useState(null);
   const [ordenacao, setOrdenacao] = useState({ coluna: "", direcao: "" });
   const [filtros, setFiltros] = useState(FILTROS_INICIAIS);
+  const [mostrarTabelaCompleta, setMostrarTabelaCompleta] = useState(false);
+  const filterButtonRefs = useRef({});
 
 
   useEffect(() => {
@@ -435,20 +454,6 @@ export default function EtiquetasPage() {
     );
   }, [location.state]);
 
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      const clicouDentroDeFiltro = event.target.closest(".filter-th");
-      if (!clicouDentroDeFiltro) {
-        setFiltroAberto(null);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []);
 
   useEffect(() => {
     const antes = converterPreco(campanhaAntes);
@@ -467,16 +472,15 @@ export default function EtiquetasPage() {
     setErroCampanha("");
   }, [campanhaAntes, campanhaAtual]);
 
-
   useEffect(() => {
     let ativo = true;
 
     async function syncCatalogo() {
       try {
-        const data = await loadAllArtigos({ pageSize: 500 });
+        const snapshot = await ensureCatalogoPesquisaPronto({ pageSize: 1000 });
 
         if (ativo) {
-          setCatalogoArtigos(data.items || []);
+          setCatalogoArtigos(snapshot.items || []);
           setCatalogoErro("");
         }
       } catch (error) {
@@ -503,6 +507,12 @@ export default function EtiquetasPage() {
     const termo = normalizarTexto(pesquisaCampanha);
     if (termo.length < 2) return [];
 
+    const resultadosCatalogo = pesquisarNoCatalogoPreparado(pesquisaCampanha, { limit: 10 });
+
+    if (resultadosCatalogo.length > 0) {
+      return resultadosCatalogo;
+    }
+
     return catalogoArtigos
       .filter((item) => {
         const artigo = normalizarTexto(item.artigo);
@@ -523,38 +533,6 @@ export default function EtiquetasPage() {
     const atual = converterPreco(campanhaAtual);
     return Math.max(0, antes - atual);
   }, [campanhaAntes, campanhaAtual]);
-
-
-  useEffect(() => {
-    let ativo = true;
-
-    async function syncCatalogo() {
-      try {
-        const data = await loadAllArtigos({ pageSize: 500 });
-
-        if (ativo) {
-          setCatalogoArtigos(data.items || []);
-          setCatalogoErro("");
-        }
-      } catch (error) {
-        console.error("Não foi possível carregar o catálogo da campanha.", error);
-
-        if (ativo) {
-          setCatalogoErro("Não foi possível carregar o catálogo de artigos.");
-        }
-      } finally {
-        if (ativo) {
-          setCatalogoLoading(false);
-        }
-      }
-    }
-
-    syncCatalogo();
-
-    return () => {
-      ativo = false;
-    };
-  }, []);
 
   const pvpBaseCampanha = useMemo(
     () => converterPreco(artigoCampanhaSelecionado?.pvp2 || ""),
@@ -1079,17 +1057,123 @@ export default function EtiquetasPage() {
         </div>
 
         <div className="table-card">
-          <div className="table-card-header">
-            <h2>Lista de artigos</h2>
+          <div className="table-card-header table-card-header-inline">
+            <h2>{mostrarTabelaCompleta ? "Tabela completa" : "Lista de artigos"}</h2>
+
+            <button
+              type="button"
+              className={`btn ${mostrarTabelaCompleta ? "btn-secondary" : "btn-primary"}`}
+              onClick={() => setMostrarTabelaCompleta((prev) => !prev)}
+            >
+              {mostrarTabelaCompleta
+                ? "Ver tabela simples"
+                : "Abrir tabela completa"}
+            </button>
           </div>
 
-          <div className="table-panel">
-            <table>
+          {mostrarTabelaCompleta ? (
+            <SyncedHorizontalScroll className="table-panel table-panel-complete">
+                <table className="full-table full-campaign-table">
+                  <thead>
+                    <tr>
+                      <th>Selecionar</th>
+
+                      {TABLE_COLUMNS.map((col) => (
+                        <th
+                          key={col.key}
+                          className={col.tipo ? "filter-th" : undefined}
+                        >
+                          {col.tipo ? (
+                            <>
+                              <button
+                                type="button"
+                                ref={(node) => {
+                                  filterButtonRefs.current[col.key] = node;
+                                }}
+                                className="filter-button"
+                                aria-expanded={filtroAberto === col.key}
+                                onClick={() =>
+                                  setFiltroAberto(
+                                    filtroAberto === col.key ? null : col.key,
+                                  )
+                                }
+                              >
+                                {col.label}
+                              </button>
+
+                              <FilterMenu
+                                coluna={col.label}
+                                tipo={col.tipo}
+                                aberto={filtroAberto === col.key}
+                                filtro={filtros[col.key]}
+                                anchorEl={filterButtonRefs.current[col.key]}
+                                onClose={() => setFiltroAberto(null)}
+                                onUpdate={(chave, valor) =>
+                                  atualizarFiltroPopup(col.key, chave, valor)
+                                }
+                                onSort={(direcao) =>
+                                  setOrdenacao({ coluna: col.key, direcao })
+                                }
+                                onClear={() => limparFiltro(col.key, col.tipo)}
+                              />
+                            </>
+                          ) : (
+                            col.label
+                          )}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {dadosFiltrados.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={TABLE_COLUMNS.length + 1}
+                          className="empty-cell"
+                        >
+                          Cola a tabela do email e carrega em “Carregar tabela”.
+                        </td>
+                      </tr>
+                    ) : (
+                      dadosFiltrados.map((item) => (
+                        <tr
+                          key={`full-${item.id}`}
+                          className={item.selecionado ? "linha-selecionada" : ""}
+                          onClick={() => alternarSelecionado(item.id)}
+                        >
+                          <td
+                            className="col-select"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={!!item.selecionado}
+                              onChange={() => alternarSelecionado(item.id)}
+                            />
+                          </td>
+
+                          {TABLE_COLUMNS.map((col) => (
+                            <td key={`${item.id}-${col.key}`}>
+                              {renderCampaignTableCell(item, col.key)}
+                            </td>
+                          ))}
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+            </SyncedHorizontalScroll>
+          ) : null}
+
+          {!mostrarTabelaCompleta ? (
+            <div className="table-panel table-panel-summary">
+              <table className="compact-table compact-campaign-table compact-campaign-table--summary">
               <thead>
                 <tr>
                   <th>Selecionar</th>
 
-                  {TABLE_COLUMNS.map((col) => (
+                  {PRIMARY_TABLE_COLUMNS.map((col) => (
                     <th
                       key={col.key}
                       className={col.tipo ? "filter-th" : undefined}
@@ -1098,7 +1182,11 @@ export default function EtiquetasPage() {
                         <>
                           <button
                             type="button"
+                            ref={(node) => {
+                              filterButtonRefs.current[col.key] = node;
+                            }}
                             className="filter-button"
+                            aria-expanded={filtroAberto === col.key}
                             onClick={() =>
                               setFiltroAberto(
                                 filtroAberto === col.key ? null : col.key,
@@ -1113,6 +1201,7 @@ export default function EtiquetasPage() {
                             tipo={col.tipo}
                             aberto={filtroAberto === col.key}
                             filtro={filtros[col.key]}
+                            anchorEl={filterButtonRefs.current[col.key]}
                             onClose={() => setFiltroAberto(null)}
                             onUpdate={(chave, valor) =>
                               atualizarFiltroPopup(col.key, chave, valor)
@@ -1135,7 +1224,7 @@ export default function EtiquetasPage() {
                 {dadosFiltrados.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={TABLE_COLUMNS.length + 1}
+                      colSpan={PRIMARY_TABLE_COLUMNS.length + 1}
                       className="empty-cell"
                     >
                       Cola a tabela do email e carrega em “Carregar tabela”.
@@ -1159,30 +1248,18 @@ export default function EtiquetasPage() {
                         />
                       </td>
 
-                      <td>{item.codigo}</td>
-                      <td>{item.descricao}</td>
-                      <td>{item.pn}</td>
-                      <td>{item.ean}</td>
-                      <td>{formatarEuro(item.antes)}€</td>
-                      <td>{formatarEuro(item.atual)}€</td>
-                      <td>{item.pv3}</td>
-                      <td>{item.estado}</td>
-                      <td>{item.ae}</td>
-                      <td>{item.aea}</td>
-                      <td>{item.aev}</td>
-                      <td>{item.a10}</td>
-                      <td>{item.a1e}</td>
-                      <td>{item.data}</td>
-                      <td>{item.dataInicio}</td>
-                      <td>{item.dataFim}</td>
-                      <td>{item.alterado}</td>
-                      <td>{item.info}</td>
+                      {PRIMARY_TABLE_COLUMNS.map((col) => (
+                        <td key={`${item.id}-${col.key}`}>
+                          {renderCampaignTableCell(item, col.key)}
+                        </td>
+                      ))}
                     </tr>
                   ))
                 )}
               </tbody>
             </table>
-          </div>
+            </div>
+          ) : null}
         </div>
       </div>
 
