@@ -141,7 +141,9 @@
   
   .content {
     position: relative;
-    height: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
+    height: auto;
     padding: 14px 16px 12px;
     overflow: visible;
   }
@@ -327,11 +329,14 @@
   }
   
   .label.label-a5 .content {
-    height: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
+    height: auto;
     box-sizing: border-box;
     padding: 20px 24px 18px;
     display: grid;
-    grid-template-rows: auto 1fr auto;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    row-gap: 8px;
   }
   
   .label.label-a5 .codigo {
@@ -355,6 +360,17 @@
     left: auto;
     right: auto;
   }
+
+  .label.label-a5 .precos {
+    position: static;
+    transform: none;
+    align-self: center;
+    left: auto;
+    right: auto;
+    top: auto;
+    width: 100%;
+    overflow: visible;
+  }
   
   .label.label-a5 .antes {
     font-size: 40px;
@@ -371,11 +387,13 @@
   }
   
   .label.label-a5 .rodape {
-    left: 24px;
-    right: 24px;
-    bottom: 18px;
+    position: static;
+    left: auto;
+    right: auto;
+    bottom: auto;
     gap: 6px;
     background: #ffffff;
+    width: 100%;
   }
   
   .label.label-a5 .rodape svg {
