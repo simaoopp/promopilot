@@ -6,13 +6,13 @@ export function parseNumero(valor) {
 
   if (!texto) return 0;
 
+  texto = texto.replace(/(\d)[\s\u00A0]+(\d{1,2})\s*$/, "$1,$2");
+
   texto = texto
     .replace(/\u00A0/g, "")
     .replace(/\s/g, "")
     .replace(/€/g, "")
     .replace(/[^0-9,.-]/g, "");
-
-  if (!texto) return 0;
 
   const negativo = texto.startsWith("-");
   texto = texto.replace(/-/g, "");
