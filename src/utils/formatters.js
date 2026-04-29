@@ -1,11 +1,12 @@
 export function parseNumero(valor) {
-  if (valor === null || valor === undefined || valor === "") return 0;
-  if (typeof valor === "number") return Number.isNaN(valor) ? 0 : valor;
+  if (valor === null || valor === undefined) return 0;
 
   let texto = String(valor).trim();
 
   if (!texto) return 0;
 
+  // Alguns emails/PDFs convertem a vírgula decimal em espaço.
+  // Ex.: "399 99" deve ser lido como "399,99" e não como "39999".
   texto = texto.replace(/(\d)[\s\u00A0]+(\d{1,2})\s*$/, "$1,$2");
 
   texto = texto
@@ -14,32 +15,43 @@ export function parseNumero(valor) {
     .replace(/€/g, "")
     .replace(/[^0-9,.-]/g, "");
 
-  const negativo = texto.startsWith("-");
-  texto = texto.replace(/-/g, "");
+  if (!texto) return 0;
 
-  const ultimaVirgula = texto.lastIndexOf(",");
-  const ultimoPonto = texto.lastIndexOf(".");
-  const ultimaPontuacao = Math.max(ultimaVirgula, ultimoPonto);
+  const temVirgula = texto.includes(",");
+  const temPonto = texto.includes(".");
 
-  if (ultimaPontuacao !== -1) {
-    const parteInteira = texto.slice(0, ultimaPontuacao).replace(/[.,]/g, "");
-    const parteDecimal = texto.slice(ultimaPontuacao + 1).replace(/[.,]/g, "");
+  let separadorDecimal = null;
 
-    if (!parteDecimal) {
-      texto = parteInteira;
-    } else if (parteDecimal.length <= 2) {
-      texto = `${parteInteira || "0"}.${parteDecimal}`;
-    } else {
-      texto = texto.replace(/[.,]/g, "");
-    }
+  if (temVirgula && temPonto) {
+    separadorDecimal =
+      texto.lastIndexOf(",") > texto.lastIndexOf(".") ? "," : ".";
+  } else if (temVirgula) {
+    separadorDecimal = ",";
+  } else if (temPonto) {
+    separadorDecimal = ".";
   }
 
-  if (negativo) {
-    texto = `-${texto}`;
+  if (separadorDecimal) {
+    const partes = texto.split(separadorDecimal);
+    const parteDecimal = partes.pop();
+    const parteInteira = partes.join("").replace(/[.,]/g, "");
+
+    let decimal = parteDecimal || "";
+
+    // Exportações de Excel/sistemas podem vir com 4 casas decimais.
+    // Ex.: "269.9900" ou "399.9900" devem ser lidos como "269,99" e "399,99".
+    if (decimal.length > 2 && /^\d{1,2}0+$/.test(decimal)) {
+      decimal = decimal.slice(0, 2);
+    }
+
+    const numero = Number(`${parteInteira}.${decimal}`);
+
+    return Number.isFinite(numero) ? numero : 0;
   }
 
   const numero = Number(texto);
-  return Number.isNaN(numero) ? 0 : numero;
+
+  return Number.isFinite(numero) ? numero : 0;
 }
 
 export function formatarEuro(valor) {
