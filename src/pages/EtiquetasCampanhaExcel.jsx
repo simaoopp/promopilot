@@ -326,6 +326,14 @@ function formatarDataDiaMes(data) {
   return `${dia}/${mes}`;
 }
 
+function formatarDataInputDiaMes(valor) {
+  const [ano, mes, dia] = String(valor || "").split("-");
+
+  if (!ano || !mes || !dia) return "";
+
+  return `${dia}/${mes}`;
+}
+
 
 function normalizarCodigoTexto(valor) {
   if (valor === null || valor === undefined) return "";
@@ -637,6 +645,8 @@ export default function EtiquetasExcelPage() {
   const [formatoEtiqueta, setFormatoEtiqueta] = useState("a6");
   const [formatoAutomaticoAtivo, setFormatoAutomaticoAtivo] = useState(false);
   const [modeloImportado, setModeloImportado] = useState(EXCEL_FORMATS.CAMPANHA);
+  const [dataInicioShopping, setDataInicioShopping] = useState("");
+  const [dataFimShopping, setDataFimShopping] = useState("");
 
   const [popupArtigosInvalidosAberto, setPopupArtigosInvalidosAberto] =
     useState(false);
@@ -764,6 +774,8 @@ export default function EtiquetasExcelPage() {
       }
 
       setModeloImportado(formatoExcel);
+      setDataInicioShopping("");
+      setDataFimShopping("");
       setMostrarTabelaCompleta(false);
       setOrdenacao({ coluna: "", direcao: "" });
       setFiltroAberto(null);
@@ -908,6 +920,24 @@ export default function EtiquetasExcelPage() {
           ...atualizacoes,
         });
       }),
+    );
+  }
+
+  function atualizarDatasShopping(campo, valor) {
+    const dataFormatada = formatarDataInputDiaMes(valor);
+
+    if (campo === "dataInicio") {
+      setDataInicioShopping(valor);
+    } else {
+      setDataFimShopping(valor);
+    }
+
+    setDados((prev) =>
+      prev.map((item) =>
+        item.tipo_registo === EXCEL_FORMATS.SHOPPING
+          ? { ...item, [campo]: dataFormatada }
+          : item,
+      ),
     );
   }
 
@@ -1356,6 +1386,32 @@ export default function EtiquetasExcelPage() {
             {nomeFicheiro ? <small>Ficheiro: {nomeFicheiro}</small> : null}
             {loading ? <small>A carregar Excel...</small> : null}
           </div>
+
+          {modeloImportado === EXCEL_FORMATS.SHOPPING && dados.length > 0 ? (
+            <div className="toolbar-grid">
+              <label className="input-group">
+                <span>Data início Shopping</span>
+                <input
+                  type="date"
+                  value={dataInicioShopping}
+                  onChange={(e) =>
+                    atualizarDatasShopping("dataInicio", e.target.value)
+                  }
+                />
+              </label>
+
+              <label className="input-group">
+                <span>Data fim Shopping</span>
+                <input
+                  type="date"
+                  value={dataFimShopping}
+                  onChange={(e) =>
+                    atualizarDatasShopping("dataFim", e.target.value)
+                  }
+                />
+              </label>
+            </div>
+          ) : null}
 
           <div className="resumo-cards">
             <div className="resumo-card">
