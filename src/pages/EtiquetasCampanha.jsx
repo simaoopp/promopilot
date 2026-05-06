@@ -19,6 +19,7 @@ import {
 } from "../services/catalogoPesquisaService";
 import { PRIMARY_TABLE_COLUMNS, TABLE_COLUMNS } from "../data/tableColumns";
 import SyncedHorizontalScroll from "../components/SyncedHorizontalScroll";
+import EditableCampaignDate from "../components/EditableCampaignDate";
 import logo from "../logo.png";
 import "../styles/styles.css";
 import {
@@ -754,6 +755,28 @@ export default function EtiquetasPage() {
     setDados((prev) => prev.map((item) => ({ ...item, selecionado: false })));
   }
 
+  function atualizarDataCampanha(id, campo, valor) {
+    setDados((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, [campo]: valor } : item)),
+    );
+  }
+
+  function renderTabelaCampanhaCell(item, col) {
+    if (col.key === "dataInicio" || col.key === "dataFim") {
+      return (
+        <EditableCampaignDate
+          item={item}
+          field={col.key}
+          label={col.label}
+          anoValidade={anoValidade}
+          onChange={atualizarDataCampanha}
+        />
+      );
+    }
+
+    return renderCampaignTableCell(item, col.key);
+  }
+
   function alternarComparacaoPvp3Popup(item) {
     if (!artigoElegivelComparacaoPvp3(item)) return;
 
@@ -1197,7 +1220,7 @@ export default function EtiquetasPage() {
 
                           {TABLE_COLUMNS.map((col) => (
                             <td key={`${item.id}-${col.key}`}>
-                              {renderCampaignTableCell(item, col.key)}
+                              {renderTabelaCampanhaCell(item, col)}
                             </td>
                           ))}
                         </tr>
@@ -1292,7 +1315,7 @@ export default function EtiquetasPage() {
 
                       {PRIMARY_TABLE_COLUMNS.map((col) => (
                         <td key={`${item.id}-${col.key}`}>
-                          {renderCampaignTableCell(item, col.key)}
+                          {renderTabelaCampanhaCell(item, col)}
                         </td>
                       ))}
                     </tr>
