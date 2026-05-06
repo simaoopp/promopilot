@@ -1,12 +1,6 @@
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { printDocument } from "../utils/print";
-import {
-  aplicarComparacaoPvp3NoArtigo,
-  artigoElegivelComparacaoPvp3,
-  criarIdsComparacaoPvp3,
-  obterCodigosParaCopiar,
-} from "../utils/pvp3Promotion";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../components/ToastProvider";
 import logo from "../logo.png";
@@ -657,9 +651,6 @@ export default function EtiquetasExcelPage() {
   const [popupArtigosInvalidosAberto, setPopupArtigosInvalidosAberto] =
     useState(false);
   const [artigosInvalidosPopup, setArtigosInvalidosPopup] = useState([]);
-  const [idsComparacaoPvp3Popup, setIdsComparacaoPvp3Popup] = useState(
-    () => new Set(),
-  );
 
   const [filtroAberto, setFiltroAberto] = useState(null);
   const [ordenacao, setOrdenacao] = useState({
@@ -909,6 +900,44 @@ export default function EtiquetasExcelPage() {
     [selecionadosA6],
   );
 
+  async function guardarCampanhaNoHistorico(origem = "manual") {
+    const itensSelecionados = dados.filter((item) => item.selecionado);
+    if (!itensSelecionados.length) return false;
+
+    const store = String(profile?.store || "").trim();
+
+    if (!store || !user?.id) {
+      console.warn(
+        "Sem utilizador autenticado ou loja associada; campanha não foi guardada.",
+      );
+      return false;
+    }
+
+    const nomeCompleto =
+      `${profile?.first_name || ""} ${profile?.last_name || ""}`.trim();
+
+    const snapshot = createCampaignSnapshot({
+      titulo,
+      dados: itensSelecionados,
+      anoValidade,
+      formatoEtiqueta,
+      origem,
+      createdBy: nomeCompleto || "Utilizador",
+      createdByEmail: user?.email || "",
+      store,
+      userId: user.id,
+    });
+
+    try {
+      await addCampaignToHistory(snapshot);
+      return true;
+    } catch (error) {
+      console.error("Não foi possível guardar a campanha no histórico.", error);
+      toast.error("Não foi possível guardar a campanha no histórico.");
+      return false;
+    }
+  }
+
   function alternarSelecionado(id) {
     setDados((prev) =>
       prev.map((item) =>
@@ -974,77 +1003,39 @@ export default function EtiquetasExcelPage() {
     setDados((prev) => prev.map((item) => ({ ...item, selecionado: false })));
   }
 
-  function alternarComparacaoPvp3Popup(item) {
-    if (!artigoElegivelComparacaoPvp3(item)) return;
+  function removerInvalidosDaSelecao() {
+    const idsInvalidos = new Set(artigosInvalidosPopup.map((item) => item.id));
 
-    setIdsComparacaoPvp3Popup((prev) => {
-      const next = new Set(prev);
-
-      if (next.has(item.id)) {
-        next.delete(item.id);
-      } else {
-        next.add(item.id);
-      }
-
-      return next;
-    });
-  }
-
-  function selecionarTodosComparacaoPvp3Popup() {
-    setIdsComparacaoPvp3Popup(
-      new Set(
-        artigosInvalidosPopup
-          .filter(artigoElegivelComparacaoPvp3)
-          .map((item) => item.id),
+    setDados((prev) =>
+      prev.map((item) =>
+        idsInvalidos.has(item.id) ? { ...item, selecionado: false } : item,
       ),
     );
   }
 
-  function desmarcarTodosComparacaoPvp3Popup() {
-    setIdsComparacaoPvp3Popup(new Set());
-  }
+  
 
-  async function resolverPopupArtigosInvalidos({ copiarCodigos }) {
-    const comparacaoPvp3Ativa = modeloImportado === EXCEL_FORMATS.CAMPANHA;
-    const idsInvalidos = new Set(artigosInvalidosPopup.map((item) => item.id));
-    const idsComparacaoPvp3 = comparacaoPvp3Ativa
-      ? criarIdsComparacaoPvp3(artigosInvalidosPopup, idsComparacaoPvp3Popup)
-      : new Set();
+  async function copiarCodigosInvalidosEProsseguir() {
+    const texto = artigosInvalidosPopup
+      .map((item) => String(item.codigo || "").trim())
+      .filter(Boolean)
+      .join("|");
 
-    if (copiarCodigos) {
-      const texto = comparacaoPvp3Ativa
-        ? obterCodigosParaCopiar(artigosInvalidosPopup, idsComparacaoPvp3)
-        : artigosInvalidosPopup
-            .map((item) => String(item.codigo || "").trim())
-            .filter(Boolean)
-            .join("|");
-
-      try {
-        if (texto) {
-          await navigator.clipboard.writeText(texto);
-        }
-      } catch (error) {
-        console.error("Não foi possível copiar os códigos.", error);
+    try {
+      if (texto) {
+        await navigator.clipboard.writeText(texto);
       }
+    } catch (error) {
+      console.error("Não foi possível copiar os códigos.", error);
     }
 
+    const idsInvalidos = new Set(artigosInvalidosPopup.map((item) => item.id));
     const restantesValidos = selecionados.filter(
-      (item) => !idsInvalidos.has(item.id) || idsComparacaoPvp3.has(item.id),
+      (item) => !idsInvalidos.has(item.id),
     );
 
-    setDados((prev) =>
-      prev.map((item) => {
-        if (!idsInvalidos.has(item.id)) return item;
-
-        if (idsComparacaoPvp3.has(item.id)) {
-          return aplicarComparacaoPvp3NoArtigo(item);
-        }
-
-        return { ...item, selecionado: false };
-      }),
-    );
+    removerInvalidosDaSelecao();
     setPopupArtigosInvalidosAberto(false);
-    setIdsComparacaoPvp3Popup(new Set());
 
     if (restantesValidos.length === 0) {
       toast.warning("Não existem etiquetas válidas para imprimir.");
@@ -1052,15 +1043,27 @@ export default function EtiquetasExcelPage() {
     }
 
     await guardarCampanhaNoHistorico("impressao");
+
     await printDocument();
   }
 
-  async function copiarCodigosInvalidosEProsseguir() {
-    await resolverPopupArtigosInvalidos({ copiarCodigos: true });
-  }
-
   async function fecharPopupEProsseguir() {
-    await resolverPopupArtigosInvalidos({ copiarCodigos: false });
+    const idsInvalidos = new Set(artigosInvalidosPopup.map((item) => item.id));
+    const restantesValidos = selecionados.filter(
+      (item) => !idsInvalidos.has(item.id),
+    );
+
+    removerInvalidosDaSelecao();
+    setPopupArtigosInvalidosAberto(false);
+
+    if (restantesValidos.length === 0) {
+      toast.warning("Não existem etiquetas válidas para imprimir.");
+      return;
+    }
+
+    await guardarCampanhaNoHistorico("impressao");
+
+    await printDocument();
   }
 
   async function imprimirSelecionados() {
@@ -1087,7 +1090,6 @@ export default function EtiquetasExcelPage() {
 
     if (invalidos.length > 0) {
       setArtigosInvalidosPopup(invalidos);
-      setIdsComparacaoPvp3Popup(new Set());
       setPopupArtigosInvalidosAberto(true);
       return;
     }
@@ -1707,30 +1709,10 @@ export default function EtiquetasExcelPage() {
             <p className="popup-text">
               {modeloImportado === EXCEL_FORMATS.SHOPPING
                 ? "Os artigos abaixo foram selecionados para impressão, mas têm o preço sem promoção menor ou igual ao preço com promoção."
-                : "Os artigos abaixo foram selecionados para impressão, mas têm o PVP2 atual maior ou igual ao PVP2 antes. Quando o PVP atual for inferior ao PVP3, podes selecionar o artigo para impressão com a comparação PVP atual/PVP3. Os artigos selecionados nessa comparação não entram no botão “Copiar código”."}
+                : "Os artigos abaixo foram selecionados para impressão, mas têm o PVP2 atual maior ou igual ao PVP2 antes."}
             </p>
 
             <div className="popup-actions">
-              {modeloImportado === EXCEL_FORMATS.CAMPANHA ? (
-                <>
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    onClick={selecionarTodosComparacaoPvp3Popup}
-                  >
-                    Selecionar todos
-                  </button>
-
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    onClick={desmarcarTodosComparacaoPvp3Popup}
-                  >
-                    Desmarcar todos
-                  </button>
-                </>
-              ) : null}
-
               <button
                 type="button"
                 className="btn btn-primary"
@@ -1752,9 +1734,6 @@ export default function EtiquetasExcelPage() {
               <table>
                 <thead>
                   <tr>
-                    {modeloImportado === EXCEL_FORMATS.CAMPANHA ? (
-                      <th>Imprimir PVP atual/PVP3</th>
-                    ) : null}
                     <th>Código</th>
                     <th>Designação</th>
                     <th>
@@ -1767,41 +1746,18 @@ export default function EtiquetasExcelPage() {
                         ? "Preço promoção"
                         : "PVP2 Atual"}
                     </th>
-                    {modeloImportado === EXCEL_FORMATS.CAMPANHA ? <th>PVP3</th> : null}
                   </tr>
                 </thead>
 
                 <tbody>
-                  {artigosInvalidosPopup.map((item) => {
-                    const elegivelPvp3 = artigoElegivelComparacaoPvp3(item);
-                    const isCampanha = modeloImportado === EXCEL_FORMATS.CAMPANHA;
-
-                    return (
-                      <tr key={item.id}>
-                        {isCampanha ? (
-                          <td>
-                            <input
-                              type="checkbox"
-                              checked={idsComparacaoPvp3Popup.has(item.id)}
-                              disabled={!elegivelPvp3}
-                              aria-label={`Selecionar ${item.codigo} para impressão por PVP3`}
-                              onChange={() => alternarComparacaoPvp3Popup(item)}
-                            />
-                          </td>
-                        ) : null}
-                        <td>{item.codigo}</td>
-                        <td>{item.descricao}</td>
-                        <td>{formatarEuro(item.antes)}€</td>
-                        <td>{formatarEuro(item.atual)}€</td>
-                        {isCampanha ? (
-                          <td>
-                            {item.pv3 ? `${formatarEuro(item.pv3)}€` : "-"}
-                            {!elegivelPvp3 ? " · não elegível" : ""}
-                          </td>
-                        ) : null}
-                      </tr>
-                    );
-                  })}
+                  {artigosInvalidosPopup.map((item) => (
+                    <tr key={item.id}>
+                      <td>{item.codigo}</td>
+                      <td>{item.descricao}</td>
+                      <td>{formatarEuro(item.antes)}€</td>
+                      <td>{formatarEuro(item.atual)}€</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
