@@ -3,6 +3,12 @@ import { useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../components/ToastProvider";
 import { printDocument } from "../utils/print";
+import {
+  aplicarComparacaoPvp3NoArtigo,
+  artigoElegivelComparacaoPvp3,
+  criarIdsComparacaoPvp3,
+  obterCodigosParaCopiar,
+} from "../utils/pvp3Promotion";
 
 import Barcode from "../components/Barcode";
 import FilterMenu from "../components/FilterMenu";
@@ -412,6 +418,9 @@ export default function EtiquetasPage() {
   const [popupArtigosInvalidosAberto, setPopupArtigosInvalidosAberto] =
     useState(false);
   const [artigosInvalidosPopup, setArtigosInvalidosPopup] = useState([]);
+  const [idsComparacaoPvp3Popup, setIdsComparacaoPvp3Popup] = useState(
+    () => new Set(),
+  );
 
   const [popupCriarCampanhaAberto, setPopupCriarCampanhaAberto] =
     useState(false);
@@ -745,19 +754,75 @@ export default function EtiquetasPage() {
     setDados((prev) => prev.map((item) => ({ ...item, selecionado: false })));
   }
 
-  function removerInvalidosDaSelecao() {
-    const idsInvalidos = new Set(artigosInvalidosPopup.map((item) => item.id));
+  function alternarComparacaoPvp3Popup(item) {
+    if (!artigoElegivelComparacaoPvp3(item)) return;
 
-    setDados((prev) =>
-      prev.map((item) =>
-        idsInvalidos.has(item.id) ? { ...item, selecionado: false } : item,
+    setIdsComparacaoPvp3Popup((prev) => {
+      const next = new Set(prev);
+
+      if (next.has(item.id)) {
+        next.delete(item.id);
+      } else {
+        next.add(item.id);
+      }
+
+      return next;
+    });
+  }
+
+  function selecionarTodosComparacaoPvp3Popup() {
+    setIdsComparacaoPvp3Popup(
+      new Set(
+        artigosInvalidosPopup
+          .filter(artigoElegivelComparacaoPvp3)
+          .map((item) => item.id),
       ),
     );
   }
 
-  async function imprimirComValidosRestantes(restantesValidos) {
-    removerInvalidosDaSelecao();
+  function desmarcarTodosComparacaoPvp3Popup() {
+    setIdsComparacaoPvp3Popup(new Set());
+  }
+
+  async function resolverPopupArtigosInvalidos({ copiarCodigos }) {
+    const idsInvalidos = new Set(artigosInvalidosPopup.map((item) => item.id));
+    const idsComparacaoPvp3 = criarIdsComparacaoPvp3(
+      artigosInvalidosPopup,
+      idsComparacaoPvp3Popup,
+    );
+
+    if (copiarCodigos) {
+      const texto = obterCodigosParaCopiar(
+        artigosInvalidosPopup,
+        idsComparacaoPvp3,
+      );
+
+      try {
+        if (texto) {
+          await navigator.clipboard.writeText(texto);
+        }
+      } catch (error) {
+        console.error("Não foi possível copiar os códigos.", error);
+      }
+    }
+
+    const restantesValidos = selecionados.filter(
+      (item) => !idsInvalidos.has(item.id) || idsComparacaoPvp3.has(item.id),
+    );
+
+    setDados((prev) =>
+      prev.map((item) => {
+        if (!idsInvalidos.has(item.id)) return item;
+
+        if (idsComparacaoPvp3.has(item.id)) {
+          return aplicarComparacaoPvp3NoArtigo(item);
+        }
+
+        return { ...item, selecionado: false };
+      }),
+    );
     setPopupArtigosInvalidosAberto(false);
+    setIdsComparacaoPvp3Popup(new Set());
 
     if (restantesValidos.length === 0) {
       toast.warning("Não existem etiquetas válidas para imprimir.");
@@ -765,39 +830,15 @@ export default function EtiquetasPage() {
     }
 
     await guardarCampanhaNoHistorico("impressao");
-
     await printDocument();
   }
 
   async function copiarCodigosInvalidosEProsseguir() {
-    const texto = artigosInvalidosPopup
-      .map((item) => String(item.codigo || "").trim())
-      .filter(Boolean)
-      .join("|");
-
-    try {
-      if (texto) {
-        await navigator.clipboard.writeText(texto);
-      }
-    } catch (error) {
-      console.error("Não foi possível copiar os códigos.", error);
-    }
-
-    const idsInvalidos = new Set(artigosInvalidosPopup.map((item) => item.id));
-    const restantesValidos = selecionados.filter(
-      (item) => !idsInvalidos.has(item.id),
-    );
-
-    await imprimirComValidosRestantes(restantesValidos);
+    await resolverPopupArtigosInvalidos({ copiarCodigos: true });
   }
 
   async function fecharPopupEProsseguir() {
-    const idsInvalidos = new Set(artigosInvalidosPopup.map((item) => item.id));
-    const restantesValidos = selecionados.filter(
-      (item) => !idsInvalidos.has(item.id),
-    );
-
-    await imprimirComValidosRestantes(restantesValidos);
+    await resolverPopupArtigosInvalidos({ copiarCodigos: false });
   }
 
   async function imprimirSelecionados() {
@@ -812,6 +853,7 @@ export default function EtiquetasPage() {
 
     if (invalidos.length > 0) {
       setArtigosInvalidosPopup(invalidos);
+      setIdsComparacaoPvp3Popup(new Set());
       setPopupArtigosInvalidosAberto(true);
       return;
     }
@@ -1531,10 +1573,29 @@ export default function EtiquetasPage() {
 
             <p className="popup-text">
               Os artigos abaixo foram selecionados para impressão, mas têm o
-              PVP2 anterior menor ou igual ao PVP2 atual.
+              PVP2 anterior menor ou igual ao PVP2 atual. Quando o PVP atual for
+              inferior ao PVP3, podes selecionar o artigo para impressão com a
+              comparação PVP atual/PVP3. Os artigos selecionados nessa comparação
+              não entram no botão “Copiar código”.
             </p>
 
             <div className="popup-actions">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={selecionarTodosComparacaoPvp3Popup}
+              >
+                Selecionar todos
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={desmarcarTodosComparacaoPvp3Popup}
+              >
+                Desmarcar todos
+              </button>
+
               <button
                 type="button"
                 className="btn btn-primary"
@@ -1556,22 +1617,41 @@ export default function EtiquetasPage() {
               <table>
                 <thead>
                   <tr>
+                    <th>Imprimir PVP atual/PVP3</th>
                     <th>Código</th>
                     <th>Designação</th>
                     <th>PVP2 Antes</th>
                     <th>PVP2 Atual</th>
+                    <th>PVP3</th>
                   </tr>
                 </thead>
 
                 <tbody>
-                  {artigosInvalidosPopup.map((item) => (
-                    <tr key={item.id}>
-                      <td>{item.codigo}</td>
-                      <td>{item.descricao}</td>
-                      <td>{formatarEuro(item.antes)}€</td>
-                      <td>{formatarEuro(item.atual)}€</td>
-                    </tr>
-                  ))}
+                  {artigosInvalidosPopup.map((item) => {
+                    const elegivelPvp3 = artigoElegivelComparacaoPvp3(item);
+
+                    return (
+                      <tr key={item.id}>
+                        <td>
+                          <input
+                            type="checkbox"
+                            checked={idsComparacaoPvp3Popup.has(item.id)}
+                            disabled={!elegivelPvp3}
+                            aria-label={`Selecionar ${item.codigo} para impressão por PVP3`}
+                            onChange={() => alternarComparacaoPvp3Popup(item)}
+                          />
+                        </td>
+                        <td>{item.codigo}</td>
+                        <td>{item.descricao}</td>
+                        <td>{formatarEuro(item.antes)}€</td>
+                        <td>{formatarEuro(item.atual)}€</td>
+                        <td>
+                          {item.pv3 ? `${formatarEuro(item.pv3)}€` : "-"}
+                          {!elegivelPvp3 ? " · não elegível" : ""}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
