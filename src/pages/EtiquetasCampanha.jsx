@@ -20,6 +20,7 @@ import {
 import { PRIMARY_TABLE_COLUMNS, TABLE_COLUMNS } from "../data/tableColumns";
 import SyncedHorizontalScroll from "../components/SyncedHorizontalScroll";
 import EditableCampaignDate from "../components/EditableCampaignDate";
+import { obterDataInputCampanha } from "../utils/campaignDates";
 import logo from "../logo.png";
 import "../styles/styles.css";
 import {
@@ -412,6 +413,8 @@ export default function EtiquetasPage() {
   const [titulo, setTitulo] = useState(CAMPANHA_TITULO_DEFAULT);
   const [textoColado, setTextoColado] = useState("");
   const [anoValidade, setAnoValidade] = useState(new Date().getFullYear());
+  const [dataInicioGeral, setDataInicioGeral] = useState("");
+  const [dataFimGeral, setDataFimGeral] = useState("");
   const [dados, setDados] = useState([]);
   const [formatoEtiqueta, setFormatoEtiqueta] = useState("a6");
   const [modoFormatoAutomatico, setModoFormatoAutomatico] = useState(true);
@@ -666,6 +669,39 @@ export default function EtiquetasPage() {
     }));
   }
 
+  function extrairPrimeiraDataCampanha(linhas, campo) {
+    const itemComData = linhas.find((item) => String(item?.[campo] || "").trim());
+    return itemComData ? obterDataInputCampanha(itemComData[campo], anoValidade) : "";
+  }
+
+  function aplicarDatasGeraisEmLinhas(linhas, dataInicioIso, dataFimIso) {
+    const dataInicioFormatada = formatarDataInputParaDiaMes(dataInicioIso);
+    const dataFimFormatada = formatarDataInputParaDiaMes(dataFimIso);
+
+    return linhas.map((item) => ({
+      ...item,
+      dataInicio: dataInicioFormatada || item.dataInicio || "",
+      dataFim: dataFimFormatada || item.dataFim || "",
+    }));
+  }
+
+  function atualizarDataGeral(campo, valor) {
+    const valorFormatado = formatarDataInputParaDiaMes(valor);
+
+    if (campo === "dataInicio") {
+      setDataInicioGeral(valor);
+    } else {
+      setDataFimGeral(valor);
+    }
+
+    setDados((prev) =>
+      prev.map((item) => ({
+        ...item,
+        [campo]: valorFormatado,
+      })),
+    );
+  }
+
   function carregarTextoColado() {
     try {
       if (!textoColado.trim()) {
@@ -681,7 +717,20 @@ export default function EtiquetasPage() {
         throw new Error("Dados inválidos");
       }
 
-      setDados(linhas);
+      const dataInicioCapturada = extrairPrimeiraDataCampanha(linhas, "dataInicio");
+      const dataFimCapturada = extrairPrimeiraDataCampanha(linhas, "dataFim");
+      const dataInicioBase = dataInicioGeral || dataInicioCapturada;
+      const dataFimBase = dataFimGeral || dataFimCapturada;
+
+      if (!dataInicioGeral && dataInicioCapturada) {
+        setDataInicioGeral(dataInicioCapturada);
+      }
+
+      if (!dataFimGeral && dataFimCapturada) {
+        setDataFimGeral(dataFimCapturada);
+      }
+
+      setDados(aplicarDatasGeraisEmLinhas(linhas, dataInicioBase, dataFimBase));
     } catch {
       toast.error("Verifica se os dados inseridos estão corretos.");
     }
@@ -1061,6 +1110,28 @@ export default function EtiquetasPage() {
               onChange={(e) => setTextoColado(e.target.value)}
               placeholder="Cola aqui a tabela completa do email"
             />
+          </div>
+
+          <div className="toolbar-grid campaign-global-dates">
+            <label className="input-group">
+              <span>Data início geral</span>
+              <input
+                type="date"
+                value={dataInicioGeral}
+                onChange={(e) => atualizarDataGeral("dataInicio", e.target.value)}
+              />
+              <small>Predefine a data de início para todos os artigos abaixo.</small>
+            </label>
+
+            <label className="input-group">
+              <span>Data fim geral</span>
+              <input
+                type="date"
+                value={dataFimGeral}
+                onChange={(e) => atualizarDataGeral("dataFim", e.target.value)}
+              />
+              <small>Se ficar vazio, mantém as datas do email ou o fallback de 30 dias.</small>
+            </label>
           </div>
 
           <div className="toolbar-actions">
@@ -1654,8 +1725,13 @@ export default function EtiquetasPage() {
                     const elegivelPvp3 = artigoElegivelComparacaoPvp3(item);
 
                     return (
-                      <tr key={item.id}>
-                        <td>
+                      <tr
+                        key={item.id}
+                        className={idsComparacaoPvp3Popup.has(item.id) ? "linha-selecionada" : ""}
+                        onClick={() => alternarComparacaoPvp3Popup(item)}
+                        title={elegivelPvp3 ? "Selecionar para impressão PVP atual/PVP3" : "Artigo não elegível para comparação PVP3"}
+                      >
+                        <td onClick={(e) => e.stopPropagation()}>
                           <input
                             type="checkbox"
                             checked={idsComparacaoPvp3Popup.has(item.id)}
