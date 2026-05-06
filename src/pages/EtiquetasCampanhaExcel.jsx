@@ -27,6 +27,7 @@ import {
 } from "../utils/filters";
 import SyncedHorizontalScroll from "../components/SyncedHorizontalScroll";
 import EditableCampaignDate from "../components/EditableCampaignDate";
+import { obterDataInputCampanha } from "../utils/campaignDates";
 
 const EXCEL_FORMATS = {
   CAMPANHA: "campanha",
@@ -654,6 +655,8 @@ export default function EtiquetasExcelPage() {
   const [modeloImportado, setModeloImportado] = useState(EXCEL_FORMATS.CAMPANHA);
   const [dataInicioShopping, setDataInicioShopping] = useState("");
   const [dataFimShopping, setDataFimShopping] = useState("");
+  const [dataInicioCampanhaGeral, setDataInicioCampanhaGeral] = useState("");
+  const [dataFimCampanhaGeral, setDataFimCampanhaGeral] = useState("");
 
   const [popupArtigosInvalidosAberto, setPopupArtigosInvalidosAberto] =
     useState(false);
@@ -793,6 +796,49 @@ export default function EtiquetasExcelPage() {
     [ordenacao],
   );
 
+  function extrairPrimeiraDataCampanha(linhas, campo) {
+    const itemComData = linhas.find(
+      (item) =>
+        item.tipo_registo === EXCEL_FORMATS.CAMPANHA &&
+        String(item?.[campo] || "").trim(),
+    );
+
+    return itemComData ? obterDataInputCampanha(itemComData[campo], anoValidade) : "";
+  }
+
+  function aplicarDatasGeraisCampanha(linhas, dataInicioIso, dataFimIso) {
+    const dataInicioFormatada = formatarDataInputDiaMes(dataInicioIso);
+    const dataFimFormatada = formatarDataInputDiaMes(dataFimIso);
+
+    return linhas.map((item) => {
+      if (item.tipo_registo !== EXCEL_FORMATS.CAMPANHA) return item;
+
+      return {
+        ...item,
+        dataInicio: dataInicioFormatada || item.dataInicio || "",
+        dataFim: dataFimFormatada || item.dataFim || "",
+      };
+    });
+  }
+
+  function atualizarDataGeralCampanha(campo, valor) {
+    const valorFormatado = formatarDataInputDiaMes(valor);
+
+    if (campo === "dataInicio") {
+      setDataInicioCampanhaGeral(valor);
+    } else {
+      setDataFimCampanhaGeral(valor);
+    }
+
+    setDados((prev) =>
+      prev.map((item) =>
+        item.tipo_registo === EXCEL_FORMATS.CAMPANHA
+          ? { ...item, [campo]: valorFormatado }
+          : item,
+      ),
+    );
+  }
+
   async function carregarExcel(event) {
     try {
       const file = event.target.files?.[0];
@@ -821,13 +867,30 @@ export default function EtiquetasExcelPage() {
         throw new Error("Sem linhas válidas");
       }
 
+      const dataInicioCapturada =
+        formatoExcel === EXCEL_FORMATS.CAMPANHA
+          ? extrairPrimeiraDataCampanha(linhas, "dataInicio")
+          : "";
+      const dataFimCapturada =
+        formatoExcel === EXCEL_FORMATS.CAMPANHA
+          ? extrairPrimeiraDataCampanha(linhas, "dataFim")
+          : "";
+      const dataInicioBase = dataInicioCapturada || dataInicioCampanhaGeral;
+      const dataFimBase = dataFimCapturada || dataFimCampanhaGeral;
+
       setModeloImportado(formatoExcel);
       setDataInicioShopping("");
       setDataFimShopping("");
+      setDataInicioCampanhaGeral(dataInicioBase);
+      setDataFimCampanhaGeral(dataFimBase);
       setMostrarTabelaCompleta(false);
       setOrdenacao({ coluna: "", direcao: "" });
       setFiltroAberto(null);
-      setDados(linhas);
+      setDados(
+        formatoExcel === EXCEL_FORMATS.CAMPANHA
+          ? aplicarDatasGeraisCampanha(linhas, dataInicioBase, dataFimBase)
+          : linhas,
+      );
 
       toast.success(
         formatoExcel === EXCEL_FORMATS.SHOPPING
@@ -1452,6 +1515,34 @@ export default function EtiquetasExcelPage() {
             {loading ? <small>A carregar Excel...</small> : null}
           </div>
 
+          {modeloImportado === EXCEL_FORMATS.CAMPANHA && dados.length > 0 ? (
+            <div className="toolbar-grid campaign-global-dates">
+              <label className="input-group">
+                <span>Data início geral</span>
+                <input
+                  type="date"
+                  value={dataInicioCampanhaGeral}
+                  onChange={(e) =>
+                    atualizarDataGeralCampanha("dataInicio", e.target.value)
+                  }
+                />
+                <small>Predefine a data de início para todos os artigos abaixo.</small>
+              </label>
+
+              <label className="input-group">
+                <span>Data fim geral</span>
+                <input
+                  type="date"
+                  value={dataFimCampanhaGeral}
+                  onChange={(e) =>
+                    atualizarDataGeralCampanha("dataFim", e.target.value)
+                  }
+                />
+                <small>Se ficar vazio, mantém as datas do Excel ou o fallback de 30 dias.</small>
+              </label>
+            </div>
+          ) : null}
+
           {modeloImportado === EXCEL_FORMATS.SHOPPING && dados.length > 0 ? (
             <div className="toolbar-grid">
               <label className="input-group">
@@ -1843,9 +1934,20 @@ export default function EtiquetasExcelPage() {
                     const isCampanha = modeloImportado === EXCEL_FORMATS.CAMPANHA;
 
                     return (
-                      <tr key={item.id}>
+                      <tr
+                        key={item.id}
+                        className={idsComparacaoPvp3Popup.has(item.id) ? "linha-selecionada" : ""}
+                        onClick={isCampanha ? () => alternarComparacaoPvp3Popup(item) : undefined}
+                        title={
+                          isCampanha
+                            ? elegivelPvp3
+                              ? "Selecionar para impressão PVP atual/PVP3"
+                              : "Artigo não elegível para comparação PVP3"
+                            : undefined
+                        }
+                      >
                         {isCampanha ? (
-                          <td>
+                          <td onClick={(e) => e.stopPropagation()}>
                             <input
                               type="checkbox"
                               checked={idsComparacaoPvp3Popup.has(item.id)}
