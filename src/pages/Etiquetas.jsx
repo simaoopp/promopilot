@@ -10,6 +10,7 @@ import {
 } from "../services/catalogoPesquisaService";
 import { filterAndRankPreparedArticles, normalizeArticleCompact } from "../utils/articleSearch";
 import "../styles/styles.css";
+import { normalizarValorPvp } from "../utils/articlePrices";
 
 const LIMITE_RESULTADOS = 100;
 
@@ -550,7 +551,9 @@ export default function EtiquetasCampanhaExcelPage() {
                 <th scope="col">Selecionar</th>
                 <th scope="col">Artigo</th>
                 <th scope="col">Descrição</th>
+                <th scope="col">PVP1</th>
                 <th scope="col">PVP2</th>
+                <th scope="col">PVP3</th>
                 <th scope="col">Cód. Barras</th>
                 <th scope="col">Armazém</th>
                 <th scope="col">Stock</th>
@@ -560,19 +563,19 @@ export default function EtiquetasCampanhaExcelPage() {
             <tbody>
               {artigosLoading ? (
                 <tr>
-                  <td colSpan={7} className="empty-cell">
+                  <td colSpan={9} className="empty-cell">
                     A carregar catálogo de artigos...
                   </td>
                 </tr>
               ) : pesquisaDebounced.trim().length < 2 ? (
                 <tr>
-                  <td colSpan={7} className="empty-cell">
+                  <td colSpan={9} className="empty-cell">
                     Escreve pelo menos 2 caracteres para pesquisar.
                   </td>
                 </tr>
               ) : resultadosVisiveis.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="empty-cell">
+                  <td colSpan={9} className="empty-cell">
                     Nenhum artigo encontrado.
                   </td>
                 </tr>
@@ -597,7 +600,9 @@ export default function EtiquetasCampanhaExcelPage() {
                     </td>
                     <td>{item.artigo}</td>
                     <td>{item.descricao}</td>
-                    <td>{item.pvp2}</td>
+                    <td>{normalizarValorPvp(item.pvp1)}</td>
+                    <td>{normalizarValorPvp(item.pvp2)}</td>
+                    <td>{normalizarValorPvp(item.pvp3)}</td>
                     <td>{item.codigoBarras}</td>
                     <td>{item.armazem}</td>
                     <td>{item.stock}</td>
@@ -728,7 +733,13 @@ export default function EtiquetasCampanhaExcelPage() {
                       {resultadoScan.item.codigoBarras}
                     </p>
                     <p>
-                      <strong>PVP2:</strong> {resultadoScan.item.pvp2}
+                      <strong>PVP1:</strong> {normalizarValorPvp(resultadoScan.item.pvp1)}
+                    </p>
+                    <p>
+                      <strong>PVP2:</strong> {normalizarValorPvp(resultadoScan.item.pvp2)}
+                    </p>
+                    <p>
+                      <strong>PVP3:</strong> {normalizarValorPvp(resultadoScan.item.pvp3)}
                     </p>
                     <p>
                       <strong>Armazém:</strong> {resultadoScan.item.armazem}

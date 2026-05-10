@@ -9,13 +9,11 @@ import {
 } from "../utils/pvp3Promotion";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../components/ToastProvider";
-import logo from "../logo.png";
-import Barcode from "../components/Barcode";
 import FilterMenu from "../components/FilterMenu";
 import "../styles/styles.css";
 
 import { formatarEuro, parseNumero } from "../utils/formatters";
-import { useAutoFontSize } from "../utils/useAutoFontSize";
+import { renderCampaignLabel } from "../components/campaign/CampaignLabel";
 import {
   addCampaignToHistory,
   createCampaignSnapshot,
@@ -107,73 +105,6 @@ const SHOPPING_PRICE_SOURCE_LABELS = {
 };
 
 /* =========================================================
-   AUTO TEXT
-   ========================================================= */
-function AutoText({ texto, className, min, max, style = {} }) {
-  const autoFont = useAutoFontSize(texto, min, max);
-
-  return (
-    <div
-      ref={autoFont.ref}
-      className={className}
-      style={{
-        width: "100%",
-        ...style,
-        fontSize: `${autoFont.fontSize}px`,
-      }}
-    >
-      {texto}
-    </div>
-  );
-}
-
-function DescricaoAuto({ texto, formatoEtiqueta }) {
-  return (
-    <AutoText
-      texto={texto}
-      className="descricao"
-      min={formatoEtiqueta === "a5" ? 24 : 12}
-      max={formatoEtiqueta === "a5" ? 38 : 18}
-    />
-  );
-}
-
-function PrecoAntesAuto({ valor, formatoEtiqueta }) {
-  return (
-    <AutoText
-      texto={`${formatarEuro(valor)}€`}
-      className="antes"
-      min={formatoEtiqueta === "a5" ? 44 : 38}
-      max={formatoEtiqueta === "a5" ? 54 : 46}
-    />
-  );
-}
-
-function DescontoAuto({ valor, formatoEtiqueta }) {
-  return (
-    <AutoText
-      texto={`-${formatarEuro(valor)}€`}
-      className="desconto"
-      min={formatoEtiqueta === "a5" ? 48 : 40}
-      max={formatoEtiqueta === "a5" ? 60 : 50}
-    />
-  );
-}
-
-function PrecoAtualAuto({ valor, formatoEtiqueta }) {
-  return (
-    <AutoText
-      texto={`${formatarEuro(valor)}€`}
-      className="atual"
-      min={formatoEtiqueta === "a5" ? 62 : 48}
-      max={formatoEtiqueta === "a5" ? 88 : 68}
-    />
-  );
-}
-
-
-
-/* =========================================================
    HELPERS
    ========================================================= */
 function normalizarCabecalho(texto) {
@@ -205,7 +136,7 @@ function obterValor(normalizado, chaves = [], fallback = "") {
 }
 
 function formatarValorTabelaMoeda(valor) {
-  return Number(valor) > 0 ? `${formatarEuro(valor)}€` : "—";
+  return parseNumero(valor) > 0 ? `${formatarEuro(valor)}€` : "—";
 }
 function formatarLabelOpcaoPreco(opcao) {
   if (opcao.value === "manual") return "Outro valor";
@@ -797,8 +728,8 @@ export default function EtiquetasExcelPage() {
         const va = a[ordenacao.coluna];
         const vb = b[ordenacao.coluna];
 
-        const aNum = Number(va);
-        const bNum = Number(vb);
+        const aNum = parseNumero(va);
+        const bNum = parseNumero(vb);
         const ambosNumeros = !Number.isNaN(aNum) && !Number.isNaN(bNum);
 
         if (ambosNumeros) {
@@ -1217,16 +1148,16 @@ export default function EtiquetasExcelPage() {
     const invalidos = selecionados.filter((item) => {
       if (item.tipo_registo === EXCEL_FORMATS.SHOPPING) {
         return (
-          Number(item.antes) > 0 &&
-          Number(item.atual) > 0 &&
-          Number(item.antes) <= Number(item.atual)
+          parseNumero(item.antes) > 0 &&
+          parseNumero(item.atual) > 0 &&
+          parseNumero(item.antes) <= parseNumero(item.atual)
         );
       }
 
       return (
-        Number(item.antes) > 0 &&
-        Number(item.atual) > 0 &&
-        Number(item.antes) <= Number(item.atual)
+        parseNumero(item.antes) > 0 &&
+        parseNumero(item.atual) > 0 &&
+        parseNumero(item.antes) <= parseNumero(item.atual)
       );
     });
 
@@ -1242,147 +1173,17 @@ export default function EtiquetasExcelPage() {
   }
 
   function renderEtiquetaCampanha(item, formatoAtual) {
-    const desconto = Math.max(0, item.antes - item.atual);
     const textoValidade = obterTextoValidade(item, anoValidade, titulo);
-    const mostrarValidade = Boolean(String(textoValidade || "").trim());
     const mostrarIndicadorShopping = item.tipo_registo === EXCEL_FORMATS.SHOPPING;
 
-    return (
-      <div
-        key={item.id}
-        className={`label ${formatoAtual === "a5" ? "label-a5" : "label-a6"}`}
-      >
-        {formatoAtual === "a5" ? (
-          <div className="label-a5-rotator">
-            <div className="label-inner">
-              <div className="topbar">
-                <img src={logo} alt="Expert" className="print-logo" />
-              </div>
-
-              <div className="content">
-                <div className="topo">
-                  <div className="codigo">{item.codigo}</div>
-                  <div className="titulo">{titulo}</div>
-                  <DescricaoAuto
-                    texto={item.descricao}
-                    formatoEtiqueta={formatoAtual}
-                  />
-                </div>
-
-                <div className="precos">
-                  <div className="linha-preco">
-                    <PrecoAntesAuto
-                      valor={item.antes}
-                      formatoEtiqueta={formatoAtual}
-                    />
-                  </div>
-
-                  <div className="linha-preco desconto-linha">
-                    <DescontoAuto
-                      valor={desconto}
-                      formatoEtiqueta={formatoAtual}
-                    />
-                  </div>
-
-                  <div className="linha-preco">
-                    <PrecoAtualAuto
-                      valor={item.atual}
-                      formatoEtiqueta={formatoAtual}
-                    />
-                  </div>
-                </div>
-
-                <div className="rodape">
-                  <Barcode value={item.ean} />
-
-                  {mostrarValidade || mostrarIndicadorShopping ? (
-                    <div className="validade-row">
-                      {mostrarValidade ? (
-                        <div className="validade">{textoValidade}</div>
-                      ) : null}
-                      {mostrarIndicadorShopping ? (
-                        <span
-                          className={`shopping-price-dot ${obterClasseIndicadorShopping(item)}`}
-                          aria-hidden="true"
-                        />
-                      ) : null}
-                    </div>
-                  ) : null}
-
-                  <div className="nota">
-                    VÁLIDO ENQUANTO DURAR O STOCK. Limitado ao stock existente e
-                    não acumulável com outras promoções.
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="label-inner">
-            <div className="topbar">
-              <img src={logo} alt="Expert" className="print-logo" />
-            </div>
-
-            <div className="content">
-              <div className="topo">
-                <div className="codigo">{item.codigo}</div>
-                <div className="titulo">{titulo}</div>
-                <DescricaoAuto
-                  texto={item.descricao}
-                  formatoEtiqueta={formatoAtual}
-                />
-              </div>
-
-              <div className="precos">
-                <div className="linha-preco">
-                  <PrecoAntesAuto
-                    valor={item.antes}
-                    formatoEtiqueta={formatoAtual}
-                  />
-                </div>
-
-                <div className="linha-preco desconto-linha">
-                  <DescontoAuto
-                    valor={desconto}
-                    formatoEtiqueta={formatoAtual}
-                  />
-                </div>
-
-                <div className="linha-preco">
-                  <PrecoAtualAuto
-                    valor={item.atual}
-                    formatoEtiqueta={formatoAtual}
-                  />
-                </div>
-              </div>
-
-              <div className="rodape">
-                <Barcode value={item.ean} />
-
-                {mostrarValidade || mostrarIndicadorShopping ? (
-                  <div className="validade-row">
-                    {mostrarValidade ? (
-                      <div className="validade">{textoValidade}</div>
-                    ) : null}
-                    {mostrarIndicadorShopping ? (
-                      <span
-                        className={`shopping-price-dot ${obterClasseIndicadorShopping(item)}`}
-                        aria-hidden="true"
-                      />
-                    ) : null}
-                  </div>
-                ) : null}
-
-                <div className="nota">
-                  VÁLIDO ENQUANTO DURAR O STOCK. Limitado ao stock existente e
-                  não acumulável com outras promoções.
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    );
+    return renderCampaignLabel(item, formatoAtual, {
+      titulo,
+      textoValidade,
+      showShoppingIndicator: mostrarIndicadorShopping,
+      shoppingIndicatorClass: mostrarIndicadorShopping
+        ? obterClasseIndicadorShopping(item)
+        : "",
+    });
   }
 
   function renderEtiqueta(item, formatoAtual) {

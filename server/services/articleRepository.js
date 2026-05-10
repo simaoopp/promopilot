@@ -5,7 +5,9 @@ export const ARTICLES_TABLE = process.env.ARTICLES_TABLE || "articles";
 const ARTICLE_SELECT = [
   "artigo",
   "descricao",
+  "pvp1",
   "pvp2",
+  "pvp3",
   "codigo_barras",
   "fonte_oficial",
   "raw_hash",
@@ -78,12 +80,14 @@ export function mapRowToArticle(row = {}) {
   return {
     artigo: row.artigo || "",
     descricao: row.descricao || "",
+    pvp1: row.pvp1 != null ? String(row.pvp1) : "",
     pvp2:
       typeof row.pvp2 === "number"
         ? String(row.pvp2)
         : row.pvp2 != null
           ? String(row.pvp2)
           : "",
+    pvp3: row.pvp3 != null ? String(row.pvp3) : "",
     codigoBarras: row.codigo_barras || "",
     fonte_oficial: row.fonte_oficial || "",
     raw_hash: row.raw_hash || "",
@@ -119,7 +123,9 @@ export function mapArticleToRow(article = {}) {
   return {
     artigo: articleCode,
     descricao,
+    pvp1: String(article.pvp1 ?? "").trim(),
     pvp2: parseNullableNumber(article.pvp2),
+    pvp3: String(article.pvp3 ?? article.pv3 ?? "").trim(),
     codigo_barras: barcode,
     fonte_oficial: String(article.fonte_oficial || "").trim(),
     raw_hash: String(article.raw_hash || "").trim(),

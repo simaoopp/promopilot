@@ -10,7 +10,6 @@ import {
   obterCodigosParaCopiar,
 } from "../utils/pvp3Promotion";
 
-import Barcode from "../components/Barcode";
 import FilterMenu from "../components/FilterMenu";
 import {
   ensureCatalogoPesquisaPronto,
@@ -26,7 +25,6 @@ import {
   limparDatasCampanhaItem,
   TITULO_CAMPANHA_SEM_DATA_DEFINIDA,
 } from "../utils/campaignTitleRules";
-import logo from "../logo.png";
 import "../styles/styles.css";
 import {
   addCampaignToHistory,
@@ -37,14 +35,12 @@ import {
   compararNumero,
   dividirEmPaginas,
 } from "../utils/filters";
-import { formatarEuro } from "../utils/formatters";
+import { formatarEuro, parseNumero } from "../utils/formatters";
 import { parseTabelaColada } from "../utils/parsers";
-import { useAutoFontSize } from "../utils/useAutoFontSize";
+import { formatarPvpTriplo, normalizarValorPvp } from "../utils/articlePrices";
+import { renderCampaignLabel } from "../components/campaign/CampaignLabel";
 
 const CAMPANHA_TITULO_DEFAULT = "PROMO";
-const NOTA_PROMOCAO =
-  "VÁLIDO ENQUANTO DURAR O STOCK. Limitado ao stock existente e não acumulável com outras promoções.";
-
 const FILTROS_INICIAIS = {
   codigo: { contains: "", equals: "" },
   descricao: { contains: "", equals: "" },
@@ -57,69 +53,6 @@ const FILTROS_INICIAIS = {
   a10: { op: "", valor: "" },
   a1e: { op: "", valor: "" },
 };
-
-function AutoText({ texto, className, min, max, style = {} }) {
-  const autoFont = useAutoFontSize(texto, min, max);
-
-  return (
-    <div
-      ref={autoFont.ref}
-      className={className}
-      style={{
-        width: "100%",
-        fontSize: `${autoFont.fontSize}px`,
-        ...style,
-      }}
-    >
-      {texto}
-    </div>
-  );
-}
-
-function DescricaoAuto({ texto, formatoEtiqueta }) {
-  return (
-    <AutoText
-      texto={texto}
-      className="descricao"
-      min={formatoEtiqueta === "a5" ? 24 : 12}
-      max={formatoEtiqueta === "a5" ? 38 : 18}
-    />
-  );
-}
-
-function PrecoAntesAuto({ valor, formatoEtiqueta }) {
-  return (
-    <AutoText
-      texto={`${formatarEuro(valor)}€`}
-      className="antes"
-      min={formatoEtiqueta === "a5" ? 44 : 38}
-      max={formatoEtiqueta === "a5" ? 54 : 46}
-    />
-  );
-}
-
-function DescontoAuto({ valor, formatoEtiqueta }) {
-  return (
-    <AutoText
-      texto={`-${formatarEuro(valor)}€`}
-      className="desconto"
-      min={formatoEtiqueta === "a5" ? 48 : 40}
-      max={formatoEtiqueta === "a5" ? 60 : 50}
-    />
-  );
-}
-
-function PrecoAtualAuto({ valor, formatoEtiqueta }) {
-  return (
-    <AutoText
-      texto={`${formatarEuro(valor)}€`}
-      className="atual"
-      min={formatoEtiqueta === "a5" ? 62 : 48}
-      max={formatoEtiqueta === "a5" ? 88 : 68}
-    />
-  );
-}
-
 function ResumoCard({ label, value }) {
   return (
     <div className="resumo-card">
@@ -139,85 +72,6 @@ function renderCampaignTableCell(item, columnKey) {
   }
 }
 
-
-function EtiquetaConteudo({ item, formatoAtual, titulo, textoValidade }) {
-  const desconto = Math.max(0, Number(item.antes) - Number(item.atual));
-  const mostrarValidade = Boolean(String(textoValidade || "").trim());
-
-  return (
-    <div className="label-inner">
-      <div className="topbar">
-        <img src={logo} alt="Expert" className="print-logo" />
-      </div>
-
-      <div className="content">
-        <div className="topo">
-          <div className="codigo">{item.codigo}</div>
-          <div className="titulo">{titulo}</div>
-          <DescricaoAuto
-            texto={item.descricao}
-            formatoEtiqueta={formatoAtual}
-          />
-        </div>
-
-        <div className="precos">
-          <div className="linha-preco">
-            <PrecoAntesAuto valor={item.antes} formatoEtiqueta={formatoAtual} />
-          </div>
-
-          <div className="linha-preco desconto-linha">
-            <DescontoAuto valor={desconto} formatoEtiqueta={formatoAtual} />
-          </div>
-
-          <div className="linha-preco">
-            <PrecoAtualAuto valor={item.atual} formatoEtiqueta={formatoAtual} />
-          </div>
-        </div>
-
-        <div className="rodape">
-          <Barcode value={item.ean} />
-          {mostrarValidade ? (
-            <div className="validade">{textoValidade}</div>
-          ) : null}
-          <div className="nota">{NOTA_PROMOCAO}</div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function renderEtiqueta(item, formatoAtual, titulo, textoValidade) {
-  const etiquetaClassName = `label ${
-    formatoAtual === "a5" ? "label-a5" : "label-a6"
-  }`;
-
-  if (formatoAtual === "a5") {
-    return (
-      <div key={item.id} className={etiquetaClassName}>
-        <div className="label-a5-rotator">
-          <EtiquetaConteudo
-            item={item}
-            formatoAtual={formatoAtual}
-            titulo={titulo}
-            textoValidade={textoValidade}
-          />
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div key={item.id} className={etiquetaClassName}>
-      <EtiquetaConteudo
-        item={item}
-        formatoAtual={formatoAtual}
-        titulo={titulo}
-        textoValidade={textoValidade}
-      />
-    </div>
-  );
-}
-
 function normalizarTexto(texto) {
   return String(texto || "")
     .normalize("NFD")
@@ -227,13 +81,7 @@ function normalizarTexto(texto) {
 }
 
 function converterPreco(valor) {
-  const texto = String(valor || "")
-    .replace(/\s/g, "")
-    .replace(",", ".")
-    .trim();
-  const numero = Number(texto);
-
-  return Number.isFinite(numero) ? numero : 0;
+  return parseNumero(valor);
 }
 
 function formatarDataInputParaDiaMes(dataIso = "") {
@@ -400,8 +248,8 @@ function dataCampanhaInvalida(data) {
 
 function itemTabelaInvalido(item) {
   const nomeInvalido = !item.descricao || item.descricao.length < 3;
-  const precoAntesInvalido = !item.antes || Number(item.antes) <= 0;
-  const precoAtualInvalido = !item.atual || Number(item.atual) <= 0;
+  const precoAntesInvalido = !item.antes || parseNumero(item.antes) <= 0;
+  const precoAtualInvalido = !item.atual || parseNumero(item.atual) <= 0;
   const eanInvalido =
     !item.ean || String(item.ean).replace(/\D/g, "").length < 8;
 
@@ -962,7 +810,7 @@ export default function EtiquetasPage() {
     }
 
     const invalidos = selecionados.filter(
-      (item) => Number(item.antes) <= Number(item.atual),
+      (item) => parseNumero(item.antes) <= parseNumero(item.atual),
     );
 
     if (invalidos.length > 0) {
@@ -1033,7 +881,7 @@ export default function EtiquetasPage() {
       ean: artigoCampanhaSelecionado.codigoBarras || "",
       antes,
       atual,
-      pv3: "",
+      pv3: artigoCampanhaSelecionado.pvp3 || "",
       estado: "",
       ae: artigoCampanhaSelecionado.stock || "",
       aea: "",
@@ -1066,12 +914,10 @@ export default function EtiquetasPage() {
         className={`sheet ${pagina.layout === "a5" ? "sheet-a5" : "sheet-a6"}`}
       >
         {pagina.items.map((item) =>
-          renderEtiqueta(
-            item,
-            pagina.layout,
+          renderCampaignLabel(item, pagina.layout, {
             titulo,
-            obterTextoValidade(item, anoValidade, titulo),
-          ),
+            textoValidade: obterTextoValidade(item, anoValidade, titulo),
+          }),
         )}
 
         {pagina.layout === "a5" && pagina.items.length === 1 ? (
@@ -1527,7 +1373,7 @@ export default function EtiquetasPage() {
                               <div className="campanha-sugestao-top">
                                 <strong>{item.artigo}</strong>
                                 <span className="campanha-tag">
-                                  PVP2: {item.pvp2 || "-"}
+                                  {formatarPvpTriplo(item)}
                                 </span>
                               </div>
 
@@ -1658,10 +1504,18 @@ export default function EtiquetasPage() {
                           </div>
 
                           <div className="campanha-resumo-item">
+                            <span>PVP1 base</span>
+                            <strong>{normalizarValorPvp(artigoCampanhaSelecionado.pvp1)}</strong>
+                          </div>
+
+                          <div className="campanha-resumo-item">
                             <span>PVP2 base</span>
-                            <strong>
-                              {artigoCampanhaSelecionado.pvp2 || "-"}
-                            </strong>
+                            <strong>{normalizarValorPvp(artigoCampanhaSelecionado.pvp2)}</strong>
+                          </div>
+
+                          <div className="campanha-resumo-item">
+                            <span>PVP3 base</span>
+                            <strong>{normalizarValorPvp(artigoCampanhaSelecionado.pvp3)}</strong>
                           </div>
 
                           <div className="campanha-resumo-item">
@@ -1832,8 +1686,8 @@ function ordenarLista(lista, ordenacao) {
     const valorA = a[ordenacao.coluna];
     const valorB = b[ordenacao.coluna];
 
-    const aNum = Number(valorA);
-    const bNum = Number(valorB);
+    const aNum = parseNumero(valorA);
+    const bNum = parseNumero(valorB);
     const ambosNumeros = !Number.isNaN(aNum) && !Number.isNaN(bNum);
 
     if (ambosNumeros) {

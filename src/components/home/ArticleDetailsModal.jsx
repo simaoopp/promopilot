@@ -4,6 +4,7 @@ import {
   hasUsefulTechData,
   parseGroundingText,
 } from "../../utils/homepageAi";
+import { normalizarValorPvp } from "../../utils/articlePrices";
 
 function renderGroundingSections(texto = "") {
   const textoBase = String(texto || "").trim();
@@ -125,7 +126,13 @@ export default function ArticleDetailsModal({
                   <strong>Descrição:</strong> {artigo.descricao || "-"}
                 </p>
                 <p>
-                  <strong>PVP2:</strong> {artigo.pvp2 || "-"}
+                  <strong>PVP1:</strong> {normalizarValorPvp(artigo.pvp1)}
+                </p>
+                <p>
+                  <strong>PVP2:</strong> {normalizarValorPvp(artigo.pvp2)}
+                </p>
+                <p>
+                  <strong>PVP3:</strong> {normalizarValorPvp(artigo.pvp3)}
                 </p>
                 <p>
                   <strong>Código de barras:</strong> {artigo.codigoBarras || "-"}
