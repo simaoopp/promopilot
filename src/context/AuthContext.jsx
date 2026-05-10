@@ -71,6 +71,17 @@ export function AuthProvider({ children }) {
 
         if (error) {
           console.error("Erro ao buscar sessão:", error.message);
+
+          if (/refresh token/i.test(error.message || "")) {
+            await supabase.auth.signOut({ scope: "local" }).catch(() => {});
+
+            if (typeof window !== "undefined") {
+              Object.keys(window.localStorage)
+                .filter((key) => key.startsWith("sb-"))
+                .forEach((key) => window.localStorage.removeItem(key));
+            }
+          }
+
           setUser(null);
           setProfile(null);
           lastLoadedProfileUserId.current = null;
@@ -159,13 +170,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   const completeOnboarding = useCallback(
-    async ({
-      password,
-      first_name,
-      last_name,
-      store,
-      requirePassword,
-    }) => {
+    async ({ password, first_name, last_name, store, requirePassword }) => {
       if (!user?.id) {
         throw new Error("Utilizador não autenticado.");
       }
@@ -185,7 +190,7 @@ export function AuthProvider({ children }) {
       lastLoadedProfileUserId.current = user.id;
       return updatedProfile;
     },
-    [updatePassword, user?.id]
+    [updatePassword, user?.id],
   );
 
   const requiresPasswordChange = profileRequiresPasswordChange(profile);
@@ -198,7 +203,7 @@ export function AuthProvider({ children }) {
 
   const refreshProfile = useCallback(
     () => loadProfile(user?.id, { force: true }),
-    [loadProfile, user?.id]
+    [loadProfile, user?.id],
   );
 
   const value = useMemo(
@@ -229,7 +234,7 @@ export function AuthProvider({ children }) {
       updatePassword,
       completeOnboarding,
       refreshProfile,
-    ]
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
