@@ -21,6 +21,11 @@ import { PRIMARY_TABLE_COLUMNS, TABLE_COLUMNS } from "../data/tableColumns";
 import SyncedHorizontalScroll from "../components/SyncedHorizontalScroll";
 import EditableCampaignDate from "../components/EditableCampaignDate";
 import { obterDataInputCampanha } from "../utils/campaignDates";
+import {
+  campanhaSemDataDefinida,
+  limparDatasCampanhaItem,
+  TITULO_CAMPANHA_SEM_DATA_DEFINIDA,
+} from "../utils/campaignTitleRules";
 import logo from "../logo.png";
 import "../styles/styles.css";
 import {
@@ -137,6 +142,7 @@ function renderCampaignTableCell(item, columnKey) {
 
 function EtiquetaConteudo({ item, formatoAtual, titulo, textoValidade }) {
   const desconto = Math.max(0, Number(item.antes) - Number(item.atual));
+  const mostrarValidade = Boolean(String(textoValidade || "").trim());
 
   return (
     <div className="label-inner">
@@ -170,7 +176,9 @@ function EtiquetaConteudo({ item, formatoAtual, titulo, textoValidade }) {
 
         <div className="rodape">
           <Barcode value={item.ean} />
-          <div className="validade">{textoValidade}</div>
+          {mostrarValidade ? (
+            <div className="validade">{textoValidade}</div>
+          ) : null}
           <div className="nota">{NOTA_PROMOCAO}</div>
         </div>
       </div>
@@ -249,7 +257,9 @@ function formatarDataDiaMes(data) {
   return `${dia}/${mes}`;
 }
 
-function obterTextoValidade(item, anoValidadeAtual) {
+function obterTextoValidade(item, anoValidadeAtual, tituloCampanha) {
+  if (campanhaSemDataDefinida(tituloCampanha)) return "";
+
   const normalizarData = (valor) => {
     const texto = String(valor || "").trim();
     return texto && texto !== "-" ? texto : "";
@@ -448,6 +458,10 @@ export default function EtiquetasPage() {
   const [mostrarTabelaCompleta, setMostrarTabelaCompleta] = useState(false);
   const filterButtonRefs = useRef({});
 
+  const campanhaSemDatas = useMemo(
+    () => campanhaSemDataDefinida(titulo),
+    [titulo],
+  );
 
   useEffect(() => {
     const campanhaDuplicada = location.state?.campanhaDuplicada;
@@ -515,6 +529,17 @@ export default function EtiquetasPage() {
       ativo = false;
     };
   }, []);
+
+
+  useEffect(() => {
+    if (!campanhaSemDatas) return;
+
+    setDataInicioGeral("");
+    setDataFimGeral("");
+    setCampanhaDataInicio("");
+    setCampanhaDataFim("");
+    setDados((prev) => prev.map(limparDatasCampanhaItem));
+  }, [campanhaSemDatas]);
 
   const sugestoesCampanha = useMemo(() => {
     const termo = normalizarTexto(pesquisaCampanha);
@@ -686,6 +711,8 @@ export default function EtiquetasPage() {
   }
 
   function atualizarDataGeral(campo, valor) {
+    if (campanhaSemDatas) return;
+
     const valorFormatado = formatarDataInputParaDiaMes(valor);
 
     if (campo === "dataInicio") {
@@ -713,12 +740,23 @@ export default function EtiquetasPage() {
         throw new Error("Sem linhas válidas");
       }
 
-      if (linhas.some(itemTabelaInvalido)) {
+      const linhasNormalizadas = campanhaSemDatas
+        ? linhas.map(limparDatasCampanhaItem)
+        : linhas;
+
+      if (linhasNormalizadas.some(itemTabelaInvalido)) {
         throw new Error("Dados inválidos");
       }
 
-      const dataInicioCapturada = extrairPrimeiraDataCampanha(linhas, "dataInicio");
-      const dataFimCapturada = extrairPrimeiraDataCampanha(linhas, "dataFim");
+      if (campanhaSemDatas) {
+        setDataInicioGeral("");
+        setDataFimGeral("");
+        setDados(linhasNormalizadas);
+        return;
+      }
+
+      const dataInicioCapturada = extrairPrimeiraDataCampanha(linhasNormalizadas, "dataInicio");
+      const dataFimCapturada = extrairPrimeiraDataCampanha(linhasNormalizadas, "dataFim");
       const dataInicioBase = dataInicioGeral || dataInicioCapturada;
       const dataFimBase = dataFimGeral || dataFimCapturada;
 
@@ -730,7 +768,7 @@ export default function EtiquetasPage() {
         setDataFimGeral(dataFimCapturada);
       }
 
-      setDados(aplicarDatasGeraisEmLinhas(linhas, dataInicioBase, dataFimBase));
+      setDados(aplicarDatasGeraisEmLinhas(linhasNormalizadas, dataInicioBase, dataFimBase));
     } catch {
       toast.error("Verifica se os dados inseridos estão corretos.");
     }
@@ -805,6 +843,8 @@ export default function EtiquetasPage() {
   }
 
   function atualizarDataCampanha(id, campo, valor) {
+    if (campanhaSemDatas) return;
+
     setDados((prev) =>
       prev.map((item) => (item.id === id ? { ...item, [campo]: valor } : item)),
     );
@@ -812,6 +852,8 @@ export default function EtiquetasPage() {
 
   function renderTabelaCampanhaCell(item, col) {
     if (col.key === "dataInicio" || col.key === "dataFim") {
+      if (campanhaSemDatas) return "";
+
       return (
         <EditableCampaignDate
           item={item}
@@ -953,12 +995,12 @@ export default function EtiquetasPage() {
       return;
     }
 
-    if (!campanhaValida30Dias && (!campanhaDataInicio || !campanhaDataFim)) {
+    if (!campanhaSemDatas && !campanhaValida30Dias && (!campanhaDataInicio || !campanhaDataFim)) {
       setErroCampanha("Preenche a data de início e a data de fim da campanha.");
       return;
     }
 
-    if (!campanhaValida30Dias && campanhaDataInicio > campanhaDataFim) {
+    if (!campanhaSemDatas && !campanhaValida30Dias && campanhaDataInicio > campanhaDataFim) {
       setErroCampanha("A data de início não pode ser superior à data de fim.");
       return;
     }
@@ -971,14 +1013,16 @@ export default function EtiquetasPage() {
     let dataInicioFinal = "";
     let dataFimFinal = "";
 
-    if (campanhaValida30Dias) {
-      const hoje = new Date();
-      const fim = somarDias(hoje, 30);
-      dataInicioFinal = formatarDataDiaMes(hoje);
-      dataFimFinal = formatarDataDiaMes(fim);
-    } else {
-      dataInicioFinal = formatarDataInputParaDiaMes(campanhaDataInicio);
-      dataFimFinal = formatarDataInputParaDiaMes(campanhaDataFim);
+    if (!campanhaSemDatas) {
+      if (campanhaValida30Dias) {
+        const hoje = new Date();
+        const fim = somarDias(hoje, 30);
+        dataInicioFinal = formatarDataDiaMes(hoje);
+        dataFimFinal = formatarDataDiaMes(fim);
+      } else {
+        dataInicioFinal = formatarDataInputParaDiaMes(campanhaDataInicio);
+        dataFimFinal = formatarDataInputParaDiaMes(campanhaDataFim);
+      }
     }
 
     const novoItem = {
@@ -1026,7 +1070,7 @@ export default function EtiquetasPage() {
             item,
             pagina.layout,
             titulo,
-            obterTextoValidade(item, anoValidade),
+            obterTextoValidade(item, anoValidade, titulo),
           ),
         )}
 
@@ -1060,6 +1104,11 @@ export default function EtiquetasPage() {
                 onChange={(e) => setTitulo(e.target.value)}
                 placeholder="Ex: ASUS PROMO"
               />
+              {campanhaSemDatas ? (
+                <small>
+                  Regra ativa: campanhas “{TITULO_CAMPANHA_SEM_DATA_DEFINIDA}” são impressas sem campo de validade.
+                </small>
+              ) : null}
             </label>
 
             <div className="input-group">
@@ -1071,6 +1120,7 @@ export default function EtiquetasPage() {
                   value={anoValidade}
                   onChange={(e) => setAnoValidade(e.target.value)}
                   placeholder="2026"
+                  disabled={campanhaSemDatas}
                 />
 
                 <button
@@ -1112,27 +1162,29 @@ export default function EtiquetasPage() {
             />
           </div>
 
-          <div className="toolbar-grid campaign-global-dates">
-            <label className="input-group">
-              <span>Data início geral</span>
-              <input
-                type="date"
-                value={dataInicioGeral}
-                onChange={(e) => atualizarDataGeral("dataInicio", e.target.value)}
-              />
-              <small>Predefine a data de início para todos os artigos abaixo.</small>
-            </label>
+          {!campanhaSemDatas ? (
+            <div className="toolbar-grid campaign-global-dates">
+              <label className="input-group">
+                <span>Data início geral</span>
+                <input
+                  type="date"
+                  value={dataInicioGeral}
+                  onChange={(e) => atualizarDataGeral("dataInicio", e.target.value)}
+                />
+                <small>Predefine a data de início para todos os artigos abaixo.</small>
+              </label>
 
-            <label className="input-group">
-              <span>Data fim geral</span>
-              <input
-                type="date"
-                value={dataFimGeral}
-                onChange={(e) => atualizarDataGeral("dataFim", e.target.value)}
-              />
-              <small>Se ficar vazio, mantém as datas do email ou o fallback de 30 dias.</small>
-            </label>
-          </div>
+              <label className="input-group">
+                <span>Data fim geral</span>
+                <input
+                  type="date"
+                  value={dataFimGeral}
+                  onChange={(e) => atualizarDataGeral("dataFim", e.target.value)}
+                />
+                <small>Se ficar vazio, mantém as datas do email ou o fallback de 30 dias.</small>
+              </label>
+            </div>
+          ) : null}
 
           <div className="toolbar-actions">
             <button
@@ -1530,48 +1582,50 @@ export default function EtiquetasPage() {
                       )}
                     </div>
 
-                    <div className="ai-card-panel">
-                      <div className="section-title-row">
-                        <h3>Validade da campanha</h3>
-                      </div>
-
-                      <label className="campanha-check-row">
-                        <input
-                          type="checkbox"
-                          checked={campanhaValida30Dias}
-                          onChange={(e) =>
-                            setCampanhaValida30Dias(e.target.checked)
-                          }
-                        />
-                        <span>Campanha válida para 30 dias</span>
-                      </label>
-
-                      {!campanhaValida30Dias && (
-                        <div className="campanha-datas-grid">
-                          <label className="input-group">
-                            <span>Data de início</span>
-                            <input
-                              type="date"
-                              value={campanhaDataInicio}
-                              onChange={(e) =>
-                                setCampanhaDataInicio(e.target.value)
-                              }
-                            />
-                          </label>
-
-                          <label className="input-group">
-                            <span>Data de fim</span>
-                            <input
-                              type="date"
-                              value={campanhaDataFim}
-                              onChange={(e) =>
-                                setCampanhaDataFim(e.target.value)
-                              }
-                            />
-                          </label>
+                    {!campanhaSemDatas ? (
+                      <div className="ai-card-panel">
+                        <div className="section-title-row">
+                          <h3>Validade da campanha</h3>
                         </div>
-                      )}
-                    </div>
+
+                        <label className="campanha-check-row">
+                          <input
+                            type="checkbox"
+                            checked={campanhaValida30Dias}
+                            onChange={(e) =>
+                              setCampanhaValida30Dias(e.target.checked)
+                            }
+                          />
+                          <span>Campanha válida para 30 dias</span>
+                        </label>
+
+                        {!campanhaValida30Dias && (
+                          <div className="campanha-datas-grid">
+                            <label className="input-group">
+                              <span>Data de início</span>
+                              <input
+                                type="date"
+                                value={campanhaDataInicio}
+                                onChange={(e) =>
+                                  setCampanhaDataInicio(e.target.value)
+                                }
+                              />
+                            </label>
+
+                            <label className="input-group">
+                              <span>Data de fim</span>
+                              <input
+                                type="date"
+                                value={campanhaDataFim}
+                                onChange={(e) =>
+                                  setCampanhaDataFim(e.target.value)
+                                }
+                              />
+                            </label>
+                          </div>
+                        )}
+                      </div>
+                    ) : null}
                   </div>
                 </div>
 
