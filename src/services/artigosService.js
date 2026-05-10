@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase";
+import { readPersistedArtigos, writePersistedArtigos } from "./artigosPersistentCache";
 
 const API_BASE_URL =
   process.env.REACT_APP_API_BASE_URL ||
@@ -7,9 +8,12 @@ const API_BASE_URL =
     : "");
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
+const PERSISTENT_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+const BACKGROUND_REFRESH_DEBOUNCE_MS = 60 * 1000;
 const ALL_ARTIGOS_CACHE_KEY = "all-artigos";
 const artigosCache = new Map();
 const artigosPendingRequests = new Map();
+let lastBackgroundRefreshAt = 0;
 
 function buildApiUrl(path) {
   return `${API_BASE_URL}${path}`;
@@ -155,14 +159,127 @@ export function getCachedAllArtigosSnapshot() {
   return cacheGet(ALL_ARTIGOS_CACHE_KEY);
 }
 
-export async function loadAllArtigos({ forceRefresh = false, pageSize = 500 } = {}) {
+function normalizeAllArtigosResult(data, fallbackSource = "api") {
+  const normalized = normalizeArtigosApiResponse(data, 0, 0);
+  const items = normalized.items || [];
+
+  return {
+    ...normalized,
+    ok: true,
+    items,
+    artigos: items,
+    total: Number.isFinite(normalized.total) ? normalized.total : items.length,
+    limit: items.length,
+    offset: 0,
+    hasMore: false,
+    q: "",
+    source: data?.source || fallbackSource,
+  };
+}
+
+async function fetchAllArtigosCatalogo({ forceRefresh = false, signal } = {}) {
+  const params = new URLSearchParams();
+
+  if (forceRefresh) {
+    params.set("refresh", "1");
+  }
+
+  const token = await getAccessToken();
+  const queryString = params.toString();
+  const path = `/api/artigos/catalogo${queryString ? `?${queryString}` : ""}`;
+  const response = await fetch(buildApiUrl(path), {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    signal,
+  });
+
+  const data = await readJsonResponse(response);
+
+  if (!response.ok || data?.ok === false) {
+    throw new Error(data?.error || "Erro ao carregar catálogo de artigos.");
+  }
+
+  return normalizeAllArtigosResult(data, data?.fromCache ? "server-cache" : "server");
+}
+
+async function fetchAllArtigosPaginated({ pageSize = 1000 } = {}) {
+  const allItems = [];
+  let offset = 0;
+
+  while (true) {
+    const page = await fetchArtigosPage({
+      q: "",
+      limit: pageSize,
+      offset,
+      includeCount: false,
+    });
+
+    allItems.push(...page.items);
+
+    if (!page.hasMore || page.items.length === 0) {
+      return normalizeAllArtigosResult({ items: allItems, total: allItems.length }, "api-paginated");
+    }
+
+    offset += page.items.length;
+  }
+}
+
+async function fetchFreshAllArtigos(options = {}) {
+  try {
+    return await fetchAllArtigosCatalogo(options);
+  } catch (error) {
+    if (options?.signal?.aborted) {
+      throw error;
+    }
+
+    console.warn("Endpoint de catálogo completo indisponível; a usar paginação.", error);
+    return fetchAllArtigosPaginated({ pageSize: options.pageSize });
+  }
+}
+
+async function persistAndCacheAllArtigos(result) {
+  const cachedResult = cacheSet(ALL_ARTIGOS_CACHE_KEY, result);
+  writePersistedArtigos(cachedResult).catch((error) => {
+    console.warn("Não foi possível atualizar a cache local de artigos.", error);
+  });
+
+  return cachedResult;
+}
+
+export function refreshAllArtigosInBackground(options = {}) {
+  const now = Date.now();
+
+  if (now - lastBackgroundRefreshAt < BACKGROUND_REFRESH_DEBOUNCE_MS) {
+    return getPendingRequest(`${ALL_ARTIGOS_CACHE_KEY}:refresh`) || Promise.resolve(getCachedAllArtigosSnapshot());
+  }
+
+  lastBackgroundRefreshAt = now;
+  const pendingKey = `${ALL_ARTIGOS_CACHE_KEY}:refresh`;
+  const pending = getPendingRequest(pendingKey);
+
+  if (pending) return pending;
+
+  const request = fetchFreshAllArtigos({ ...options, forceRefresh: true })
+    .then((result) => persistAndCacheAllArtigos({ ...result, source: result.source || "background-refresh" }))
+    .finally(() => clearPendingRequest(pendingKey, request));
+
+  setPendingRequest(pendingKey, request);
+  return request;
+}
+
+export async function loadAllArtigos({
+  forceRefresh = false,
+  pageSize = 1000,
+  usePersistentCache = true,
+} = {}) {
   const cached = !forceRefresh ? cacheGet(ALL_ARTIGOS_CACHE_KEY) : null;
 
   if (cached) {
     return cached;
   }
 
-  const pendingKey = `${ALL_ARTIGOS_CACHE_KEY}:${pageSize}`;
+  const pendingKey = `${ALL_ARTIGOS_CACHE_KEY}:${forceRefresh ? "force" : "normal"}:${pageSize}`;
   const pending = !forceRefresh ? getPendingRequest(pendingKey) : null;
 
   if (pending) {
@@ -170,36 +287,22 @@ export async function loadAllArtigos({ forceRefresh = false, pageSize = 500 } = 
   }
 
   const request = (async () => {
-    const allItems = [];
-    let offset = 0;
+    if (!forceRefresh && usePersistentCache) {
+      const persisted = await readPersistedArtigos({ maxAgeMs: PERSISTENT_CACHE_MAX_AGE_MS });
 
-    while (true) {
-      const page = await fetchArtigosPage({
-        q: "",
-        limit: pageSize,
-        offset,
-        includeCount: false,
-      });
+      if (persisted?.items?.length) {
+        const result = cacheSet(ALL_ARTIGOS_CACHE_KEY, normalizeAllArtigosResult(persisted, "indexeddb"));
 
-      allItems.push(...page.items);
+        refreshAllArtigosInBackground({ pageSize }).catch((error) => {
+          console.warn("Não foi possível atualizar o catálogo em segundo plano.", error);
+        });
 
-      if (!page.hasMore || page.items.length === 0) {
-        const result = {
-          ok: true,
-          items: allItems,
-          artigos: allItems,
-          total: allItems.length,
-          limit: allItems.length,
-          offset: 0,
-          hasMore: false,
-          q: "",
-        };
-
-        return cacheSet(ALL_ARTIGOS_CACHE_KEY, result);
+        return result;
       }
-
-      offset += page.items.length;
     }
+
+    const fresh = await fetchFreshAllArtigos({ forceRefresh, pageSize });
+    return persistAndCacheAllArtigos(fresh);
   })();
 
   setPendingRequest(pendingKey, request);
@@ -296,17 +399,31 @@ export function mergeArtigosIntoList(list = [], updatedArtigo = {}) {
 export function syncUpdatedArtigoToCache(updatedArtigo = {}) {
   if (!updatedArtigo?.artigo) return;
 
+  let latestAllArtigosValue = null;
+
   for (const [key, entry] of artigosCache.entries()) {
     if (!entry?.value?.items) continue;
 
     const mergedItems = mergeArtigosIntoList(entry.value.items, updatedArtigo);
+    const nextValue = {
+      ...entry.value,
+      items: mergedItems,
+      artigos: mergedItems,
+    };
+
     artigosCache.set(key, {
-      value: {
-        ...entry.value,
-        items: mergedItems,
-        artigos: mergedItems,
-      },
+      value: nextValue,
       updatedAt: Date.now(),
+    });
+
+    if (key === ALL_ARTIGOS_CACHE_KEY) {
+      latestAllArtigosValue = nextValue;
+    }
+  }
+
+  if (latestAllArtigosValue) {
+    writePersistedArtigos(latestAllArtigosValue).catch((error) => {
+      console.warn("Não foi possível sincronizar a cache local de artigos.", error);
     });
   }
 }
@@ -314,4 +431,5 @@ export function syncUpdatedArtigoToCache(updatedArtigo = {}) {
 export function __clearArtigosCacheForTests() {
   artigosCache.clear();
   artigosPendingRequests.clear();
+  lastBackgroundRefreshAt = 0;
 }

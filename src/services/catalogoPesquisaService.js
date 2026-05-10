@@ -4,7 +4,7 @@ import {
   prepareArticlesForSearch,
   buildPreparedArticlesIndex,
 } from "../utils/articleSearch";
-import { loadAllArtigos } from "./artigosService";
+import { loadAllArtigos, refreshAllArtigosInBackground } from "./artigosService";
 
 const DEFAULT_PAGE_SIZE = 1000;
 
@@ -46,7 +46,23 @@ export async function ensureCatalogoPesquisaPronto({ forceRefresh = false, pageS
   }
 
   const request = loadAllArtigos({ forceRefresh, pageSize })
-    .then((data) => hydrateCatalogoPesquisa(data?.items || []))
+    .then((data) => {
+      const snapshot = hydrateCatalogoPesquisa(data?.items || []);
+
+      if (!forceRefresh && data?.source === "indexeddb") {
+        refreshAllArtigosInBackground({ pageSize })
+          .then((freshData) => {
+            if (freshData?.items?.length) {
+              hydrateCatalogoPesquisa(freshData.items);
+            }
+          })
+          .catch((error) => {
+            console.warn("Não foi possível atualizar a pesquisa do catálogo em segundo plano.", error);
+          });
+      }
+
+      return snapshot;
+    })
     .finally(() => {
       if (catalogoPesquisaState.promise === request) {
         catalogoPesquisaState.promise = null;
