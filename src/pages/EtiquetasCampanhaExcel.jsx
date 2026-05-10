@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { printDocument } from "../utils/print";
 import {
@@ -28,6 +28,11 @@ import {
 import SyncedHorizontalScroll from "../components/SyncedHorizontalScroll";
 import EditableCampaignDate from "../components/EditableCampaignDate";
 import { obterDataInputCampanha } from "../utils/campaignDates";
+import {
+  campanhaSemDataDefinida,
+  limparDatasCampanhaItem,
+  TITULO_CAMPANHA_SEM_DATA_DEFINIDA,
+} from "../utils/campaignTitleRules";
 
 const EXCEL_FORMATS = {
   CAMPANHA: "campanha",
@@ -605,7 +610,9 @@ function obterFormatoAutomaticoEtiqueta(descricao = "") {
   return isA5 ? "a5" : "a6";
 }
 
-function obterTextoValidade(item, anoValidade) {
+function obterTextoValidade(item, anoValidade, tituloCampanha) {
+  if (campanhaSemDataDefinida(tituloCampanha)) return "";
+
   const normalizarData = (valor) => {
     const texto = String(valor || "").trim();
     return texto && texto !== "-" ? texto : "";
@@ -708,6 +715,21 @@ export default function EtiquetasExcelPage() {
         : CAMPANHA_PRIMARY_COLUMNS,
     [modeloImportado],
   );
+
+  const campanhaSemDatas = useMemo(
+    () => campanhaSemDataDefinida(titulo),
+    [titulo],
+  );
+
+  useEffect(() => {
+    if (!campanhaSemDatas) return;
+
+    setDataInicioCampanhaGeral("");
+    setDataFimCampanhaGeral("");
+    setDataInicioShopping("");
+    setDataFimShopping("");
+    setDados((prev) => prev.map(limparDatasCampanhaItem));
+  }, [campanhaSemDatas]);
 
   function atualizarFiltroPopup(campo, chave, valor) {
     setFiltros((prev) => ({
@@ -822,6 +844,8 @@ export default function EtiquetasExcelPage() {
   }
 
   function atualizarDataGeralCampanha(campo, valor) {
+    if (campanhaSemDatas) return;
+
     const valorFormatado = formatarDataInputDiaMes(valor);
 
     if (campo === "dataInicio") {
@@ -867,13 +891,16 @@ export default function EtiquetasExcelPage() {
         throw new Error("Sem linhas válidas");
       }
 
+      const linhasNormalizadas = campanhaSemDatas
+        ? linhas.map(limparDatasCampanhaItem)
+        : linhas;
       const dataInicioCapturada =
-        formatoExcel === EXCEL_FORMATS.CAMPANHA
-          ? extrairPrimeiraDataCampanha(linhas, "dataInicio")
+        !campanhaSemDatas && formatoExcel === EXCEL_FORMATS.CAMPANHA
+          ? extrairPrimeiraDataCampanha(linhasNormalizadas, "dataInicio")
           : "";
       const dataFimCapturada =
-        formatoExcel === EXCEL_FORMATS.CAMPANHA
-          ? extrairPrimeiraDataCampanha(linhas, "dataFim")
+        !campanhaSemDatas && formatoExcel === EXCEL_FORMATS.CAMPANHA
+          ? extrairPrimeiraDataCampanha(linhasNormalizadas, "dataFim")
           : "";
       const dataInicioBase = dataInicioCapturada || dataInicioCampanhaGeral;
       const dataFimBase = dataFimCapturada || dataFimCampanhaGeral;
@@ -881,15 +908,15 @@ export default function EtiquetasExcelPage() {
       setModeloImportado(formatoExcel);
       setDataInicioShopping("");
       setDataFimShopping("");
-      setDataInicioCampanhaGeral(dataInicioBase);
-      setDataFimCampanhaGeral(dataFimBase);
+      setDataInicioCampanhaGeral(campanhaSemDatas ? "" : dataInicioBase);
+      setDataFimCampanhaGeral(campanhaSemDatas ? "" : dataFimBase);
       setMostrarTabelaCompleta(false);
       setOrdenacao({ coluna: "", direcao: "" });
       setFiltroAberto(null);
       setDados(
-        formatoExcel === EXCEL_FORMATS.CAMPANHA
-          ? aplicarDatasGeraisCampanha(linhas, dataInicioBase, dataFimBase)
-          : linhas,
+        !campanhaSemDatas && formatoExcel === EXCEL_FORMATS.CAMPANHA
+          ? aplicarDatasGeraisCampanha(linhasNormalizadas, dataInicioBase, dataFimBase)
+          : linhasNormalizadas,
       );
 
       toast.success(
@@ -1035,6 +1062,8 @@ export default function EtiquetasExcelPage() {
   }
 
   function atualizarDatasShopping(campo, valor) {
+    if (campanhaSemDatas) return;
+
     const dataFormatada = formatarDataInputDiaMes(valor);
 
     if (campo === "dataInicio") {
@@ -1053,6 +1082,8 @@ export default function EtiquetasExcelPage() {
   }
 
   function atualizarDataCampanha(id, campo, valor) {
+    if (campanhaSemDatas) return;
+
     setDados((prev) =>
       prev.map((item) => {
         if (item.id !== id || item.tipo_registo === EXCEL_FORMATS.SHOPPING) {
@@ -1212,7 +1243,9 @@ export default function EtiquetasExcelPage() {
 
   function renderEtiquetaCampanha(item, formatoAtual) {
     const desconto = Math.max(0, item.antes - item.atual);
-    const textoValidade = obterTextoValidade(item, anoValidade);
+    const textoValidade = obterTextoValidade(item, anoValidade, titulo);
+    const mostrarValidade = Boolean(String(textoValidade || "").trim());
+    const mostrarIndicadorShopping = item.tipo_registo === EXCEL_FORMATS.SHOPPING;
 
     return (
       <div
@@ -1262,15 +1295,19 @@ export default function EtiquetasExcelPage() {
                 <div className="rodape">
                   <Barcode value={item.ean} />
 
-                  <div className="validade-row">
-                    <div className="validade">{textoValidade}</div>
-                    {item.tipo_registo === EXCEL_FORMATS.SHOPPING ? (
-                      <span
-                        className={`shopping-price-dot ${obterClasseIndicadorShopping(item)}`}
-                        aria-hidden="true"
-                      />
-                    ) : null}
-                  </div>
+                  {mostrarValidade || mostrarIndicadorShopping ? (
+                    <div className="validade-row">
+                      {mostrarValidade ? (
+                        <div className="validade">{textoValidade}</div>
+                      ) : null}
+                      {mostrarIndicadorShopping ? (
+                        <span
+                          className={`shopping-price-dot ${obterClasseIndicadorShopping(item)}`}
+                          aria-hidden="true"
+                        />
+                      ) : null}
+                    </div>
+                  ) : null}
 
                   <div className="nota">
                     VÁLIDO ENQUANTO DURAR O STOCK. Limitado ao stock existente e
@@ -1322,15 +1359,19 @@ export default function EtiquetasExcelPage() {
               <div className="rodape">
                 <Barcode value={item.ean} />
 
-                <div className="validade-row">
-                  <div className="validade">{textoValidade}</div>
-                  {item.tipo_registo === EXCEL_FORMATS.SHOPPING ? (
-                    <span
-                      className={`shopping-price-dot ${obterClasseIndicadorShopping(item)}`}
-                      aria-hidden="true"
-                    />
-                  ) : null}
-                </div>
+                {mostrarValidade || mostrarIndicadorShopping ? (
+                  <div className="validade-row">
+                    {mostrarValidade ? (
+                      <div className="validade">{textoValidade}</div>
+                    ) : null}
+                    {mostrarIndicadorShopping ? (
+                      <span
+                        className={`shopping-price-dot ${obterClasseIndicadorShopping(item)}`}
+                        aria-hidden="true"
+                      />
+                    ) : null}
+                  </div>
+                ) : null}
 
                 <div className="nota">
                   VÁLIDO ENQUANTO DURAR O STOCK. Limitado ao stock existente e
@@ -1431,6 +1472,8 @@ export default function EtiquetasExcelPage() {
       item.tipo_registo === EXCEL_FORMATS.CAMPANHA &&
       (col.key === "dataInicio" || col.key === "dataFim")
     ) {
+      if (campanhaSemDatas) return "";
+
       return (
         <EditableCampaignDate
           item={item}
@@ -1468,6 +1511,11 @@ export default function EtiquetasExcelPage() {
                 onChange={(e) => setTitulo(e.target.value)}
                 placeholder="Ex: ASUS PROMO / SHOPPING"
               />
+              {campanhaSemDatas ? (
+                <small>
+                  Regra ativa: campanhas “{TITULO_CAMPANHA_SEM_DATA_DEFINIDA}” são impressas sem campo de validade.
+                </small>
+              ) : null}
             </label>
 
             <div className="input-group">
@@ -1478,6 +1526,7 @@ export default function EtiquetasExcelPage() {
                   value={anoValidade}
                   onChange={(e) => setAnoValidade(e.target.value)}
                   placeholder="2026"
+                  disabled={campanhaSemDatas}
                 />
 
                 <button
@@ -1515,7 +1564,7 @@ export default function EtiquetasExcelPage() {
             {loading ? <small>A carregar Excel...</small> : null}
           </div>
 
-          {modeloImportado === EXCEL_FORMATS.CAMPANHA && dados.length > 0 ? (
+          {!campanhaSemDatas && modeloImportado === EXCEL_FORMATS.CAMPANHA && dados.length > 0 ? (
             <div className="toolbar-grid campaign-global-dates">
               <label className="input-group">
                 <span>Data início geral</span>
@@ -1543,7 +1592,7 @@ export default function EtiquetasExcelPage() {
             </div>
           ) : null}
 
-          {modeloImportado === EXCEL_FORMATS.SHOPPING && dados.length > 0 ? (
+          {!campanhaSemDatas && modeloImportado === EXCEL_FORMATS.SHOPPING && dados.length > 0 ? (
             <div className="toolbar-grid">
               <label className="input-group">
                 <span>Data início Shopping</span>
