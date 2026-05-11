@@ -1,5 +1,7 @@
 import {
   __clearArtigosCacheForTests,
+  buildArtigosCatalogoPath,
+  isFullCatalogoResponse,
   mergeArtigoData,
   mergeArtigosIntoList,
   normalizeArtigosApiResponse,
@@ -30,6 +32,36 @@ describe("artigosService", () => {
     expect(result.total).toBe(1);
     expect(result.limit).toBe(25);
     expect(result.q).toBe("tv");
+  });
+
+  test("usa a rota canónica de artigos para pedir catálogo completo", () => {
+    expect(buildArtigosCatalogoPath()).toBe(
+      "/api/artigos?catalogo=1&includeCount=0&pageSize=1000",
+    );
+
+    expect(buildArtigosCatalogoPath({ forceRefresh: true, pageSize: 2500 })).toBe(
+      "/api/artigos?catalogo=1&includeCount=0&pageSize=2500&refresh=1",
+    );
+  });
+
+  test("distingue catálogo completo de resposta paginada", () => {
+    expect(
+      isFullCatalogoResponse({
+        ok: true,
+        items: [{ artigo: "A1" }, { artigo: "A2" }],
+        total: 2,
+        hasMore: false,
+      }),
+    ).toBe(true);
+
+    expect(
+      isFullCatalogoResponse({
+        ok: true,
+        items: [{ artigo: "A1" }],
+        total: 2,
+        hasMore: true,
+      }),
+    ).toBe(false);
   });
 
   test("mistura campos enriquecidos sem perder coleções", () => {

@@ -27,7 +27,9 @@ function normalizeArticle(item) {
   return {
     artigo: String(item.artigo || "").trim(),
     descricao: String(item.descricao || "").trim(),
+    pvp1: String(item.pvp1 || "").trim(),
     pvp2: String(item.pvp2 || "").trim(),
+    pvp3: String(item.pvp3 || item.pv3 || "").trim(),
     codigo_barras: String(item.codigoBarras || "").trim() || null,
     fonte_oficial: String(item.fonte_oficial || "").trim(),
     raw_hash: String(item.raw_hash || "").trim(),

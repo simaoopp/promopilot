@@ -2,10 +2,20 @@ import { supabaseAdminClient } from "../lib/supabaseClients.js";
 
 export const ARTICLES_TABLE = process.env.ARTICLES_TABLE || "articles";
 
+const ALL_ARTICLES_CACHE_TTL_MS = Number(process.env.ARTICLES_CACHE_TTL_MS || 30 * 60 * 1000);
+const ALL_ARTICLES_PAGE_SIZE = Number(process.env.ARTICLES_CACHE_PAGE_SIZE || 1000);
+const allArticlesCache = {
+  value: null,
+  updatedAt: 0,
+  promise: null,
+};
+
 const ARTICLE_SELECT = [
   "artigo",
   "descricao",
+  "pvp1",
   "pvp2",
+  "pvp3",
   "codigo_barras",
   "fonte_oficial",
   "raw_hash",
@@ -78,12 +88,14 @@ export function mapRowToArticle(row = {}) {
   return {
     artigo: row.artigo || "",
     descricao: row.descricao || "",
+    pvp1: row.pvp1 != null ? String(row.pvp1) : "",
     pvp2:
       typeof row.pvp2 === "number"
         ? String(row.pvp2)
         : row.pvp2 != null
           ? String(row.pvp2)
           : "",
+    pvp3: row.pvp3 != null ? String(row.pvp3) : "",
     codigoBarras: row.codigo_barras || "",
     fonte_oficial: row.fonte_oficial || "",
     raw_hash: row.raw_hash || "",
@@ -119,7 +131,9 @@ export function mapArticleToRow(article = {}) {
   return {
     artigo: articleCode,
     descricao,
+    pvp1: String(article.pvp1 ?? "").trim(),
     pvp2: parseNullableNumber(article.pvp2),
+    pvp3: String(article.pvp3 ?? article.pv3 ?? "").trim(),
     codigo_barras: barcode,
     fonte_oficial: String(article.fonte_oficial || "").trim(),
     raw_hash: String(article.raw_hash || "").trim(),
@@ -224,6 +238,99 @@ export async function listArticles({ q = "", limit = 100, offset = 0, includeCou
     offset,
     hasMore,
   };
+}
+
+function isAllArticlesCacheFresh() {
+  return (
+    allArticlesCache.value &&
+    allArticlesCache.updatedAt &&
+    Date.now() - allArticlesCache.updatedAt < ALL_ARTICLES_CACHE_TTL_MS
+  );
+}
+
+export function getAllArticlesCacheStatus() {
+  return {
+    ready: Boolean(allArticlesCache.value),
+    fresh: Boolean(isAllArticlesCacheFresh()),
+    total: allArticlesCache.value?.total || 0,
+    updatedAt: allArticlesCache.updatedAt || null,
+    pending: Boolean(allArticlesCache.promise),
+  };
+}
+
+export async function listAllArticles({ forceRefresh = false, pageSize = ALL_ARTICLES_PAGE_SIZE } = {}) {
+  if (!forceRefresh && isAllArticlesCacheFresh()) {
+    return {
+      ...allArticlesCache.value,
+      fromCache: true,
+      cacheUpdatedAt: allArticlesCache.updatedAt,
+    };
+  }
+
+  if (!forceRefresh && allArticlesCache.promise) {
+    const value = await allArticlesCache.promise;
+    return {
+      ...value,
+      fromCache: false,
+      cacheUpdatedAt: allArticlesCache.updatedAt,
+    };
+  }
+
+  const request = (async () => {
+    const normalizedPageSize = Math.max(100, Number(pageSize) || ALL_ARTICLES_PAGE_SIZE);
+    const items = [];
+    let offset = 0;
+
+    while (true) {
+      const page = await listArticles({
+        q: "",
+        limit: normalizedPageSize,
+        offset,
+        includeCount: false,
+      });
+
+      items.push(...page.items);
+
+      if (!page.hasMore || page.items.length === 0) {
+        const value = {
+          items,
+          total: items.length,
+          limit: items.length,
+          offset: 0,
+          hasMore: false,
+          q: "",
+        };
+
+        allArticlesCache.value = value;
+        allArticlesCache.updatedAt = Date.now();
+        return value;
+      }
+
+      offset += page.items.length;
+    }
+  })();
+
+  allArticlesCache.promise = request;
+
+  try {
+    const value = await request;
+    return {
+      ...value,
+      fromCache: false,
+      cacheUpdatedAt: allArticlesCache.updatedAt,
+    };
+  } finally {
+    if (allArticlesCache.promise === request) {
+      allArticlesCache.promise = null;
+    }
+  }
+}
+
+export function warmArticlesCache() {
+  return listAllArticles({ forceRefresh: false }).catch((error) => {
+    console.warn("Não foi possível aquecer a cache de artigos.", error?.message || error);
+    return null;
+  });
 }
 
 export async function findArticleByIdentifiers({ artigoInterno = "", codigoBarras = "" } = {}) {

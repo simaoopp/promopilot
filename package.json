@@ -29,7 +29,10 @@
     "eject": "react-scripts eject",
     "test:ci": "react-scripts test --watch=false --runInBand",
     "qa:static": "python3 scripts/qa_check.py",
-    "seed:articles": "node scripts/import-artigos-to-supabase.mjs"
+    "seed:articles": "node scripts/import-artigos-to-supabase.mjs",
+    "validate:artigos-json": "node -e \"const fs=require('fs');const data=JSON.parse(fs.readFileSync('src/data/artigos.json','utf8'));if(!Array.isArray(data.artigos)){throw new Error('artigos.json precisa de conter um array artigos')}console.log('artigos.json válido:', data.artigos.length, 'artigos')\"",
+    "repair:artigos-json": "node scripts/repair-artigos-json.mjs",
+    "migrate:article-prices": "node scripts/migrate-artigos-prices-to-supabase.mjs"
   },
   "browserslist": [
     ">0.2%",

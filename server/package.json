@@ -5,15 +5,16 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "smoke": "node --check index.js && node --check lib/supabaseClients.js && node --check services/articleRepository.js"
+    "smoke": "node --check index.js && node --check app.js && node --check bootstrap/runtimeInfo.js && node --check lib/supabaseClients.js && node --check services/articleRepository.js && node --check services/aiProdutoService.js && node --check config/cors.js && node --check middleware/auth.js && node --check middleware/aiRateLimit.js && node --check routes/health.js && node --check routes/articles.js && node --check routes/aiProduto.js"
   },
   "dependencies": {
     "@google/genai": "^0.14.1",
+    "@supabase/supabase-js": "^2.56.0",
     "cheerio": "^1.2.0",
+    "compression": "^1.8.1",
     "cors": "^2.8.6",
     "dotenv": "^16.6.1",
     "express": "^5.2.1",
-    "playwright": "^1.59.1",
-    "@supabase/supabase-js": "^2.56.0"
+    "playwright": "^1.59.1"
   }
 }

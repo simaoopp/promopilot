@@ -8,6 +8,7 @@ import React, {
   useState,
 } from "react";
 import { supabase } from "../lib/supabase";
+import { preloadCatalogoPesquisa } from "../services/catalogoPesquisaService";
 import { getProfile, upsertProfile } from "../services/profileService";
 import {
   hasMissingProfileFields,
@@ -25,6 +26,19 @@ export function AuthProvider({ children }) {
 
   const lastLoadedProfileUserId = useRef(null);
   const profileRef = useRef(null);
+  const preloadedCatalogUserId = useRef(null);
+
+  const preloadCatalogForUser = useCallback((userId) => {
+    if (!userId || preloadedCatalogUserId.current === userId) {
+      return;
+    }
+
+    preloadedCatalogUserId.current = userId;
+    preloadCatalogoPesquisa({ pageSize: 1000 }).catch((error) => {
+      console.warn("Não foi possível pré-carregar o catálogo de artigos.", error);
+      preloadedCatalogUserId.current = null;
+    });
+  }, []);
 
   const loadProfile = useCallback(async (userId, options = {}) => {
     const { force = false } = options;
@@ -71,9 +85,21 @@ export function AuthProvider({ children }) {
 
         if (error) {
           console.error("Erro ao buscar sessão:", error.message);
+
+          if (/refresh token/i.test(error.message || "")) {
+            await supabase.auth.signOut({ scope: "local" }).catch(() => {});
+
+            if (typeof window !== "undefined") {
+              Object.keys(window.localStorage)
+                .filter((key) => key.startsWith("sb-"))
+                .forEach((key) => window.localStorage.removeItem(key));
+            }
+          }
+
           setUser(null);
           setProfile(null);
           lastLoadedProfileUserId.current = null;
+          preloadedCatalogUserId.current = null;
           setLoadingProfile(false);
           setLoadingAuth(false);
           return;
@@ -84,10 +110,12 @@ export function AuthProvider({ children }) {
         setLoadingAuth(false);
 
         if (currentUser?.id) {
+          preloadCatalogForUser(currentUser.id);
           await loadProfile(currentUser.id);
         } else {
           setProfile(null);
           lastLoadedProfileUserId.current = null;
+          preloadedCatalogUserId.current = null;
           setLoadingProfile(false);
         }
       } catch (error) {
@@ -96,6 +124,7 @@ export function AuthProvider({ children }) {
         setUser(null);
         setProfile(null);
         lastLoadedProfileUserId.current = null;
+        preloadedCatalogUserId.current = null;
         setLoadingProfile(false);
         setLoadingAuth(false);
       }
@@ -115,9 +144,12 @@ export function AuthProvider({ children }) {
       if (!currentUser?.id) {
         setProfile(null);
         lastLoadedProfileUserId.current = null;
+        preloadedCatalogUserId.current = null;
         setLoadingProfile(false);
         return;
       }
+
+      preloadCatalogForUser(currentUser.id);
 
       if (lastLoadedProfileUserId.current !== currentUser.id) {
         loadProfile(currentUser.id);
@@ -128,7 +160,7 @@ export function AuthProvider({ children }) {
       active = false;
       subscription?.unsubscribe();
     };
-  }, [loadProfile]);
+  }, [loadProfile, preloadCatalogForUser]);
 
   const signIn = useCallback(async (email, password) => {
     const { error } = await supabase.auth.signInWithPassword({
@@ -147,6 +179,7 @@ export function AuthProvider({ children }) {
     setUser(null);
     setProfile(null);
     lastLoadedProfileUserId.current = null;
+    preloadedCatalogUserId.current = null;
     setLoadingProfile(false);
   }, []);
 
@@ -159,13 +192,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   const completeOnboarding = useCallback(
-    async ({
-      password,
-      first_name,
-      last_name,
-      store,
-      requirePassword,
-    }) => {
+    async ({ password, first_name, last_name, store, requirePassword }) => {
       if (!user?.id) {
         throw new Error("Utilizador não autenticado.");
       }
@@ -185,7 +212,7 @@ export function AuthProvider({ children }) {
       lastLoadedProfileUserId.current = user.id;
       return updatedProfile;
     },
-    [updatePassword, user?.id]
+    [updatePassword, user?.id],
   );
 
   const requiresPasswordChange = profileRequiresPasswordChange(profile);
@@ -198,7 +225,7 @@ export function AuthProvider({ children }) {
 
   const refreshProfile = useCallback(
     () => loadProfile(user?.id, { force: true }),
-    [loadProfile, user?.id]
+    [loadProfile, user?.id],
   );
 
   const value = useMemo(
@@ -229,7 +256,7 @@ export function AuthProvider({ children }) {
       updatePassword,
       completeOnboarding,
       refreshProfile,
-    ]
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
