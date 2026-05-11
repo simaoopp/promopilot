@@ -18,8 +18,53 @@ function parsePositiveInt(value, fallback) {
   return parsed;
 }
 
+function parseBooleanQueryFlag(value) {
+  const normalized = String(value || "").toLowerCase().trim();
+  return ["1", "true", "sim", "yes", "y"].includes(normalized);
+}
+
+function shouldReturnFullCatalog(req) {
+  return parseBooleanQueryFlag(req.query.catalogo) || parseBooleanQueryFlag(req.query.all);
+}
+
+async function sendFullCatalogResponse(req, res) {
+  try {
+    const forceRefresh = parseBooleanQueryFlag(req.query.refresh);
+    const pageSize = Math.min(parsePositiveInt(req.query.pageSize, 1000), 5000);
+    const result = await listAllArticles({ forceRefresh, pageSize });
+
+    res.set("Cache-Control", "private, max-age=300");
+    res.set("X-Articles-Cache", result.fromCache ? "hit" : "miss");
+
+    return res.json({
+      ok: true,
+      items: result.items,
+      artigos: result.items,
+      total: result.total,
+      limit: result.limit,
+      offset: result.offset,
+      hasMore: false,
+      q: "",
+      source: result.fromCache ? "server-cache" : "server",
+      fromCache: Boolean(result.fromCache),
+      cacheUpdatedAt: result.cacheUpdatedAt || null,
+    });
+  } catch (error) {
+    console.error("Erro ao carregar catálogo completo de artigos:", error);
+
+    return res.status(500).json({
+      ok: false,
+      error: error?.message || "Erro ao carregar catálogo de artigos.",
+    });
+  }
+}
+
 export function registerArticleRoutes(app, { requireAuth }) {
   app.get("/api/artigos", requireAuth, async (req, res) => {
+    if (shouldReturnFullCatalog(req)) {
+      return sendFullCatalogResponse(req, res);
+    }
+
     try {
       const q = normalizeSearchValue(req.query.q || "");
       const limit = Math.min(parsePositiveInt(req.query.limit, 100), 1000);
@@ -48,35 +93,7 @@ export function registerArticleRoutes(app, { requireAuth }) {
     }
   });
 
-  app.get("/api/artigos/catalogo", requireAuth, async (req, res) => {
-    try {
-      const forceRefresh = String(req.query.refresh || "") === "1";
-      const result = await listAllArticles({ forceRefresh });
-
-      res.set("Cache-Control", "private, max-age=300");
-      res.set("X-Articles-Cache", result.fromCache ? "hit" : "miss");
-
-      return res.json({
-        ok: true,
-        items: result.items,
-        artigos: result.items,
-        total: result.total,
-        limit: result.limit,
-        offset: result.offset,
-        hasMore: false,
-        q: "",
-        fromCache: Boolean(result.fromCache),
-        cacheUpdatedAt: result.cacheUpdatedAt || null,
-      });
-    } catch (error) {
-      console.error("Erro em GET /api/artigos/catalogo:", error);
-
-      return res.status(500).json({
-        ok: false,
-        error: error?.message || "Erro ao carregar catálogo de artigos.",
-      });
-    }
-  });
+  app.get(["/api/artigos/catalogo", "/api/catalogo/artigos"], requireAuth, sendFullCatalogResponse);
 
   app.get("/api/artigos/cache-status", requireAuth, (_req, res) => {
     return res.json({

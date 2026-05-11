@@ -66,7 +66,13 @@ async function readJsonResponse(response) {
   try {
     return JSON.parse(rawText);
   } catch {
-    throw new Error(`Resposta inválida do servidor: ${rawText.slice(0, 200)}`);
+    const contentType = response.headers?.get?.("content-type") || "conteúdo não JSON";
+    const status = response.status ? `HTTP ${response.status}` : "resposta sem estado HTTP";
+    const url = response.url || "endpoint desconhecido";
+
+    throw new Error(
+      `Resposta inválida do servidor em ${url}: esperava JSON, recebi ${contentType} (${status}).`,
+    );
   }
 }
 
@@ -177,16 +183,34 @@ function normalizeAllArtigosResult(data, fallbackSource = "api") {
   };
 }
 
-async function fetchAllArtigosCatalogo({ forceRefresh = false, signal } = {}) {
+export function buildArtigosCatalogoPath({ forceRefresh = false, pageSize = 1000 } = {}) {
   const params = new URLSearchParams();
+
+  params.set("catalogo", "1");
+  params.set("includeCount", "0");
+
+  if (pageSize) {
+    params.set("pageSize", String(pageSize));
+  }
 
   if (forceRefresh) {
     params.set("refresh", "1");
   }
 
+  return `/api/artigos?${params.toString()}`;
+}
+
+export function isFullCatalogoResponse(data = {}) {
+  const normalized = normalizeArtigosApiResponse(data, 0, 0);
+  const items = normalized.items || [];
+  const total = Number.isFinite(normalized.total) ? normalized.total : items.length;
+
+  return normalized.hasMore === false && items.length >= total;
+}
+
+async function fetchAllArtigosCatalogo({ forceRefresh = false, pageSize = 1000, signal } = {}) {
   const token = await getAccessToken();
-  const queryString = params.toString();
-  const path = `/api/artigos/catalogo${queryString ? `?${queryString}` : ""}`;
+  const path = buildArtigosCatalogoPath({ forceRefresh, pageSize });
   const response = await fetch(buildApiUrl(path), {
     headers: {
       Authorization: `Bearer ${token}`,
@@ -198,6 +222,10 @@ async function fetchAllArtigosCatalogo({ forceRefresh = false, signal } = {}) {
 
   if (!response.ok || data?.ok === false) {
     throw new Error(data?.error || "Erro ao carregar catálogo de artigos.");
+  }
+
+  if (!isFullCatalogoResponse(data)) {
+    throw new Error("O endpoint de artigos respondeu de forma paginada, não como catálogo completo.");
   }
 
   return normalizeAllArtigosResult(data, data?.fromCache ? "server-cache" : "server");
@@ -233,7 +261,10 @@ async function fetchFreshAllArtigos(options = {}) {
       throw error;
     }
 
-    console.warn("Endpoint de catálogo completo indisponível; a usar paginação.", error);
+    if (process.env.NODE_ENV !== "production") {
+      console.info("Catálogo completo indisponível; a usar paginação.", error);
+    }
+
     return fetchAllArtigosPaginated({ pageSize: options.pageSize });
   }
 }
