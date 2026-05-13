@@ -155,24 +155,24 @@ export default function ExcelCampaignToolbar({
           ) : null}
 
           <div className="input-group promotion-price-source-group">
-            <span>Preço usado na promoção/impressão</span>
-            <div className="segmented-control" role="group" aria-label="Preço usado na promoção">
+            <span>Preço sem promoção usado na impressão</span>
+            <div className="segmented-control" role="group" aria-label="Preço sem promoção usado na impressão">
               <button
                 type="button"
                 className={`segmented-control-button ${promocaoFontePreco === "pvp2" ? "active" : ""}`}
                 onClick={() => setPromocaoFontePreco("pvp2")}
               >
-                Usar PVP2 para promoção
+                Usar PVP2 como preço sem promoção
               </button>
               <button
                 type="button"
                 className={`segmented-control-button ${promocaoFontePreco === "pvp3" ? "active" : ""}`}
                 onClick={() => setPromocaoFontePreco("pvp3")}
               >
-                Usar PVP3 para promoção
+                Usar PVP3 como preço sem promoção
               </button>
             </div>
-            <small>Nos ficheiros Shopping mantém os preços selecionados na tabela.</small>
+            <small>O preço de promoção mantém sempre o PVP ATUAL; esta opção só muda o preço sem promoção nos artigos de campanha.</small>
           </div>
         </div>
       ) : null}

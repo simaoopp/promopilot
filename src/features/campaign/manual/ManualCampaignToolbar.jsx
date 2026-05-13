@@ -139,24 +139,24 @@ export default function ManualCampaignToolbar({
           ) : null}
 
           <div className="input-group promotion-price-source-group">
-            <span>Preço usado na promoção/impressão</span>
-            <div className="segmented-control" role="group" aria-label="Preço usado na promoção">
+            <span>Preço sem promoção usado na impressão</span>
+            <div className="segmented-control" role="group" aria-label="Preço sem promoção usado na impressão">
               <button
                 type="button"
                 className={`segmented-control-button ${promocaoFontePreco === "pvp2" ? "active" : ""}`}
                 onClick={() => setPromocaoFontePreco("pvp2")}
               >
-                Usar PVP2 para promoção
+                Usar PVP2 como preço sem promoção
               </button>
               <button
                 type="button"
                 className={`segmented-control-button ${promocaoFontePreco === "pvp3" ? "active" : ""}`}
                 onClick={() => setPromocaoFontePreco("pvp3")}
               >
-                Usar PVP3 para promoção
+                Usar PVP3 como preço sem promoção
               </button>
             </div>
-            <small>Quando PVP3 não existir no artigo, a impressão mantém o PVP2 atual.</small>
+            <small>O preço de promoção mantém sempre o PVP ATUAL; esta opção só muda o preço sem promoção.</small>
           </div>
         </div>
       ) : null}

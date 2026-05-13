@@ -25,24 +25,42 @@ export function formatarEuroPromocional(valor) {
   return formatarEuro(ajustarPrecoPromocionalParaImpressao(valor));
 }
 
-export function obterPrecoAtualPromocional(item = {}, fonte = PROMOTION_PRICE_SOURCES.PVP2) {
-  if (fonte === PROMOTION_PRICE_SOURCES.PVP3) {
-    const pvp3 = parseNumero(item.pv3 ?? item.pvp3);
+function obterPvp3Valido(item = {}) {
+  const pvp3 = parseNumero(item.pv3 ?? item.pvp3);
+  return Number.isFinite(pvp3) && pvp3 > 0 ? pvp3 : null;
+}
 
-    if (Number.isFinite(pvp3) && pvp3 > 0) {
+/**
+ * Define o preço de referência/sem promoção que será impresso como "antes".
+ * O preço promocional nunca é alterado aqui: mantém sempre o campo PVP ATUAL (`item.atual`).
+ */
+export function obterPrecoSemPromocaoParaImpressao(item = {}, fonte = PROMOTION_PRICE_SOURCES.PVP2) {
+  if (fonte === PROMOTION_PRICE_SOURCES.PVP3) {
+    const pvp3 = obterPvp3Valido(item);
+
+    if (pvp3 !== null) {
       return pvp3;
     }
   }
 
+  return parseNumero(item.antes);
+}
+
+export function obterPrecoPromocaoParaImpressao(item = {}) {
   return parseNumero(item.atual);
 }
 
+// Backwards-compatible alias kept for older imports/tests.
+export const obterPrecoAtualPromocional = obterPrecoPromocaoParaImpressao;
+
 export function prepararItemPromocionalParaImpressao(item = {}, fonte = PROMOTION_PRICE_SOURCES.PVP2) {
-  const atual = obterPrecoAtualPromocional(item, fonte);
+  const precoSemPromocao = obterPrecoSemPromocaoParaImpressao(item, fonte);
+  const precoPromocao = obterPrecoPromocaoParaImpressao(item);
 
   return {
     ...item,
-    atual,
-    promocaoFontePreco: fonte,
+    antes: precoSemPromocao,
+    atual: precoPromocao,
+    precoSemPromocaoFonte: fonte,
   };
 }
