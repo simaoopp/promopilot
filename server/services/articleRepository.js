@@ -3,7 +3,8 @@ import { supabaseAdminClient } from "../lib/supabaseClients.js";
 export const ARTICLES_TABLE = process.env.ARTICLES_TABLE || "articles";
 
 const ALL_ARTICLES_CACHE_TTL_MS = Number(process.env.ARTICLES_CACHE_TTL_MS || 30 * 60 * 1000);
-const ALL_ARTICLES_PAGE_SIZE = Number(process.env.ARTICLES_CACHE_PAGE_SIZE || 1000);
+const ALL_ARTICLES_PAGE_SIZE = Number(process.env.ARTICLES_CACHE_PAGE_SIZE || 5000);
+const ALL_ARTICLES_MAX_CONCURRENCY = Math.max(1, Number(process.env.ARTICLES_CACHE_CONCURRENCY || 6));
 const allArticlesCache = {
   value: null,
   updatedAt: 0,
@@ -240,6 +241,41 @@ export async function listArticles({ q = "", limit = 100, offset = 0, includeCou
   };
 }
 
+
+async function getArticlesCount() {
+  const client = getArticlesClient();
+  const { count, error } = await client
+    .from(ARTICLES_TABLE)
+    .select("artigo", { count: "exact", head: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return typeof count === "number" ? count : 0;
+}
+
+async function runWithConcurrency(tasks, concurrency = ALL_ARTICLES_MAX_CONCURRENCY) {
+  const results = new Array(tasks.length);
+  let nextIndex = 0;
+
+  async function worker() {
+    while (nextIndex < tasks.length) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+      results[currentIndex] = await tasks[currentIndex]();
+    }
+  }
+
+  const workers = Array.from(
+    { length: Math.min(concurrency, tasks.length) },
+    () => worker(),
+  );
+
+  await Promise.all(workers);
+  return results;
+}
+
 function isAllArticlesCacheFresh() {
   return (
     allArticlesCache.value &&
@@ -277,37 +313,53 @@ export async function listAllArticles({ forceRefresh = false, pageSize = ALL_ART
   }
 
   const request = (async () => {
-    const normalizedPageSize = Math.max(100, Number(pageSize) || ALL_ARTICLES_PAGE_SIZE);
-    const items = [];
-    let offset = 0;
+    const normalizedPageSize = Math.max(1000, Number(pageSize) || ALL_ARTICLES_PAGE_SIZE);
+    const total = await getArticlesCount();
 
-    while (true) {
-      const page = await listArticles({
+    if (total <= 0) {
+      const value = {
+        items: [],
+        total: 0,
+        limit: 0,
+        offset: 0,
+        hasMore: false,
         q: "",
-        limit: normalizedPageSize,
-        offset,
-        includeCount: false,
-      });
+      };
 
-      items.push(...page.items);
-
-      if (!page.hasMore || page.items.length === 0) {
-        const value = {
-          items,
-          total: items.length,
-          limit: items.length,
-          offset: 0,
-          hasMore: false,
-          q: "",
-        };
-
-        allArticlesCache.value = value;
-        allArticlesCache.updatedAt = Date.now();
-        return value;
-      }
-
-      offset += page.items.length;
+      allArticlesCache.value = value;
+      allArticlesCache.updatedAt = Date.now();
+      return value;
     }
+
+    const offsets = [];
+    for (let offset = 0; offset < total; offset += normalizedPageSize) {
+      offsets.push(offset);
+    }
+
+    const pages = await runWithConcurrency(
+      offsets.map((offset) => async () =>
+        listArticles({
+          q: "",
+          limit: normalizedPageSize,
+          offset,
+          includeCount: false,
+        }),
+      ),
+    );
+
+    const items = pages.flatMap((page) => page.items);
+    const value = {
+      items,
+      total: items.length,
+      limit: items.length,
+      offset: 0,
+      hasMore: false,
+      q: "",
+    };
+
+    allArticlesCache.value = value;
+    allArticlesCache.updatedAt = Date.now();
+    return value;
   })();
 
   allArticlesCache.promise = request;

@@ -24,6 +24,7 @@ import {
 } from "../utils/campaignHistory";
 import { aplicarFiltroTexto, compararNumero } from "../utils/filters";
 import { formatarEuro, parseNumero } from "../utils/formatters";
+import { PROMOTION_PRICE_SOURCES } from "../utils/promotionPricing";
 import { parseTabelaColada } from "../utils/parsers";
 import ManualCampaignToolbar from "../features/campaign/manual/ManualCampaignToolbar";
 import ManualCampaignTable from "../features/campaign/manual/ManualCampaignTable";
@@ -59,6 +60,7 @@ export default function EtiquetasPage() {
   const [dados, setDados] = useState([]);
   const [formatoEtiqueta, setFormatoEtiqueta] = useState("a6");
   const [modoFormatoAutomatico, setModoFormatoAutomatico] = useState(true);
+  const [promocaoFontePreco, setPromocaoFontePreco] = useState(PROMOTION_PRICE_SOURCES.PVP2);
 
   const [popupArtigosInvalidosAberto, setPopupArtigosInvalidosAberto] =
     useState(false);
@@ -135,7 +137,7 @@ export default function EtiquetasPage() {
 
     async function syncCatalogo() {
       try {
-        const snapshot = await ensureCatalogoPesquisaPronto({ pageSize: 1000 });
+        const snapshot = await ensureCatalogoPesquisaPronto({ pageSize: 5000 });
 
         if (ativo) {
           setCatalogoArtigos(snapshot.items || []);
@@ -726,6 +728,8 @@ export default function EtiquetasPage() {
           totalFiltrados={dadosFiltrados.length}
           totalSelecionados={selecionados.length}
           modoImpressaoTexto={modoImpressaoTexto}
+          promocaoFontePreco={promocaoFontePreco}
+          setPromocaoFontePreco={setPromocaoFontePreco}
         />
 
         <ManualCampaignTable
@@ -788,6 +792,7 @@ export default function EtiquetasPage() {
         paginasImpressao={paginasImpressao}
         titulo={titulo}
         anoValidade={anoValidade}
+        promocaoFontePreco={promocaoFontePreco}
       />
     </>
   );

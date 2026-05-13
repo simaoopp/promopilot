@@ -114,7 +114,7 @@ export default function EtiquetasCampanhaExcelPage() {
 
     async function syncArtigos() {
       try {
-        const snapshot = await ensureCatalogoPesquisaPronto({ pageSize: 1000 });
+        const snapshot = await ensureCatalogoPesquisaPronto({ pageSize: 5000 });
 
         if (ativo) {
           setArtigos(snapshot.items || []);

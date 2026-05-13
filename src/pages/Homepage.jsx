@@ -60,7 +60,7 @@ export default function HomePage() {
   const [catalogoPesquisaPronto, setCatalogoPesquisaPronto] = useState(initialCatalogo.ready);
 
   const ensureCatalogoPesquisa = useCallback(async () => {
-    const snapshot = await ensureCatalogoPesquisaPronto({ pageSize: 1000 });
+    const snapshot = await ensureCatalogoPesquisaPronto({ pageSize: 5000 });
     setCatalogoTotal(snapshot.total || 0);
     setCatalogoPesquisaPronto(snapshot.ready);
     return snapshot;
@@ -72,7 +72,7 @@ export default function HomePage() {
   }, [pesquisa]);
 
   useEffect(() => {
-    preloadCatalogoPesquisa({ pageSize: 1000 })
+    preloadCatalogoPesquisa({ pageSize: 5000 })
       .then((snapshot) => {
         setCatalogoTotal(snapshot.total || 0);
         setCatalogoPesquisaPronto(snapshot.ready);

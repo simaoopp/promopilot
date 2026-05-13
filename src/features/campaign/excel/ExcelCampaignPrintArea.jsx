@@ -1,11 +1,15 @@
 import { renderCampaignLabel } from "../../../components/campaign/CampaignLabel";
+import { prepararItemPromocionalParaImpressao } from "../../../utils/promotionPricing";
 import { EXCEL_FORMATS, obterClasseIndicadorShopping, obterTextoValidade } from "./excelCampaignUtils";
 
-export default function ExcelCampaignPrintArea({ paginasA5, paginasA6, anoValidade, titulo }) {
+export default function ExcelCampaignPrintArea({ paginasA5, paginasA6, anoValidade, titulo, promocaoFontePreco }) {
   function renderEtiqueta(item, formatoAtual) {
     const mostrarIndicadorShopping = item.tipo_registo === EXCEL_FORMATS.SHOPPING;
+    const itemImpressao = mostrarIndicadorShopping
+      ? item
+      : prepararItemPromocionalParaImpressao(item, promocaoFontePreco);
 
-    return renderCampaignLabel(item, formatoAtual, {
+    return renderCampaignLabel(itemImpressao, formatoAtual, {
       titulo,
       textoValidade: obterTextoValidade(item, anoValidade, titulo),
       showShoppingIndicator: mostrarIndicadorShopping,

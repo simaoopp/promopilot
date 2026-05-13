@@ -34,7 +34,7 @@ export function AuthProvider({ children }) {
     }
 
     preloadedCatalogUserId.current = userId;
-    preloadCatalogoPesquisa({ pageSize: 1000 }).catch((error) => {
+    preloadCatalogoPesquisa({ pageSize: 5000 }).catch((error) => {
       console.warn("Não foi possível pré-carregar o catálogo de artigos.", error);
       preloadedCatalogUserId.current = null;
     });

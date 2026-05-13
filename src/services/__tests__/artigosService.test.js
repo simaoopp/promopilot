@@ -36,7 +36,7 @@ describe("artigosService", () => {
 
   test("usa a rota canónica de artigos para pedir catálogo completo", () => {
     expect(buildArtigosCatalogoPath()).toBe(
-      "/api/artigos?catalogo=1&includeCount=0&pageSize=1000",
+      "/api/artigos?catalogo=1&includeCount=0&pageSize=5000",
     );
 
     expect(buildArtigosCatalogoPath({ forceRefresh: true, pageSize: 2500 })).toBe(

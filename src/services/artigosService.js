@@ -183,7 +183,7 @@ function normalizeAllArtigosResult(data, fallbackSource = "api") {
   };
 }
 
-export function buildArtigosCatalogoPath({ forceRefresh = false, pageSize = 1000 } = {}) {
+export function buildArtigosCatalogoPath({ forceRefresh = false, pageSize = 5000 } = {}) {
   const params = new URLSearchParams();
 
   params.set("catalogo", "1");
@@ -208,7 +208,7 @@ export function isFullCatalogoResponse(data = {}) {
   return normalized.hasMore === false && items.length >= total;
 }
 
-async function fetchAllArtigosCatalogo({ forceRefresh = false, pageSize = 1000, signal } = {}) {
+async function fetchAllArtigosCatalogo({ forceRefresh = false, pageSize = 5000, signal } = {}) {
   const token = await getAccessToken();
   const path = buildArtigosCatalogoPath({ forceRefresh, pageSize });
   const response = await fetch(buildApiUrl(path), {
@@ -231,7 +231,7 @@ async function fetchAllArtigosCatalogo({ forceRefresh = false, pageSize = 1000, 
   return normalizeAllArtigosResult(data, data?.fromCache ? "server-cache" : "server");
 }
 
-async function fetchAllArtigosPaginated({ pageSize = 1000 } = {}) {
+async function fetchAllArtigosPaginated({ pageSize = 5000 } = {}) {
   const allItems = [];
   let offset = 0;
 
@@ -301,7 +301,7 @@ export function refreshAllArtigosInBackground(options = {}) {
 
 export async function loadAllArtigos({
   forceRefresh = false,
-  pageSize = 1000,
+  pageSize = 5000,
   usePersistentCache = true,
 } = {}) {
   const cached = !forceRefresh ? cacheGet(ALL_ARTIGOS_CACHE_KEY) : null;
