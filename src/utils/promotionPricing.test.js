@@ -2,7 +2,8 @@ import {
   PROMOTION_PRICE_SOURCES,
   ajustarPrecoPromocionalParaImpressao,
   formatarEuroPromocional,
-  obterPrecoAtualPromocional,
+  obterPrecoPromocaoParaImpressao,
+  obterPrecoSemPromocaoParaImpressao,
   prepararItemPromocionalParaImpressao,
 } from "./promotionPricing";
 
@@ -17,14 +18,25 @@ describe("promotionPricing", () => {
     expect(formatarEuroPromocional("1299,00")).toMatch(/1\s?299,99|1299,99/);
   });
 
-  test("usa PVP3 para o preço atual quando disponível", () => {
-    const item = { atual: "999,00", pv3: "899,00" };
+  test("PVP3 altera apenas o preço sem promoção e mantém PVP ATUAL como preço de promoção", () => {
+    const item = { antes: "1299,00", atual: "999,00", pv3: "1199,00" };
+    const itemImpressao = prepararItemPromocionalParaImpressao(item, PROMOTION_PRICE_SOURCES.PVP3);
 
-    expect(obterPrecoAtualPromocional(item, PROMOTION_PRICE_SOURCES.PVP3)).toBe(899);
-    expect(prepararItemPromocionalParaImpressao(item, PROMOTION_PRICE_SOURCES.PVP3).atual).toBe(899);
+    expect(obterPrecoSemPromocaoParaImpressao(item, PROMOTION_PRICE_SOURCES.PVP3)).toBe(1199);
+    expect(obterPrecoPromocaoParaImpressao(item)).toBe(999);
+    expect(itemImpressao.antes).toBe(1199);
+    expect(itemImpressao.atual).toBe(999);
   });
 
-  test("faz fallback para PVP2 quando PVP3 não existe", () => {
-    expect(obterPrecoAtualPromocional({ atual: "999,00", pv3: "" }, PROMOTION_PRICE_SOURCES.PVP3)).toBe(999);
+  test("PVP2 usa o campo antes como preço sem promoção", () => {
+    const item = { antes: "1299,00", atual: "999,00", pv3: "1199,00" };
+    const itemImpressao = prepararItemPromocionalParaImpressao(item, PROMOTION_PRICE_SOURCES.PVP2);
+
+    expect(itemImpressao.antes).toBe(1299);
+    expect(itemImpressao.atual).toBe(999);
+  });
+
+  test("faz fallback para PVP2/antes quando PVP3 não existe", () => {
+    expect(obterPrecoSemPromocaoParaImpressao({ antes: "1299,00", atual: "999,00", pv3: "" }, PROMOTION_PRICE_SOURCES.PVP3)).toBe(1299);
   });
 });
