@@ -6,7 +6,7 @@ import {
 } from "../utils/articleSearch";
 import { loadAllArtigos, refreshAllArtigosInBackground } from "./artigosService";
 
-const DEFAULT_PAGE_SIZE = 1000;
+const DEFAULT_PAGE_SIZE = 5000;
 
 const catalogoPesquisaState = {
   ready: false,

@@ -2,6 +2,7 @@ import React from "react";
 import Barcode from "../Barcode";
 import logo from "../../logo.png";
 import { formatarEuro, parseNumero } from "../../utils/formatters";
+import { formatarEuroPromocional, ajustarPrecoPromocionalParaImpressao } from "../../utils/promotionPricing";
 import { useAutoFontSize } from "../../utils/useAutoFontSize";
 
 export const DEFAULT_PROMOTION_NOTE =
@@ -39,7 +40,7 @@ function DescricaoAuto({ texto, formatoEtiqueta }) {
 function PrecoAntesAuto({ valor, formatoEtiqueta }) {
   return (
     <AutoText
-      texto={`${formatarEuro(valor)}€`}
+      texto={`${formatarEuroPromocional(valor)}€`}
       className="antes"
       min={formatoEtiqueta === "a5" ? 44 : 38}
       max={formatoEtiqueta === "a5" ? 54 : 46}
@@ -61,7 +62,7 @@ function DescontoAuto({ valor, formatoEtiqueta }) {
 function PrecoAtualAuto({ valor, formatoEtiqueta }) {
   return (
     <AutoText
-      texto={`${formatarEuro(valor)}€`}
+      texto={`${formatarEuroPromocional(valor)}€`}
       className="atual"
       min={formatoEtiqueta === "a5" ? 62 : 48}
       max={formatoEtiqueta === "a5" ? 88 : 68}
@@ -78,7 +79,9 @@ function CampaignLabelContent({
   shoppingIndicatorClass = "",
   note = DEFAULT_PROMOTION_NOTE,
 }) {
-  const desconto = Math.max(0, parseNumero(item?.antes) - parseNumero(item?.atual));
+  const precoAntesImpressao = ajustarPrecoPromocionalParaImpressao(item?.antes);
+  const precoAtualImpressao = ajustarPrecoPromocionalParaImpressao(item?.atual);
+  const desconto = Math.max(0, parseNumero(precoAntesImpressao) - parseNumero(precoAtualImpressao));
   const mostrarValidade = Boolean(String(textoValidade || "").trim());
   const mostrarRodapeExtra = mostrarValidade || showShoppingIndicator;
 

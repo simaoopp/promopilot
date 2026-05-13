@@ -11,6 +11,7 @@ import { useAuth } from "../context/AuthContext";
 import { useToast } from "../components/ToastProvider";
 import "../styles/styles.css";
 import { parseNumero } from "../utils/formatters";
+import { PROMOTION_PRICE_SOURCES } from "../utils/promotionPricing";
 import { addCampaignToHistory, createCampaignSnapshot } from "../utils/campaignHistory";
 import { aplicarFiltroTexto, compararNumero, dividirEmPaginas } from "../utils/filters";
 import EditableCampaignDate from "../components/EditableCampaignDate";
@@ -46,6 +47,7 @@ export default function EtiquetasExcelPage() {
   const [nomeFicheiro, setNomeFicheiro] = useState("");
   const [formatoEtiqueta, setFormatoEtiqueta] = useState("a6");
   const [formatoAutomaticoAtivo, setFormatoAutomaticoAtivo] = useState(false);
+  const [promocaoFontePreco, setPromocaoFontePreco] = useState(PROMOTION_PRICE_SOURCES.PVP2);
   const [modeloImportado, setModeloImportado] = useState(EXCEL_FORMATS.CAMPANHA);
   const [dataInicioShopping, setDataInicioShopping] = useState("");
   const [dataFimShopping, setDataFimShopping] = useState("");
@@ -715,6 +717,8 @@ export default function EtiquetasExcelPage() {
           desmarcarTodosFiltrados={desmarcarTodosFiltrados}
           limparSelecao={limparSelecao}
           imprimirSelecionados={imprimirSelecionados}
+          promocaoFontePreco={promocaoFontePreco}
+          setPromocaoFontePreco={setPromocaoFontePreco}
         />
 
         <ExcelCampaignTable
@@ -754,6 +758,7 @@ export default function EtiquetasExcelPage() {
         paginasA6={paginasA6}
         anoValidade={anoValidade}
         titulo={titulo}
+        promocaoFontePreco={promocaoFontePreco}
       />
     </>
   );

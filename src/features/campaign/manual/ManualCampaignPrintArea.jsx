@@ -1,4 +1,5 @@
 import { renderCampaignLabel } from "../../../components/campaign/CampaignLabel";
+import { prepararItemPromocionalParaImpressao } from "../../../utils/promotionPricing";
 import { obterTextoValidade } from "./manualCampaignUtils";
 
 export default function ManualCampaignPrintArea({
@@ -7,6 +8,7 @@ export default function ManualCampaignPrintArea({
   paginasImpressao,
   titulo,
   anoValidade,
+  promocaoFontePreco,
 }) {
   return (
     <div
@@ -20,7 +22,7 @@ export default function ManualCampaignPrintArea({
           className={`sheet ${pagina.layout === "a5" ? "sheet-a5" : "sheet-a6"}`}
         >
           {pagina.items.map((item) =>
-            renderCampaignLabel(item, pagina.layout, {
+            renderCampaignLabel(prepararItemPromocionalParaImpressao(item, promocaoFontePreco), pagina.layout, {
               titulo,
               textoValidade: obterTextoValidade(item, anoValidade, titulo),
             }),

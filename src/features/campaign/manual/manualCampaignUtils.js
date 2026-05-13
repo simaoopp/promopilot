@@ -178,7 +178,18 @@ export function construirPaginasImpressao(itens, modoAutomatico, formatoManual) 
   }
 
   const paginas = [];
+  let bufferA5 = [];
   let bufferA6 = [];
+
+  const fecharBufferA5 = () => {
+    if (!bufferA5.length) return;
+
+    dividirEmPaginas(bufferA5, 2).forEach((items) => {
+      paginas.push({ layout: "a5", items });
+    });
+
+    bufferA5 = [];
+  };
 
   const fecharBufferA6 = () => {
     if (!bufferA6.length) return;
@@ -193,10 +204,16 @@ export function construirPaginasImpressao(itens, modoAutomatico, formatoManual) 
   itens.forEach((item) => {
     if (item._formato === "a5") {
       fecharBufferA6();
-      paginas.push({ layout: "a5", items: [item] });
+      bufferA5.push(item);
+
+      if (bufferA5.length === 2) {
+        fecharBufferA5();
+      }
+
       return;
     }
 
+    fecharBufferA5();
     bufferA6.push(item);
 
     if (bufferA6.length === 4) {
@@ -204,6 +221,7 @@ export function construirPaginasImpressao(itens, modoAutomatico, formatoManual) 
     }
   });
 
+  fecharBufferA5();
   fecharBufferA6();
   return paginas;
 }

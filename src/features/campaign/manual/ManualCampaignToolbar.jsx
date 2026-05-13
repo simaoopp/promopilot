@@ -1,3 +1,4 @@
+import { useState } from "react";
 import ResumoCard from "../common/ResumoCard";
 import { TITULO_CAMPANHA_SEM_DATA_DEFINIDA } from "../../../utils/campaignTitleRules";
 
@@ -26,7 +27,11 @@ export default function ManualCampaignToolbar({
   totalFiltrados,
   totalSelecionados,
   modoImpressaoTexto,
+  promocaoFontePreco,
+  setPromocaoFontePreco,
 }) {
+  const [definicoesAbertas, setDefinicoesAbertas] = useState(false);
+
   return (
     <div className="control-card">
       <div className="toolbar-grid">
@@ -96,27 +101,63 @@ export default function ManualCampaignToolbar({
         />
       </div>
 
-      {!campanhaSemDatas ? (
-        <div className="toolbar-grid campaign-global-dates">
-          <label className="input-group">
-            <span>Data início geral</span>
-            <input
-              type="date"
-              value={dataInicioGeral}
-              onChange={(e) => atualizarDataGeral("dataInicio", e.target.value)}
-            />
-            <small>Predefine a data de início para todos os artigos abaixo.</small>
-          </label>
+      <div className="settings-toggle-row">
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={() => setDefinicoesAbertas((prev) => !prev)}
+          aria-expanded={definicoesAbertas}
+        >
+          {definicoesAbertas ? "Fechar definições" : "Abrir definições"}
+        </button>
+      </div>
 
-          <label className="input-group">
-            <span>Data fim geral</span>
-            <input
-              type="date"
-              value={dataFimGeral}
-              onChange={(e) => atualizarDataGeral("dataFim", e.target.value)}
-            />
-            <small>Se ficar vazio, mantém as datas do email ou o fallback de 30 dias.</small>
-          </label>
+      {definicoesAbertas ? (
+        <div className="campaign-settings-panel">
+          {!campanhaSemDatas ? (
+            <div className="toolbar-grid campaign-global-dates">
+              <label className="input-group">
+                <span>Data início geral</span>
+                <input
+                  type="date"
+                  value={dataInicioGeral}
+                  onChange={(e) => atualizarDataGeral("dataInicio", e.target.value)}
+                />
+                <small>Predefine a data de início para todos os artigos abaixo.</small>
+              </label>
+
+              <label className="input-group">
+                <span>Data fim geral</span>
+                <input
+                  type="date"
+                  value={dataFimGeral}
+                  onChange={(e) => atualizarDataGeral("dataFim", e.target.value)}
+                />
+                <small>Se ficar vazio, mantém as datas do email ou o fallback de 30 dias.</small>
+              </label>
+            </div>
+          ) : null}
+
+          <div className="input-group promotion-price-source-group">
+            <span>Preço usado na promoção/impressão</span>
+            <div className="segmented-control" role="group" aria-label="Preço usado na promoção">
+              <button
+                type="button"
+                className={`segmented-control-button ${promocaoFontePreco === "pvp2" ? "active" : ""}`}
+                onClick={() => setPromocaoFontePreco("pvp2")}
+              >
+                Usar PVP2 para promoção
+              </button>
+              <button
+                type="button"
+                className={`segmented-control-button ${promocaoFontePreco === "pvp3" ? "active" : ""}`}
+                onClick={() => setPromocaoFontePreco("pvp3")}
+              >
+                Usar PVP3 para promoção
+              </button>
+            </div>
+            <small>Quando PVP3 não existir no artigo, a impressão mantém o PVP2 atual.</small>
+          </div>
         </div>
       ) : null}
 
