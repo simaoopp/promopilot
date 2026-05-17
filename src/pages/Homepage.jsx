@@ -5,9 +5,11 @@ import { useToast } from "../components/ToastProvider";
 import HomeHero from "../components/home/HomeHero";
 import HomeQuickActions from "../components/home/HomeQuickActions";
 import HomeHistorySection from "../components/home/HomeHistorySection";
+import HomeAutomaticCampaignHistorySection from "../components/home/HomeAutomaticCampaignHistorySection";
 import HomeSummarySection from "../components/home/HomeSummarySection";
 import ArticleDetailsModal from "../components/home/ArticleDetailsModal";
 import CampaignDetailsModal from "../components/home/CampaignDetailsModal";
+import AutomaticCampaignDetailsModal from "../components/home/AutomaticCampaignDetailsModal";
 import ConfirmDeleteModal from "../components/home/ConfirmDeleteModal";
 import {
   enrichArtigoWithAi,
@@ -24,6 +26,10 @@ import {
 } from "../services/catalogoPesquisaService";
 import { normalizeArticleCompact } from "../utils/articleSearch";
 import { loadCampaignHistory, removeCampaignFromHistory } from "../utils/campaignHistory";
+import {
+  loadAutomaticCampaignHistory,
+  removeAutomaticCampaignFromHistory,
+} from "../utils/automaticCampaignHistory";
 import {
   formatarAutorCampanha,
   formatarDataHistorico,
@@ -55,8 +61,11 @@ export default function HomePage() {
   const [aiErro, setAiErro] = useState("");
   const [aiResultado, setAiResultado] = useState(null);
   const [historicoCampanhas, setHistoricoCampanhas] = useState([]);
+  const [historicoCampanhasAutomaticas, setHistoricoCampanhasAutomaticas] = useState([]);
   const [campanhaSelecionada, setCampanhaSelecionada] = useState(null);
+  const [campanhaAutomaticaSelecionada, setCampanhaAutomaticaSelecionada] = useState(null);
   const [campanhaPendenteRemocao, setCampanhaPendenteRemocao] = useState(null);
+  const [campanhaAutomaticaPendenteRemocao, setCampanhaAutomaticaPendenteRemocao] = useState(null);
   const [catalogoPesquisaPronto, setCatalogoPesquisaPronto] = useState(initialCatalogo.ready);
 
   const ensureCatalogoPesquisa = useCallback(async () => {
@@ -96,6 +105,26 @@ export default function HomePage() {
     }
 
     syncHistoricoCampanhas();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [profile?.store]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function syncHistoricoCampanhasAutomaticas() {
+      try {
+        const campanhas = await loadAutomaticCampaignHistory(profile?.store);
+        if (isMounted) setHistoricoCampanhasAutomaticas(campanhas);
+      } catch (error) {
+        console.warn("Não foi possível carregar o histórico de campanhas automático.", error);
+        if (isMounted) setHistoricoCampanhasAutomaticas([]);
+      }
+    }
+
+    syncHistoricoCampanhasAutomaticas();
 
     return () => {
       isMounted = false;
@@ -157,6 +186,14 @@ export default function HomePage() {
     [historicoCampanhas],
   );
 
+  const historicoAutomaticoPreview = useMemo(
+    () =>
+      (Array.isArray(historicoCampanhasAutomaticas) ? historicoCampanhasAutomaticas : [])
+        .filter(Boolean)
+        .slice(0, 4),
+    [historicoCampanhasAutomaticas],
+  );
+
   function abrirPopupArtigo(item) {
     setArtigoSelecionado(item);
     setAiAberta(false);
@@ -181,6 +218,14 @@ export default function HomePage() {
     setCampanhaSelecionada(null);
   }
 
+  function abrirPopupCampanhaAutomatica(campanha) {
+    setCampanhaAutomaticaSelecionada(campanha);
+  }
+
+  function fecharPopupCampanhaAutomatica() {
+    setCampanhaAutomaticaSelecionada(null);
+  }
+
   async function apagarCampanha(id) {
     try {
       const atualizado = await removeCampaignFromHistory(id, profile?.store);
@@ -193,6 +238,21 @@ export default function HomePage() {
     } catch (error) {
       console.error("Não foi possível apagar a campanha.", error);
       toast.error("Não foi possível apagar a campanha.");
+    }
+  }
+
+  async function apagarCampanhaAutomatica(id) {
+    try {
+      const atualizado = await removeAutomaticCampaignFromHistory(id, profile?.store);
+      setHistoricoCampanhasAutomaticas(atualizado);
+      setCampanhaAutomaticaPendenteRemocao(null);
+
+      if (campanhaAutomaticaSelecionada?.id === id) {
+        setCampanhaAutomaticaSelecionada(null);
+      }
+    } catch (error) {
+      console.error("Não foi possível apagar a campanha automática.", error);
+      toast.error("Não foi possível apagar a campanha automática.");
     }
   }
 
@@ -304,9 +364,15 @@ export default function HomePage() {
         formatarAutorCampanha={formatarAutorCampanha}
       />
 
+      <HomeAutomaticCampaignHistorySection
+        historicoPreview={historicoAutomaticoPreview}
+        onOpenCampaign={abrirPopupCampanhaAutomatica}
+        formatarDataHistorico={formatarDataHistorico}
+      />
+
       <HomeSummarySection
         totalArtigos={catalogoTotal}
-        totalCampanhas={historicoCampanhas.length}
+        totalCampanhas={historicoCampanhas.length + historicoCampanhasAutomaticas.length}
       />
 
       <ArticleDetailsModal
@@ -327,10 +393,24 @@ export default function HomePage() {
         formatarDataHistorico={formatarDataHistorico}
       />
 
+      <AutomaticCampaignDetailsModal
+        campanha={campanhaAutomaticaSelecionada}
+        onClose={fecharPopupCampanhaAutomatica}
+        onDuplicate={duplicarCampanha}
+        onRequestDelete={setCampanhaAutomaticaPendenteRemocao}
+        formatarDataHistorico={formatarDataHistorico}
+      />
+
       <ConfirmDeleteModal
         campanha={campanhaPendenteRemocao}
         onCancel={() => setCampanhaPendenteRemocao(null)}
         onConfirm={apagarCampanha}
+      />
+
+      <ConfirmDeleteModal
+        campanha={campanhaAutomaticaPendenteRemocao}
+        onCancel={() => setCampanhaAutomaticaPendenteRemocao(null)}
+        onConfirm={apagarCampanhaAutomatica}
       />
     </div>
   );

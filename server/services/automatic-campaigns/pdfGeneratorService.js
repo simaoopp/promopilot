@@ -1,0 +1,261 @@
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import PDFDocument from "pdfkit";
+import { formatarEuro, parseNumero } from "./numberUtils.js";
+import { normalizeEan13, buildEan13Bits } from "./ean13Svg.js";
+import { buildAutomaticPrintPages, normalizeCampaignFormat } from "./formatRulesService.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const projectRoot = path.resolve(__dirname, "../../..");
+const logoPath = path.join(projectRoot, "src", "logo.png");
+
+const A4 = { width: 595.28, height: 841.89 };
+const DEFAULT_NOTE =
+  "VÁLIDO ENQUANTO DURAR O STOCK. Limitado ao stock existente e não acumulável com outras promoções.";
+
+function bufferFromPdf(doc) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    doc.on("data", (chunk) => chunks.push(chunk));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+  });
+}
+
+function getLayout(format) {
+  if (format === "a5") {
+    return {
+      perPage: 2,
+      slots: [
+        { x: 0, y: 0, width: A4.width / 2, height: A4.height },
+        { x: A4.width / 2, y: 0, width: A4.width / 2, height: A4.height },
+      ],
+    };
+  }
+
+  return {
+    perPage: 4,
+    slots: [
+      { x: 0, y: 0, width: A4.width / 2, height: A4.height / 2 },
+      { x: A4.width / 2, y: 0, width: A4.width / 2, height: A4.height / 2 },
+      { x: 0, y: A4.height / 2, width: A4.width / 2, height: A4.height / 2 },
+      { x: A4.width / 2, y: A4.height / 2, width: A4.width / 2, height: A4.height / 2 },
+    ],
+  };
+}
+
+function fitFontSize(doc, text, maxWidth, start, min) {
+  let size = start;
+
+  while (size > min) {
+    doc.fontSize(size);
+    if (doc.widthOfString(String(text || "")) <= maxWidth) break;
+    size -= 1;
+  }
+
+  return Math.max(size, min);
+}
+
+function textCentered(doc, text, x, y, width, options = {}) {
+  const { font = "Helvetica", size = 12, color = "#111", height, lineGap = 0 } = options;
+  doc.fillColor(color).font(font).fontSize(size);
+  doc.text(String(text || ""), x, y, {
+    width,
+    height,
+    align: "center",
+    lineGap,
+    ellipsis: true,
+  });
+}
+
+function drawLogo(doc, x, y, width, height) {
+  if (fs.existsSync(logoPath)) {
+    doc.image(logoPath, x, y, { fit: [width, height], align: "center", valign: "center" });
+    return;
+  }
+
+  doc.font("Helvetica-Bold").fontSize(22).text("EXPERT", x, y + 8, { width, align: "center" });
+}
+
+function getValidityText(item = {}, anoValidade) {
+  const inicio = String(item.dataInicio || "").trim();
+  const fim = String(item.dataFim || "").trim();
+
+  if (!inicio && !fim) return "";
+  if (inicio && fim) return `Válido de ${inicio} a ${fim}/${anoValidade}`;
+  if (fim) return `Válido até ${fim}/${anoValidade}`;
+  return `Válido desde ${inicio}/${anoValidade}`;
+}
+
+function drawEan13Barcode(doc, value, x, y, width, height) {
+  const ean = normalizeEan13(value);
+
+  if (!ean) {
+    textCentered(doc, value || "", x, y + height / 2 - 5, width, {
+      font: "Helvetica-Bold",
+      size: 9,
+    });
+    return;
+  }
+
+  const bits = buildEan13Bits(ean);
+  const moduleWidth = width / bits.length;
+  const barHeight = height - 12;
+
+  doc.save();
+  doc.fillColor("#111");
+
+  for (let index = 0; index < bits.length; index += 1) {
+    if (bits[index] !== "1") continue;
+    doc.rect(x + index * moduleWidth, y, Math.max(moduleWidth, 0.65), barHeight).fill();
+  }
+
+  doc.restore();
+  doc.font("Helvetica").fontSize(8.5).fillColor("#111").text(ean, x, y + barHeight + 1, {
+    width,
+    align: "center",
+  });
+}
+
+function drawCampaignLabel(doc, item, slot, options = {}) {
+  const isA5 = options.format === "a5";
+  const margin = isA5 ? 18 : 14;
+  const x = slot.x + margin;
+  const y = slot.y + margin;
+  const width = slot.width - margin * 2;
+  const height = slot.height - margin * 2;
+  const borderRadius = isA5 ? 18 : 14;
+
+  doc.save();
+  doc.lineWidth(2.6).roundedRect(x, y, width, height, borderRadius).stroke("#111");
+
+  const innerX = x + 12;
+  const innerW = width - 24;
+  let cursorY = y + 12;
+
+  drawLogo(doc, innerX + innerW * 0.22, cursorY, innerW * 0.56, isA5 ? 48 : 36);
+  cursorY += isA5 ? 54 : 42;
+
+  textCentered(doc, item.codigo || item.artigo || "", innerX, cursorY, innerW, {
+    font: "Helvetica-Bold",
+    size: isA5 ? 13 : 9.5,
+    height: isA5 ? 16 : 12,
+  });
+  cursorY += isA5 ? 19 : 15;
+
+  textCentered(doc, options.title || "PROMO", innerX, cursorY, innerW, {
+    font: "Helvetica-Bold",
+    size: isA5 ? 34 : 24,
+    height: isA5 ? 40 : 28,
+  });
+  cursorY += isA5 ? 43 : 31;
+
+  const descFont = fitFontSize(doc, item.descricao || "", innerW, isA5 ? 25 : 15, isA5 ? 15 : 10);
+  textCentered(doc, item.descricao || "", innerX, cursorY, innerW, {
+    font: "Helvetica-Bold",
+    size: descFont,
+    height: isA5 ? 88 : 48,
+    lineGap: 1,
+  });
+  cursorY += isA5 ? 96 : 54;
+
+  const antes = parseNumero(item.antes);
+  const atual = parseNumero(item.atual);
+  const desconto = Math.max(0, antes - atual);
+  const priceAreaTop = cursorY;
+  const priceAreaBottom = y + height - (isA5 ? 126 : 92);
+  const priceAreaHeight = Math.max(130, priceAreaBottom - priceAreaTop);
+
+  const beforeSize = isA5 ? 48 : 34;
+  const discountSize = isA5 ? 53 : 36;
+  const nowSize = isA5 ? 78 : 55;
+  const priceY = priceAreaTop + Math.max(0, (priceAreaHeight - (beforeSize + discountSize + nowSize) * 0.82) / 2);
+
+  doc.font("Helvetica-Bold").fontSize(beforeSize).fillColor("#111");
+  const beforeText = `${formatarEuro(antes)}€`;
+  const beforeWidth = doc.widthOfString(beforeText);
+  const beforeX = innerX + (innerW - beforeWidth) / 2;
+  doc.text(beforeText, beforeX, priceY, { lineBreak: false });
+  doc.moveTo(beforeX, priceY + beforeSize * 0.55).lineTo(beforeX + beforeWidth, priceY + beforeSize * 0.55).lineWidth(3).stroke("#111");
+
+  textCentered(doc, `-${formatarEuro(desconto)}€`, innerX, priceY + beforeSize * 0.72, innerW, {
+    font: "Helvetica-Bold",
+    size: discountSize,
+    height: discountSize,
+  });
+
+  textCentered(doc, `${formatarEuro(atual)}€`, innerX, priceY + beforeSize * 0.72 + discountSize * 0.82, innerW, {
+    font: "Helvetica-Bold",
+    size: nowSize,
+    height: nowSize,
+  });
+
+  const barcodeW = Math.min(innerW * 0.78, isA5 ? 230 : 164);
+  const barcodeH = isA5 ? 54 : 42;
+  const barcodeX = innerX + (innerW - barcodeW) / 2;
+  const barcodeY = y + height - (isA5 ? 112 : 80);
+  drawEan13Barcode(doc, item.ean, barcodeX, barcodeY, barcodeW, barcodeH);
+
+  const validity = getValidityText(item, options.anoValidade);
+  if (validity) {
+    textCentered(doc, validity, innerX, barcodeY + barcodeH + 3, innerW, {
+      font: "Helvetica-Bold",
+      size: isA5 ? 10 : 8,
+      height: 13,
+    });
+  }
+
+  textCentered(doc, options.note || DEFAULT_NOTE, innerX, y + height - (isA5 ? 34 : 25), innerW, {
+    font: "Helvetica",
+    size: isA5 ? 7 : 5.4,
+    height: isA5 ? 20 : 16,
+  });
+
+  doc.restore();
+}
+
+export async function generateAutomaticCampaignPdf({ items, title, storeLabel, format = "automatico", anoValidade } = {}) {
+  if (!Array.isArray(items) || !items.length) {
+    throw new Error("Não existem artigos para gerar PDF.");
+  }
+
+  const normalizedFormat = normalizeCampaignFormat(format);
+  const printPages = buildAutomaticPrintPages(items, normalizedFormat);
+
+  if (!printPages.length) {
+    throw new Error("Não existem páginas de impressão para gerar PDF.");
+  }
+
+  const doc = new PDFDocument({
+    size: "A4",
+    margin: 0,
+    autoFirstPage: false,
+    info: {
+      Title: `${title || "PROMO"} - ${storeLabel || "Loja"}`,
+      Author: "Expert Administração",
+      Subject: "Etiquetas de campanha automáticas",
+    },
+  });
+  const done = bufferFromPdf(doc);
+
+  printPages.forEach((page) => {
+    const pageFormat = page.layout === "a5" ? "a5" : "a6";
+    const layout = getLayout(pageFormat);
+
+    doc.addPage({ size: "A4", margin: 0 });
+
+    page.items.forEach((item, itemIndex) => {
+      drawCampaignLabel(doc, item, layout.slots[itemIndex], {
+        title,
+        storeLabel,
+        format: pageFormat,
+        anoValidade: anoValidade || new Date().getFullYear(),
+      });
+    });
+  });
+
+  doc.end();
+  return done;
+}
