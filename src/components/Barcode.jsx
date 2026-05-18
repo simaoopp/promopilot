@@ -1,35 +1,36 @@
 import { useEffect, useRef } from "react";
 import JsBarcode from "jsbarcode";
+import {
+  BARCODE_RENDER_DEFAULTS,
+  isValidEanForBarcode,
+  normalizeEan13,
+} from "../shared/campaign-label/barcodeRules";
 
 export default function Barcode({
   value,
-  height = 20,
-  width = 1,
-  showValue = false,
+  height = BARCODE_RENDER_DEFAULTS.height,
+  width = BARCODE_RENDER_DEFAULTS.width,
+  showValue = BARCODE_RENDER_DEFAULTS.displayValue,
 }) {
   const ref = useRef(null);
-
-  function isValidEAN(value) {
-    return /^\d{12,13}$/.test(value);
-  }
 
   useEffect(() => {
     const svg = ref.current;
 
     if (!svg) return;
 
-    if (!value || !isValidEAN(value)) {
-      svg.innerHTML = ""; // limpa código anterior
+    if (!value || !isValidEanForBarcode(value)) {
+      svg.innerHTML = "";
       return;
     }
 
     try {
-      JsBarcode(svg, value, {
-        format: "EAN13",
+      JsBarcode(svg, normalizeEan13(value), {
+        format: BARCODE_RENDER_DEFAULTS.format,
         displayValue: showValue,
         height,
         width,
-        margin: 0,
+        margin: BARCODE_RENDER_DEFAULTS.margin,
       });
     } catch (err) {
       console.error("Erro ao gerar código de barras:", err);

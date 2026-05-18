@@ -1,8 +1,13 @@
 import {
   campanhaSemDataDefinida,
 } from "../../../utils/campaignTitleRules";
-import { dividirEmPaginas } from "../../../utils/filters";
 import { formatarEuro, parseNumero } from "../../../utils/formatters";
+import {
+  buildManualCampaignPrintPages,
+  normalizarTexto as normalizarTextoPartilhado,
+  obterFormatoAutomaticoEtiqueta as obterFormatoAutomaticoEtiquetaPartilhado,
+  obterFormatoEtiquetaItem as obterFormatoEtiquetaItemPartilhado,
+} from "../../../shared/campaign-label";
 
 export const CAMPANHA_TITULO_DEFAULT = "PROMO";
 
@@ -30,12 +35,9 @@ export function renderCampaignTableCell(item, columnKey) {
 }
 
 export function normalizarTexto(texto) {
-  return String(texto || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim();
+  return normalizarTextoPartilhado(texto);
 }
+
 
 export function converterPreco(valor) {
   return parseNumero(valor);
@@ -88,143 +90,19 @@ export function obterTextoValidade(item, anoValidadeAtual, tituloCampanha) {
 }
 
 export function obterFormatoAutomaticoEtiqueta(descricao = "") {
-  const texto = normalizarTexto(descricao);
-
-  const categoriasA5 = [
-    "Máq. Lavar Loiça",
-    "Máq. Lavar Louça",
-    "Máq. Secar Roupa",
-    "Máq. Secar",
-    "Máq. Lavar Roupa",
-    "Máq. Lavar",
-    "maquina de lavar",
-    "maquinas de lavar",
-    "máquina de lavar",
-    "máquinas de lavar",
-    "maquina de secar",
-    "maquinas de secar",
-    "máquina de secar",
-    "máquinas de secar",
-    "lavar e secar",
-    "maquina de lavar e secar",
-    "maquinas de lavar e secar",
-    "máquina de lavar e secar",
-    "máquinas de lavar e secar",
-    "maquina de lavar loica",
-    "maquinas de lavar loica",
-    "máquina de lavar loiça",
-    "máquinas de lavar loiça",
-    "lava loica",
-    "lava loiça",
-    "televisao",
-    "televisoes",
-    "televisão",
-    "televisões",
-    "tv",
-    "smart tv",
-    "qled",
-    "oled",
-    "monitor",
-    "monitores",
-    "frigorifico",
-    "frigorificos",
-    "frigorífico",
-    "frigoríficos",
-    "combinado",
-    "combinados",
-    "cadeira",
-    "cadeiras",
-    "mesa",
-    "mesas",
-    "fogao",
-    "fogoes",
-    "fogão",
-    "fogões",
-    "arca",
-    "arcas",
-    "chamine",
-    "chamines",
-    "chaminé",
-    "chaminés",
-    "exaustor",
-    "exaustores",
-    "cave de vinho",
-    "caves de vinho",
-    "cave vinho",
-    "garrafeira",
-    "garrafeiras",
-  ];
-
-  return categoriasA5.some((palavra) =>
-    texto.includes(normalizarTexto(palavra)),
-  )
-    ? "a5"
-    : "a6";
+  return obterFormatoAutomaticoEtiquetaPartilhado(descricao);
 }
+
 
 export function obterFormatoEtiquetaItem(item, modoAutomatico, formatoManual) {
-  if (!modoAutomatico) return formatoManual;
-  return obterFormatoAutomaticoEtiqueta(item?.descricao || "");
+  return obterFormatoEtiquetaItemPartilhado(item, modoAutomatico, formatoManual);
 }
+
 
 export function construirPaginasImpressao(itens, modoAutomatico, formatoManual) {
-  if (!modoAutomatico) {
-    const etiquetasPorPagina = formatoManual === "a5" ? 2 : 4;
-
-    return dividirEmPaginas(itens, etiquetasPorPagina).map((items) => ({
-      layout: formatoManual,
-      items,
-    }));
-  }
-
-  const paginas = [];
-  let bufferA5 = [];
-  let bufferA6 = [];
-
-  const fecharBufferA5 = () => {
-    if (!bufferA5.length) return;
-
-    dividirEmPaginas(bufferA5, 2).forEach((items) => {
-      paginas.push({ layout: "a5", items });
-    });
-
-    bufferA5 = [];
-  };
-
-  const fecharBufferA6 = () => {
-    if (!bufferA6.length) return;
-
-    dividirEmPaginas(bufferA6, 4).forEach((items) => {
-      paginas.push({ layout: "a6", items });
-    });
-
-    bufferA6 = [];
-  };
-
-  itens.forEach((item) => {
-    if (item._formato === "a5") {
-      fecharBufferA6();
-      bufferA5.push(item);
-
-      if (bufferA5.length === 2) {
-        fecharBufferA5();
-      }
-
-      return;
-    }
-
-    fecharBufferA5();
-    bufferA6.push(item);
-
-    if (bufferA6.length === 4) {
-      fecharBufferA6();
-    }
-  });
-
-  fecharBufferA5();
-  fecharBufferA6();
-  return paginas;
+  return buildManualCampaignPrintPages(itens, modoAutomatico, formatoManual);
 }
+
 
 export function dataCampanhaInvalida(data) {
   const texto = String(data || "").trim();
