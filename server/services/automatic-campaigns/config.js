@@ -72,6 +72,7 @@ export function getAutomaticCampaignConfig() {
     runOnStart: readBoolean("CAMPAIGN_EMAIL_WORKER_RUN_ON_START", false),
     markSeen: readBoolean("CAMPAIGN_EMAIL_MARK_SEEN", false),
     sendEmails: readBoolean("CAMPAIGN_EMAIL_SEND_ENABLED", false),
+    emailProvider: String(process.env.CAMPAIGN_EMAIL_PROVIDER || "resend").toLowerCase().trim(),
     defaultFormat: process.env.CAMPAIGN_DEFAULT_FORMAT || "automatico",
     defaultTitle: process.env.CAMPAIGN_DEFAULT_TITLE || "PROMOÇÃO",
     titleFromEmail: readBoolean("CAMPAIGN_TITLE_FROM_EMAIL", false),
@@ -94,6 +95,15 @@ export function getAutomaticCampaignConfig() {
       scanLimit: readNumber("CAMPAIGN_EMAIL_SCAN_LIMIT", Math.max(readNumber("CAMPAIGN_EMAIL_MAX_MESSAGES", 10) * 10, 100)),
       seenOnly: readBoolean("CAMPAIGN_EMAIL_SEEN_ONLY", false),
       unseenOnly: readBoolean("CAMPAIGN_EMAIL_UNSEEN_ONLY", true),
+    },
+    emailApi: {
+      provider: String(process.env.CAMPAIGN_EMAIL_PROVIDER || "resend").toLowerCase().trim(),
+      apiKey: process.env.RESEND_API_KEY || process.env.CAMPAIGN_EMAIL_API_KEY || "",
+      from: process.env.CAMPAIGN_EMAIL_FROM_ADDRESS || process.env.CAMPAIGN_SMTP_FROM || "",
+      replyTo: process.env.CAMPAIGN_EMAIL_REPLY_TO || "",
+      baseUrl: process.env.RESEND_API_BASE_URL || "https://api.resend.com",
+      timeoutMs: readTimeoutMs("CAMPAIGN_EMAIL_API_TIMEOUT_MS", 30000),
+      debug: readBoolean("CAMPAIGN_EMAIL_API_DEBUG", false),
     },
     smtp: {
       host: process.env.CAMPAIGN_SMTP_HOST || "",
@@ -119,6 +129,14 @@ export function getAutomaticCampaignConfig() {
 export function hasInboxConfig(config = getAutomaticCampaignConfig()) {
   return Boolean(
     config?.inbox?.host && config?.inbox?.user && config?.inbox?.pass,
+  );
+}
+
+export function hasEmailApiConfig(config = getAutomaticCampaignConfig()) {
+  return Boolean(
+    config?.emailProvider === "resend" &&
+      config?.emailApi?.apiKey &&
+      config?.emailApi?.from,
   );
 }
 

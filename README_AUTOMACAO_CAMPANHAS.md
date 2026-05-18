@@ -238,3 +238,54 @@ CAMPAIGN_EMAIL_MAX_MESSAGES=25
 ```
 
 Nesta versão, o worker não depende apenas de `IMAP SEARCH`; ele abre as mailboxes, lê os emails recentes e aplica os filtros no código. Isto evita falhas de pesquisa por flags, labels, localização da caixa ou comportamento específico do Gmail.
+
+## Envio por API de email, sem SMTP
+
+A partir desta versão, o envio dos PDFs pode ser feito por API HTTPS usando Resend. Esta é a opção recomendada para Render, porque evita timeouts/bloqueios nas portas SMTP `465` e `587`.
+
+### Render — configuração recomendada
+
+```env
+CAMPAIGN_EMAIL_PROVIDER=resend
+RESEND_API_KEY=COLOCAR_RESEND_API_KEY
+CAMPAIGN_EMAIL_FROM_ADDRESS=Etiquetas Promo <onboarding@resend.dev>
+CAMPAIGN_EMAIL_REPLY_TO=etiquetasprom@gmail.com
+CAMPAIGN_EMAIL_API_TIMEOUT_MS=30000
+CAMPAIGN_EMAIL_API_DEBUG=1
+```
+
+Durante testes, podes usar `onboarding@resend.dev`. Para produção, valida um domínio no Resend e troca para um remetente do teu domínio, por exemplo:
+
+```env
+CAMPAIGN_EMAIL_FROM_ADDRESS=Etiquetas Promo <etiquetas@experteletro.pt>
+```
+
+### Teste do provedor de email
+
+Foi adicionada a rota:
+
+```txt
+POST /api/campanhas-automaticas/testar-email
+```
+
+A rota antiga continua disponível:
+
+```txt
+POST /api/campanhas-automaticas/testar-smtp
+```
+
+Quando `CAMPAIGN_EMAIL_PROVIDER=resend`, ambas validam a configuração da API de email.
+
+### Deduplicação e título
+
+Predefinições recomendadas:
+
+```env
+CAMPAIGN_DEFAULT_TITLE=PROMOÇÃO
+CAMPAIGN_TITLE_FROM_EMAIL=0
+CAMPAIGN_DEDUPE_ENABLED=1
+CAMPAIGN_DEDUPE_BY_SUBJECT=1
+CAMPAIGN_REPROCESS_ERRORED=0
+```
+
+Isto faz com que a campanha apareça no site como `PROMOÇÃO`, mantendo o assunto original apenas como metadado, e evita repetir a mesma campanha por email/loja e por assunto/loja.

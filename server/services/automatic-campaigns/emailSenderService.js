@@ -1,5 +1,5 @@
 import nodemailer from "nodemailer";
-import { getAutomaticCampaignConfig, hasSmtpConfig } from "./config.js";
+import { getAutomaticCampaignConfig, hasEmailApiConfig, hasSmtpConfig } from "./config.js";
 
 function uniqueAttempts(attempts = []) {
   const seen = new Set();
@@ -78,25 +78,126 @@ function buildEmailBody({ storeLabel, totalItems, subject }) {
     .join("\n");
 }
 
-function buildErrorMessage(errors = []) {
-  const compact = errors
-    .map((error) => `${error.label || "smtp"} ${error.host}:${error.port} → ${error.message}`)
-    .join(" | ");
-  return compact || "Falha desconhecida no envio SMTP.";
+function buildEmailHtml({ storeLabel, totalItems, subject }) {
+  return `
+    <div style="font-family: Arial, sans-serif; color: #111827; line-height: 1.5;">
+      <p>Bom dia,</p>
+      <p>Segue em anexo o PDF com as etiquetas de campanha para a loja <strong>${escapeHtml(storeLabel)}</strong>.</p>
+      <p><strong>Total de etiquetas:</strong> ${Number(totalItems || 0)}</p>
+      ${subject ? `<p><strong>Email de origem:</strong> ${escapeHtml(subject)}</p>` : ""}
+      <p>Cumprimentos,<br/>Sistema automático Expert Administração</p>
+    </div>
+  `;
 }
 
-export async function sendAutomaticCampaignEmail({ to, storeLabel, pdfBuffer, filename, totalItems, subject }) {
-  const config = getAutomaticCampaignConfig();
+function escapeHtml(value = "") {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
 
+function buildErrorMessage(errors = []) {
+  const compact = errors
+    .map((error) => `${error.label || "smtp"} ${error.host || ""}${error.port ? `:${error.port}` : ""} → ${error.message}`)
+    .join(" | ");
+  return compact || "Falha desconhecida no envio de email.";
+}
+
+function normalizeRecipients(to) {
+  if (Array.isArray(to)) return to.map(String).map((item) => item.trim()).filter(Boolean);
+  return String(to || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function buildMessageSubject(storeLabel) {
+  return `PROMOÇÃO - Etiquetas de campanha - ${storeLabel}`;
+}
+
+async function sendViaResend({ config, to, storeLabel, pdfBuffer, filename, totalItems, subject }) {
+  if (!hasEmailApiConfig(config)) {
+    throw new Error("API de email não configurada. Define CAMPAIGN_EMAIL_PROVIDER=resend, RESEND_API_KEY e CAMPAIGN_EMAIL_FROM.");
+  }
+
+  const endpoint = `${config.emailApi.baseUrl.replace(/\/+$/, "")}/emails`;
+  const recipients = normalizeRecipients(to);
+  const payload = {
+    from: config.emailApi.from,
+    to: recipients,
+    subject: buildMessageSubject(storeLabel),
+    text: buildEmailBody({ storeLabel, totalItems, subject }),
+    html: buildEmailHtml({ storeLabel, totalItems, subject }),
+    attachments: [
+      {
+        filename: filename || `etiquetas-${storeLabel || "loja"}.pdf`,
+        content: Buffer.from(pdfBuffer).toString("base64"),
+      },
+    ],
+  };
+
+  if (config.emailApi.replyTo) {
+    payload.reply_to = config.emailApi.replyTo;
+  }
+
+  if (config.emailApi.debug || config.debug) {
+    console.log(`[campanhas-automaticas] Resend tentativa: endpoint=${endpoint} from=${config.emailApi.from} to=${recipients.join(",")}`);
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), config.emailApi.timeoutMs);
+
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${config.emailApi.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+
+    const text = await response.text();
+    let body = null;
+    try {
+      body = text ? JSON.parse(text) : null;
+    } catch {
+      body = { raw: text };
+    }
+
+    if (!response.ok) {
+      const errorMessage = body?.message || body?.error || text || `HTTP ${response.status}`;
+      throw new Error(`Resend API falhou (${response.status}): ${errorMessage}`);
+    }
+
+    if (config.emailApi.debug || config.debug) {
+      console.log(`[campanhas-automaticas] Resend enviado com sucesso id=${body?.id || body?.data?.id || "(sem id)"}`);
+    }
+
+    return {
+      provider: "resend",
+      id: body?.id || body?.data?.id,
+      response: body,
+    };
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error(`Resend API timeout após ${config.emailApi.timeoutMs}ms.`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function sendViaSmtp({ config, to, storeLabel, pdfBuffer, filename, totalItems, subject }) {
   if (!hasSmtpConfig(config)) {
     throw new Error("SMTP não configurado. Define CAMPAIGN_SMTP_HOST, CAMPAIGN_SMTP_FROM e credenciais se necessário.");
   }
 
-  if (!to) {
-    throw new Error(`Email da loja ${storeLabel || ""} não configurado.`);
-  }
-
-  const messageSubject = `PROMOÇÃO - Etiquetas de campanha - ${storeLabel}`;
   const attempts = buildSmtpAttempts(config);
   const errors = [];
 
@@ -113,7 +214,7 @@ export async function sendAutomaticCampaignEmail({ to, storeLabel, pdfBuffer, fi
       const result = await transporter.sendMail({
         from: config.smtp.from,
         to,
-        subject: messageSubject,
+        subject: buildMessageSubject(storeLabel),
         text: buildEmailBody({ storeLabel, totalItems, subject }),
         attachments: [
           {
@@ -132,6 +233,7 @@ export async function sendAutomaticCampaignEmail({ to, storeLabel, pdfBuffer, fi
 
       return {
         ...result,
+        provider: "smtp",
         smtpAttempt: {
           host: attempt.host,
           port: attempt.port,
@@ -158,38 +260,96 @@ export async function sendAutomaticCampaignEmail({ to, storeLabel, pdfBuffer, fi
   throw new Error(`Falha no envio SMTP após ${attempts.length} tentativa(s). ${buildErrorMessage(errors)}`);
 }
 
-export async function verifyAutomaticCampaignSmtp() {
+export async function sendAutomaticCampaignEmail({ to, storeLabel, pdfBuffer, filename, totalItems, subject }) {
   const config = getAutomaticCampaignConfig();
 
-  if (!hasSmtpConfig(config)) {
-    throw new Error("SMTP não configurado. Define CAMPAIGN_SMTP_HOST, CAMPAIGN_SMTP_FROM e credenciais se necessário.");
+  if (!to) {
+    throw new Error(`Email da loja ${storeLabel || ""} não configurado.`);
   }
 
-  const attempts = buildSmtpAttempts(config);
-  const errors = [];
+  if (config.emailProvider === "resend") {
+    return sendViaResend({ config, to, storeLabel, pdfBuffer, filename, totalItems, subject });
+  }
 
-  for (const attempt of attempts) {
-    const transporter = createTransport(config, attempt);
+  if (config.emailProvider === "smtp") {
+    return sendViaSmtp({ config, to, storeLabel, pdfBuffer, filename, totalItems, subject });
+  }
+
+  throw new Error(`CAMPAIGN_EMAIL_PROVIDER inválido: ${config.emailProvider}. Usa "resend" ou "smtp".`);
+}
+
+export async function verifyAutomaticCampaignEmailProvider() {
+  const config = getAutomaticCampaignConfig();
+
+  if (config.emailProvider === "resend") {
+    if (!hasEmailApiConfig(config)) {
+      throw new Error("API de email não configurada. Define CAMPAIGN_EMAIL_PROVIDER=resend, RESEND_API_KEY e CAMPAIGN_EMAIL_FROM.");
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), config.emailApi.timeoutMs);
+
     try {
-      await transporter.verify();
-      return {
-        ok: true,
-        attempt: {
-          host: attempt.host,
-          port: attempt.port,
-          secure: attempt.secure,
-          label: attempt.label,
+      const response = await fetch(`${config.emailApi.baseUrl.replace(/\/+$/, "")}/domains`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${config.emailApi.apiKey}`,
         },
-      };
-    } catch (error) {
-      errors.push({
-        label: attempt.label,
-        host: attempt.host,
-        port: attempt.port,
-        message: error?.message || String(error),
+        signal: controller.signal,
       });
+
+      if (!response.ok) {
+        const body = await response.text();
+        throw new Error(`Resend API não validou (${response.status}): ${body || response.statusText}`);
+      }
+
+      return { ok: true, provider: "resend" };
+    } catch (error) {
+      if (error?.name === "AbortError") {
+        throw new Error(`Resend API timeout após ${config.emailApi.timeoutMs}ms.`);
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
     }
   }
 
-  throw new Error(`Falha na verificação SMTP. ${buildErrorMessage(errors)}`);
+  if (config.emailProvider === "smtp") {
+    if (!hasSmtpConfig(config)) {
+      throw new Error("SMTP não configurado. Define CAMPAIGN_SMTP_HOST, CAMPAIGN_SMTP_FROM e credenciais se necessário.");
+    }
+
+    const attempts = buildSmtpAttempts(config);
+    const errors = [];
+
+    for (const attempt of attempts) {
+      const transporter = createTransport(config, attempt);
+      try {
+        await transporter.verify();
+        return {
+          ok: true,
+          provider: "smtp",
+          attempt: {
+            host: attempt.host,
+            port: attempt.port,
+            secure: attempt.secure,
+            label: attempt.label,
+          },
+        };
+      } catch (error) {
+        errors.push({
+          label: attempt.label,
+          host: attempt.host,
+          port: attempt.port,
+          message: error?.message || String(error),
+        });
+      }
+    }
+
+    throw new Error(`Falha na verificação SMTP. ${buildErrorMessage(errors)}`);
+  }
+
+  throw new Error(`CAMPAIGN_EMAIL_PROVIDER inválido: ${config.emailProvider}. Usa "resend" ou "smtp".`);
 }
+
+export const verifyAutomaticCampaignSmtp = verifyAutomaticCampaignEmailProvider;

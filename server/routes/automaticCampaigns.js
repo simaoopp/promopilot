@@ -1,9 +1,9 @@
-import { getAutomaticCampaignConfig, hasInboxConfig, hasSmtpConfig } from "../services/automatic-campaigns/config.js";
+import { getAutomaticCampaignConfig, hasEmailApiConfig, hasInboxConfig, hasSmtpConfig } from "../services/automatic-campaigns/config.js";
 import { processAutomaticCampaignEmail } from "../services/automatic-campaigns/automaticCampaignProcessor.js";
 import { runCampaignEmailWorkerOnce } from "../workers/campaignEmailWorker.js";
 import { listAutomaticCampaignRows } from "../services/automatic-campaigns/automaticCampaignRepository.js";
 import { createAutomaticCampaignPdfSignedUrl } from "../services/automatic-campaigns/storageService.js";
-import { verifyAutomaticCampaignSmtp } from "../services/automatic-campaigns/emailSenderService.js";
+import { verifyAutomaticCampaignEmailProvider, verifyAutomaticCampaignSmtp } from "../services/automatic-campaigns/emailSenderService.js";
 
 function parseBoolean(value, fallback = false) {
   if (value === undefined || value === null || value === "") return fallback;
@@ -19,6 +19,8 @@ export function registerAutomaticCampaignRoutes(app, { requireAuth }) {
       workerEnabled: config.enabled,
       inboxConfigured: hasInboxConfig(config),
       smtpConfigured: hasSmtpConfig(config),
+      emailProvider: config.emailProvider,
+      emailApiConfigured: hasEmailApiConfig(config),
       sendEmailsEnabled: config.sendEmails,
       intervalMs: config.intervalMs,
       defaultFormat: config.defaultFormat,
@@ -89,6 +91,19 @@ export function registerAutomaticCampaignRoutes(app, { requireAuth }) {
     }
   });
 
+
+  app.post("/api/campanhas-automaticas/testar-email", requireAuth, async (_req, res) => {
+    try {
+      const result = await verifyAutomaticCampaignEmailProvider();
+      return res.json(result);
+    } catch (error) {
+      console.error("Erro em POST /api/campanhas-automaticas/testar-email:", error);
+      return res.status(500).json({
+        ok: false,
+        error: error?.message || "Erro ao testar o provedor de email das campanhas automáticas.",
+      });
+    }
+  });
 
   app.post("/api/campanhas-automaticas/testar-smtp", requireAuth, async (_req, res) => {
     try {
