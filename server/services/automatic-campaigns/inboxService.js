@@ -67,6 +67,11 @@ async function resolveMailboxes(client, config) {
       ? listed.filter(shouldScanMailbox).map((mailbox) => mailbox.path)
       : [];
 
+    if (config.debug) {
+      const allPaths = Array.isArray(listed) ? listed.map((mailbox) => mailbox.path).join(" | ") : "";
+      console.log(`[campanhas-automaticas] Mailboxes disponíveis: ${allPaths}`);
+    }
+
     return uniqueStrings([...explicit, ...discovered]);
   } catch (error) {
     if (config.debug) {
@@ -76,78 +81,120 @@ async function resolveMailboxes(client, config) {
   }
 }
 
-function buildSearchQuery(config) {
-  const searchQuery = {};
-  if (config.inbox.unseenOnly) searchQuery.seen = false;
-  if (config.inbox.seenOnly) searchQuery.seen = true;
-  return searchQuery;
+function messageMatchesSeenFilter(message, config) {
+  const flags = Array.from(message?.flags || []).map((flag) => String(flag).toLowerCase());
+  const isSeen = flags.includes("\\seen");
+  if (config.inbox.unseenOnly && isSeen) return false;
+  if (config.inbox.seenOnly && !isSeen) return false;
+  return true;
 }
 
-async function fetchMessagesFromMailbox(client, mailbox, config, seenMessageIds) {
+function buildFetchRange(mailboxExists, scanLimit) {
+  const exists = Number(mailboxExists || 0);
+  if (!exists || exists < 1) return null;
+  const start = Math.max(1, exists - Number(scanLimit || 100) + 1);
+  return `${start}:*`;
+}
+
+async function fetchRecentMessages(client, mailbox, config) {
   const lock = await client.getMailboxLock(mailbox);
 
   try {
-    const searchQuery = buildSearchQuery(config);
-    const uids = await client.search(searchQuery);
-    const selectedUids = uids.slice(-config.inbox.maxMessages);
+    const exists = Number(client.mailbox?.exists || 0);
+    const range = buildFetchRange(exists, config.inbox.scanLimit);
     const messages = [];
 
     if (config.debug) {
       console.log(
-        `[campanhas-automaticas] IMAP mailbox="${mailbox}" encontrados=${uids.length} analisados=${selectedUids.length} filtroSeen=${JSON.stringify(searchQuery)}`,
+        `[campanhas-automaticas] IMAP mailbox="${mailbox}" total=${exists} range=${range || "(vazia)"} scanLimit=${config.inbox.scanLimit}`,
       );
     }
 
-    for (const uid of selectedUids) {
-      const message = await client.fetchOne(
-        uid,
-        { uid: true, envelope: true, source: true, flags: true },
-        { uid: true },
-      );
+    if (!range) return messages;
+
+    for await (const message of client.fetch(
+      range,
+      { uid: true, envelope: true, source: true, flags: true },
+      { uid: false },
+    )) {
       if (!message?.source) continue;
-
-      const parsed = await simpleParser(message.source);
-      const from = formatAddressList(parsed.from);
-      const subject = parsed.subject || message.envelope?.subject || "";
-      const messageId = getMessageId(parsed, uid, mailbox);
-
-      if (seenMessageIds.has(messageId)) {
-        if (config.debug) console.log(`[campanhas-automaticas] Email duplicado ignorado: ${subject}`);
-        continue;
-      }
-
-      if (!messageMatchesFrom(from, config.inbox.from)) {
-        if (config.debug) console.log(`[campanhas-automaticas] Ignorado por remetente: ${from} | ${subject}`);
-        continue;
-      }
-
-      if (!messageMatchesSubject(subject, config.inbox.subjectIncludes)) {
-        if (config.debug) console.log(`[campanhas-automaticas] Ignorado por assunto: ${subject}`);
-        continue;
-      }
-
-      seenMessageIds.add(messageId);
-      messages.push({
-        uid,
-        mailbox,
-        messageId,
-        subject,
-        from,
-        receivedAt:
-          parsed.date?.toISOString?.() ||
-          message.envelope?.date?.toISOString?.() ||
-          new Date().toISOString(),
-        text: parsed.text || "",
-        html: typeof parsed.html === "string" ? parsed.html : "",
-        rawText: parsed.text || "",
-        flags: Array.from(message.flags || []),
-      });
+      messages.push(message);
     }
 
+    messages.sort((a, b) => Number(b.uid || 0) - Number(a.uid || 0));
     return messages;
   } finally {
     lock.release();
   }
+}
+
+async function fetchMessagesFromMailbox(client, mailbox, config, seenMessageIds) {
+  const recentMessages = await fetchRecentMessages(client, mailbox, config);
+  const messages = [];
+  let parsedCount = 0;
+  let skippedSeen = 0;
+  let skippedFrom = 0;
+  let skippedSubject = 0;
+  let skippedDuplicate = 0;
+
+  for (const message of recentMessages) {
+    if (messages.length >= config.inbox.maxMessages) break;
+
+    if (!messageMatchesSeenFilter(message, config)) {
+      skippedSeen += 1;
+      continue;
+    }
+
+    const parsed = await simpleParser(message.source);
+    parsedCount += 1;
+    const from = formatAddressList(parsed.from);
+    const subject = parsed.subject || message.envelope?.subject || "";
+    const uid = message.uid;
+    const messageId = getMessageId(parsed, uid, mailbox);
+
+    if (seenMessageIds.has(messageId)) {
+      skippedDuplicate += 1;
+      if (config.debug) console.log(`[campanhas-automaticas] Email duplicado ignorado: ${subject}`);
+      continue;
+    }
+
+    if (!messageMatchesFrom(from, config.inbox.from)) {
+      skippedFrom += 1;
+      if (config.debug) console.log(`[campanhas-automaticas] Ignorado por remetente: ${from} | ${subject}`);
+      continue;
+    }
+
+    if (!messageMatchesSubject(subject, config.inbox.subjectIncludes)) {
+      skippedSubject += 1;
+      if (config.debug) console.log(`[campanhas-automaticas] Ignorado por assunto: ${subject}`);
+      continue;
+    }
+
+    seenMessageIds.add(messageId);
+    messages.push({
+      uid,
+      mailbox,
+      messageId,
+      subject,
+      from,
+      receivedAt:
+        parsed.date?.toISOString?.() ||
+        message.envelope?.date?.toISOString?.() ||
+        new Date().toISOString(),
+      text: parsed.text || "",
+      html: typeof parsed.html === "string" ? parsed.html : "",
+      rawText: parsed.text || "",
+      flags: Array.from(message.flags || []),
+    });
+  }
+
+  if (config.debug) {
+    console.log(
+      `[campanhas-automaticas] IMAP mailbox="${mailbox}" recentes=${recentMessages.length} parsed=${parsedCount} aceites=${messages.length} ignorados={seen:${skippedSeen}, from:${skippedFrom}, subject:${skippedSubject}, duplicate:${skippedDuplicate}}`,
+    );
+  }
+
+  return messages;
 }
 
 export async function fetchAutomaticCampaignEmails() {
@@ -178,7 +225,7 @@ export async function fetchAutomaticCampaignEmails() {
     if (config.debug) {
       console.log(`[campanhas-automaticas] IMAP user=${config.inbox.user} mailboxes=${mailboxes.join(", ")}`);
       console.log(
-        `[campanhas-automaticas] filtros: unseenOnly=${config.inbox.unseenOnly} seenOnly=${config.inbox.seenOnly} subject=${config.inbox.subjectIncludes.join("|") || "(sem filtro)"} from=${config.inbox.from || "(sem filtro)"}`,
+        `[campanhas-automaticas] filtros: unseenOnly=${config.inbox.unseenOnly} seenOnly=${config.inbox.seenOnly} subject=${config.inbox.subjectIncludes.join("|") || "(sem filtro)"} from=${config.inbox.from || "(sem filtro)"} max=${config.inbox.maxMessages}`,
       );
     }
 

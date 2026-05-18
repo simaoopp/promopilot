@@ -66,6 +66,7 @@ export function getAutomaticCampaignConfig() {
       from: process.env.CAMPAIGN_EMAIL_FROM || "",
       subjectIncludes: readList("CAMPAIGN_EMAIL_SUBJECT_INCLUDES"),
       maxMessages: readNumber("CAMPAIGN_EMAIL_MAX_MESSAGES", 10),
+      scanLimit: readNumber("CAMPAIGN_EMAIL_SCAN_LIMIT", Math.max(readNumber("CAMPAIGN_EMAIL_MAX_MESSAGES", 10) * 10, 100)),
       seenOnly: readBoolean("CAMPAIGN_EMAIL_SEEN_ONLY", false),
       unseenOnly: readBoolean("CAMPAIGN_EMAIL_UNSEEN_ONLY", true),
     },
