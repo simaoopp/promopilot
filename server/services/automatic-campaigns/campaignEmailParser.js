@@ -1,11 +1,10 @@
 import * as cheerio from "cheerio";
-import { applyAutomaticCampaignPriceRules } from "./priceRulesService.js";
+import { applyAutomaticCampaignPriceRules, isProtectedCampaignPrice } from "./priceRulesService.js";
 import { parseNumero, parseInteiro } from "./numberUtils.js";
 
 const CODE_RE = /^\d{2}\.\d{3}\.\d{3}\.\d{5}$/;
 const CODE_LINE_RE = /^\s*\d{2}\.\d{3}\.\d{3}\.\d{5}\b/;
 const EAN_RE = /^\d{8,14}$/;
-const MAX_REASONABLE_PRICE = 50000;
 
 function cleanText(value) {
   return String(value ?? "")
@@ -54,17 +53,7 @@ function isLikelyPriceCell(value) {
   const raw = cleanText(value);
   if (!raw) return false;
   if (isLikelyArticleCode(raw) || isLikelyEan(raw)) return false;
-
-  const normalized = raw
-    .replace(/€/g, "")
-    .replace(/\s+/g, "")
-    .replace(/[^0-9,.-]/g, "");
-
-  if (!normalized) return false;
-  if (!/^-?\d{1,5}([,.]\d{1,4})?$/.test(normalized)) return false;
-
-  const price = parseNumero(raw);
-  return Number.isFinite(price) && price >= 0 && price <= MAX_REASONABLE_PRICE;
+  return isProtectedCampaignPrice(raw);
 }
 
 function isLikelyStoreCell(value) {
@@ -178,7 +167,8 @@ function buildProtectedRow({ cells = [], index = 0, source = "email" } = {}) {
   const pricedItem = applyAutomaticCampaignPriceRules(rawItem);
 
   if (!pricedItem.precoValido) return null;
-  if (isLikelyEan(pricedItem.pvp2Antes) || isLikelyEan(pricedItem.pvp2Atual) || isLikelyEan(pricedItem.pv3)) return null;
+  if (!isProtectedCampaignPrice(pvp2Antes) || !isProtectedCampaignPrice(pvp2Atual) || !isProtectedCampaignPrice(pv3)) return null;
+  if (isLikelyEan(pricedItem.pvp2AntesRaw) || isLikelyEan(pricedItem.pvp2AtualRaw) || isLikelyEan(pricedItem.pv3Raw)) return null;
 
   return pricedItem;
 }

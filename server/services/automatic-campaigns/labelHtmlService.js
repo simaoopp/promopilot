@@ -13,6 +13,7 @@ const logoPath = path.join(srcRoot, "logo.png");
 const tokensCssPath = path.join(srcRoot, "styles", "tokens.css");
 const printCssPath = path.join(srcRoot, "styles", "print.css");
 
+export const EXPERT_ORANGE = "#ec6707";
 export const DEFAULT_NOTE =
   "VÁLIDO ENQUANTO DURAR O STOCK. Limitado ao stock existente e não acumulável com outras promoções.";
 
@@ -236,28 +237,78 @@ function renderSharedCss() {
     ${tokensCss}
     ${printCss}
 
+    :root {
+      --color-primary: ${EXPERT_ORANGE};
+      --color-primary-dark: ${EXPERT_ORANGE};
+      --color-primary-darker: ${EXPERT_ORANGE};
+      --color-surface: #ffffff;
+    }
+
     html, body {
+      width: 210mm;
+      min-height: 297mm;
       margin: 0;
       padding: 0;
-      background: #ffffff;
+      background: #ffffff !important;
+      font-family: Arial, Helvetica, sans-serif;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
 
-    body {
-      width: 210mm;
-      min-height: 297mm;
-      font-family: Arial, Helvetica, sans-serif;
+    .app,
+    .app-login,
+    .print-area,
+    .sheet,
+    .label,
+    .label-inner,
+    .label-a5-rotator {
+      background: #ffffff !important;
     }
 
     .print-area {
-      margin: 0;
-      padding: 0;
+      width: 210mm;
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+
+    .label::before {
+      border-color: ${EXPERT_ORANGE} !important;
+    }
+
+    .topbar {
+      background: ${EXPERT_ORANGE} !important;
+    }
+
+    .sheet.sheet-a5::after {
+      border-top-color: ${EXPERT_ORANGE} !important;
+    }
+
+    .desconto {
+      color: ${EXPERT_ORANGE} !important;
+    }
+
+    .barcode-svg {
+      overflow: visible;
+      shape-rendering: crispEdges;
     }
 
     .barcode-svg text,
-    .barcode-text {
-      display: none;
+    .barcode-text,
+    .barcode-value {
+      display: none !important;
+      visibility: hidden !important;
+    }
+
+    .rodape svg,
+    .rodape .barcode-svg {
+      height: 20px;
+      max-height: 20px;
+    }
+
+    .label.label-a5 .rodape svg,
+    .label.label-a5 .rodape .barcode-svg {
+      height: 20px;
+      max-height: 20px;
     }
 
     .print-logo-fallback {
@@ -274,31 +325,116 @@ function renderFitScript() {
   return `
     <script>
       (function () {
-        function fitElement(element) {
-          var min = Number(element.dataset.min || 10);
-          var max = Number(element.dataset.max || min);
-          var size = max;
-          element.style.fontSize = size + 'px';
-          element.style.width = '100%';
+        function number(value, fallback) {
+          var parsed = Number(value);
+          return Number.isFinite(parsed) ? parsed : fallback;
+        }
 
-          while (
-            size > min &&
-            (element.scrollWidth > element.clientWidth + 1 || element.scrollHeight > element.clientHeight + 1)
-          ) {
-            size -= 1;
-            element.style.fontSize = size + 'px';
+        function shrink(element, min, size) {
+          var next = Math.max(min, size - 1);
+          element.style.fontSize = next + 'px';
+          return next;
+        }
+
+        function elementOverflows(element) {
+          return element.scrollWidth > element.clientWidth + 1 || element.scrollHeight > element.clientHeight + 1;
+        }
+
+        function fitElement(element) {
+          var min = number(element.dataset.min, 10);
+          var max = number(element.dataset.max, min);
+          var size = max;
+          element.style.width = '100%';
+          element.style.fontSize = size + 'px';
+
+          while (size > min && elementOverflows(element)) {
+            size = shrink(element, min, size);
+          }
+
+          element.dataset.finalFontSize = String(size);
+        }
+
+        function rect(element) {
+          return element ? element.getBoundingClientRect() : { top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0 };
+        }
+
+        function shrinkGroup(elements) {
+          var changed = false;
+          elements.forEach(function (element) {
+            if (!element) return;
+            var min = number(element.dataset.min, 10);
+            var current = number(parseFloat(globalThis.getComputedStyle(element).fontSize), min);
+            if (current > min) {
+              shrink(element, min, current);
+              changed = true;
+            }
+          });
+          return changed;
+        }
+
+        function protectLabelLayout(label) {
+          var topo = label.querySelector('.topo');
+          var precos = label.querySelector('.precos');
+          var rodape = label.querySelector('.rodape');
+          var descricao = label.querySelector('.descricao.auto-font-size');
+          var antes = label.querySelector('.antes.auto-font-size');
+          var desconto = label.querySelector('.desconto.auto-font-size');
+          var atual = label.querySelector('.atual.auto-font-size');
+
+          for (var i = 0; i < 60; i += 1) {
+            var topoRect = rect(topo);
+            var precosRect = rect(precos);
+            var rodapeRect = rect(rodape);
+            var hasOverlap = false;
+
+            if (topo && precos && topoRect.bottom > precosRect.top - 2) {
+              hasOverlap = true;
+              if (!shrinkGroup([descricao])) break;
+            }
+
+            if (precos && rodape && precosRect.bottom > rodapeRect.top - 2) {
+              hasOverlap = true;
+              if (!shrinkGroup([atual, desconto, antes])) break;
+            }
+
+            if (!hasOverlap) break;
           }
         }
 
-        function run() {
+        function fitAll() {
           Array.prototype.forEach.call(document.querySelectorAll('.auto-font-size'), fitElement);
-          window.__automaticCampaignLabelsReady = true;
+          Array.prototype.forEach.call(document.querySelectorAll('.label'), protectLabelLayout);
+          Array.prototype.forEach.call(document.querySelectorAll('.auto-font-size'), fitElement);
+        }
+
+        function waitForImages() {
+          var images = Array.prototype.slice.call(document.images || []);
+          return Promise.all(images.map(function (img) {
+            if (img.complete) return Promise.resolve();
+            return new Promise(function (resolve) {
+              img.addEventListener('load', resolve, { once: true });
+              img.addEventListener('error', resolve, { once: true });
+            });
+          }));
+        }
+
+        function ready() {
+          var fontsReady = document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve();
+          Promise.all([fontsReady, waitForImages()]).then(function () {
+            requestAnimationFrame(function () {
+              fitAll();
+              requestAnimationFrame(function () {
+                fitAll();
+                window.__automaticCampaignLabelsReady = true;
+              });
+            });
+          });
         }
 
         if (document.readyState === 'loading') {
-          document.addEventListener('DOMContentLoaded', run, { once: true });
+          document.addEventListener('DOMContentLoaded', ready, { once: true });
         } else {
-          run();
+          ready();
         }
       })();
     </script>

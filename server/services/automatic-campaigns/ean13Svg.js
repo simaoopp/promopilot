@@ -93,27 +93,42 @@ export function buildEan13Bits(ean) {
   return bits;
 }
 
-export function renderEan13Svg(value, { width = 260, height = 70, showValue = false } = {}) {
+/**
+ * Reproduz o Barcode.jsx do frontend para etiquetas de campanha:
+ * JsBarcode(EAN13, { displayValue:false, height:20, width:1, margin:0 }).
+ * O número fica escondido por defeito, exatamente como no componente React.
+ */
+export function renderEan13Svg(value, { width = 1, height = 20, showValue = false } = {}) {
   const ean = normalizeEan13(value);
 
   if (!ean) {
-    return `<div class="barcode-fallback">${String(value || "")}</div>`;
+    return `<svg class="barcode-svg barcode-svg-empty" viewBox="0 0 95 20" role="img" aria-label="Código de barras inválido"></svg>`;
   }
 
   const bits = buildEan13Bits(ean);
-  const moduleWidth = width / bits.length;
-  const barHeight = showValue ? height - 18 : height;
+  const moduleWidth = Number(width) > 0 ? Number(width) : 1;
+  const barHeight = Number(height) > 0 ? Number(height) : 20;
+  const svgWidth = bits.length * moduleWidth;
   let rects = "";
 
   for (let index = 0; index < bits.length; index += 1) {
     if (bits[index] !== "1") continue;
-    rects += `<rect x="${(index * moduleWidth).toFixed(2)}" y="0" width="${Math.ceil(moduleWidth * 100) / 100}" height="${barHeight}" />`;
+    rects += `<rect x="${index * moduleWidth}" y="0" width="${moduleWidth}" height="${barHeight}" />`;
   }
 
   return `
-    <svg class="barcode-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="EAN ${ean}" xmlns="http://www.w3.org/2000/svg">
-      <g fill="#111">${rects}</g>
-      ${showValue ? `<text x="${width / 2}" y="${height - 2}" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="#111">${ean}</text>` : ""}
+    <svg
+      class="barcode-svg"
+      viewBox="0 0 ${svgWidth} ${barHeight}"
+      width="${svgWidth}"
+      height="${barHeight}"
+      role="img"
+      aria-label="Código de barras ${ean}"
+      xmlns="http://www.w3.org/2000/svg"
+      preserveAspectRatio="none"
+    >
+      <g fill="#111111">${rects}</g>
+      ${showValue ? `<text class="barcode-value" x="${svgWidth / 2}" y="${barHeight - 2}" text-anchor="middle" font-family="Arial, sans-serif" font-size="10" fill="#111111">${ean}</text>` : ""}
     </svg>
   `;
 }
