@@ -142,13 +142,82 @@ function buildRowFromLooseLine(line = "", index = 0) {
   });
 }
 
+
+function lineLooksLikeCampaignBoundary(line = "") {
+  const normalized = cleanText(line).toLowerCase();
+  return (
+    !normalized ||
+    normalized.startsWith("cumprimentos") ||
+    normalized.includes("comercial") ||
+    normalized.includes("expert praia") ||
+    normalized.includes("susiarte") ||
+    normalized.includes("www.") ||
+    normalized.includes("facebook.com")
+  );
+}
+
+function cellsFromCampaignBlock(blockLines = []) {
+  const joinedWithTabs = blockLines.join("\t");
+  const tabCells = splitTabRow(joinedWithTabs);
+  if (tabCells.length >= 17 && CODE_RE.test(tabCells[0] || "")) {
+    return tabCells;
+  }
+
+  const firstLineCells = splitTabRow(blockLines[0] || "");
+  if (firstLineCells.length >= 17 && CODE_RE.test(firstLineCells[0] || "")) {
+    return firstLineCells;
+  }
+
+  const normalizedLines = blockLines.map(cleanText).filter(Boolean);
+  if (!normalizedLines.length) return [];
+
+  if (normalizedLines.length >= 17 && CODE_RE.test(normalizedLines[0] || "")) {
+    return normalizedLines;
+  }
+
+  return [];
+}
+
+function extractRowsFromMultilineBlocks(text = "") {
+  const normalized = normalizeEmailText(text);
+  const rawLines = normalized
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const rows = [];
+
+  for (let index = 0; index < rawLines.length; index += 1) {
+    if (!CODE_LINE_RE.test(rawLines[index])) continue;
+
+    const block = [rawLines[index]];
+
+    for (let next = index + 1; next < rawLines.length; next += 1) {
+      const nextLine = rawLines[next];
+      if (CODE_LINE_RE.test(nextLine)) break;
+      if (lineLooksLikeCampaignBoundary(nextLine) && block.length >= 10) break;
+      block.push(nextLine);
+    }
+
+    const cells = cellsFromCampaignBlock(block);
+    const row = rowFromCells(cells, rows.length) || buildRowFromLooseLine(block.join(" "), rows.length);
+    if (row) rows.push(row);
+  }
+
+  return rows;
+}
+
 function extractRowsFromText(text = "") {
   const normalized = normalizeEmailText(text);
   const lines = normalized.split("\n").filter((line) => CODE_LINE_RE.test(line));
 
-  return lines
+  const rowsFromSingleLines = lines
     .map((line, index) => rowFromTabLine(line, index) || buildRowFromLooseLine(line, index))
     .filter(Boolean);
+
+  const rowsFromMultilineBlocks = extractRowsFromMultilineBlocks(normalized);
+
+  return dedupeRows([...rowsFromSingleLines, ...rowsFromMultilineBlocks]);
 }
 
 function dedupeRows(rows = []) {
