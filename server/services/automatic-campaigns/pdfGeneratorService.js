@@ -235,7 +235,7 @@ async function generateWithPlaywright({ items, title, storeLabel, format = "auto
     const page = await browser.newPage({ viewport: { width: 794, height: 1123 }, deviceScaleFactor: 1 });
     await page.emulateMedia({ media: "print" });
     await page.setContent(html, { waitUntil: "load" });
-    await page.waitForFunction(() => globalThis.__labelsReady === true, null, { timeout: 10000 });
+    await page.waitForFunction(() => globalThis.__automaticCampaignLabelsReady === true, null, { timeout: 10000 });
     return await page.pdf({
       format: "A4",
       printBackground: true,
@@ -295,7 +295,13 @@ export async function generateAutomaticCampaignPdf({ items, title, storeLabel, f
   try {
     return await generateWithPlaywright({ items, title, storeLabel, format, anoValidade });
   } catch (error) {
-    console.warn("[campanhas-automaticas] Fallback para PDFKit porque o render via Playwright falhou:", error?.message || error);
-    return generateWithPdfKit({ items, title, storeLabel, format, anoValidade });
+    if (String(process.env.CAMPAIGN_PDF_ALLOW_APPROX_FALLBACK || "0") === "1") {
+      console.warn("[campanhas-automaticas] Fallback aproximado para PDFKit porque o render via Playwright falhou:", error?.message || error);
+      return generateWithPdfKit({ items, title, storeLabel, format, anoValidade });
+    }
+
+    throw new Error(
+      `Falha ao gerar PDF com o layout oficial das Etiquetas Campanha. O Chromium/Playwright é obrigatório para manter o estilo exato. Detalhe: ${error?.message || error}`,
+    );
   }
 }

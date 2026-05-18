@@ -1,9 +1,11 @@
 import * as cheerio from "cheerio";
 import { applyAutomaticCampaignPriceRules } from "./priceRulesService.js";
+import { parseNumero, parseInteiro } from "./numberUtils.js";
 
 const CODE_RE = /^\d{2}\.\d{3}\.\d{3}\.\d{5}$/;
 const CODE_LINE_RE = /^\s*\d{2}\.\d{3}\.\d{3}\.\d{5}\b/;
 const EAN_RE = /^\d{8,14}$/;
+const MAX_REASONABLE_PRICE = 50000;
 
 function cleanText(value) {
   return String(value ?? "")
@@ -35,34 +37,154 @@ function pick(cells, index) {
   return cleanText(cells[index] || "");
 }
 
-function rowFromCells(cells = [], index = 0) {
-  const normalized = cells.map(normalizeHtmlCell);
+function digitsOnly(value) {
+  return String(value ?? "").replace(/\D/g, "");
+}
 
-  if (!CODE_RE.test(normalized[0] || "")) return null;
-  if (normalized.length < 17) return null;
+function isLikelyEan(value) {
+  const digits = digitsOnly(value);
+  return EAN_RE.test(digits);
+}
 
-  return applyAutomaticCampaignPriceRules({
-    id: `auto-${index}-${normalized[0]}`,
-    codigo: pick(normalized, 0),
-    artigo: pick(normalized, 0),
-    descricao: pick(normalized, 1),
-    pn: pick(normalized, 2),
-    ean: pick(normalized, 3).replace(/\D/g, ""),
-    pvp2Antes: pick(normalized, 4),
-    pvp2Atual: pick(normalized, 5),
-    pv3: pick(normalized, 6),
-    estado: pick(normalized, 7),
-    ae: pick(normalized, 8),
-    aea: pick(normalized, 9),
-    aev: pick(normalized, 10),
-    a10: pick(normalized, 11),
-    a1e: pick(normalized, 12),
-    data: pick(normalized, 13),
-    dataInicio: pick(normalized, 14),
-    dataFim: pick(normalized, 15),
-    alterado: pick(normalized, 16),
-    info: normalized.slice(17).join(" ").trim(),
-  });
+function isLikelyArticleCode(value) {
+  return CODE_RE.test(cleanText(value));
+}
+
+function isLikelyPriceCell(value) {
+  const raw = cleanText(value);
+  if (!raw) return false;
+  if (isLikelyArticleCode(raw) || isLikelyEan(raw)) return false;
+
+  const normalized = raw
+    .replace(/€/g, "")
+    .replace(/\s+/g, "")
+    .replace(/[^0-9,.-]/g, "");
+
+  if (!normalized) return false;
+  if (!/^-?\d{1,5}([,.]\d{1,4})?$/.test(normalized)) return false;
+
+  const price = parseNumero(raw);
+  return Number.isFinite(price) && price >= 0 && price <= MAX_REASONABLE_PRICE;
+}
+
+function isLikelyStoreCell(value) {
+  const raw = cleanText(value);
+  if (!/^-?\d{1,4}$/.test(raw)) return false;
+  const number = parseInteiro(raw);
+  return Number.isFinite(number) && number >= 0 && number <= 9999;
+}
+
+function isLikelyEstadoCell(value) {
+  return /^[A-Z]$/i.test(cleanText(value));
+}
+
+function findPriceTripletIndex(cells = []) {
+  const maxLookahead = Math.min(cells.length - 2, 8);
+
+  for (let index = 0; index < maxLookahead; index += 1) {
+    if (
+      isLikelyPriceCell(cells[index]) &&
+      isLikelyPriceCell(cells[index + 1]) &&
+      isLikelyPriceCell(cells[index + 2])
+    ) {
+      return index;
+    }
+  }
+
+  return -1;
+}
+
+function findStoreSequenceIndex(cells = [], startIndex = 0) {
+  const maxLookahead = Math.min(cells.length - 4, startIndex + 8);
+
+  for (let index = startIndex; index <= maxLookahead; index += 1) {
+    if (
+      isLikelyStoreCell(cells[index]) &&
+      isLikelyStoreCell(cells[index + 1]) &&
+      isLikelyStoreCell(cells[index + 2]) &&
+      isLikelyStoreCell(cells[index + 3]) &&
+      isLikelyStoreCell(cells[index + 4])
+    ) {
+      return index;
+    }
+  }
+
+  return -1;
+}
+
+function buildProtectedRow({ cells = [], index = 0, source = "email" } = {}) {
+  const normalized = (Array.isArray(cells) ? cells : [])
+    .map(normalizeHtmlCell)
+    .filter((cell, cellIndex) => cell || cellIndex === 0);
+
+  if (!normalized.length) return null;
+
+  const codeIndex = normalized.findIndex((cell) => CODE_RE.test(cell));
+  if (codeIndex < 0) return null;
+
+  const codigo = normalized[codeIndex];
+  const eanIndex = normalized.findIndex((cell, cellIndex) => cellIndex > codeIndex && isLikelyEan(cell));
+  if (eanIndex < codeIndex + 2) return null;
+
+  const ean = digitsOnly(normalized[eanIndex]);
+  const beforeEan = normalized.slice(codeIndex + 1, eanIndex).filter(Boolean);
+  if (!beforeEan.length) return null;
+
+  const pn = beforeEan.length >= 2 ? beforeEan[beforeEan.length - 1] : "";
+  const descricao = beforeEan.length >= 2 ? beforeEan.slice(0, -1).join(" ") : beforeEan.join(" ");
+
+  if (!descricao || descricao.length < 3) return null;
+
+  const afterEan = normalized.slice(eanIndex + 1).filter(Boolean);
+  const priceIndex = findPriceTripletIndex(afterEan);
+  if (priceIndex < 0) return null;
+
+  const pvp2Antes = afterEan[priceIndex];
+  const pvp2Atual = afterEan[priceIndex + 1];
+  const pv3 = afterEan[priceIndex + 2];
+
+  const afterPrices = afterEan.slice(priceIndex + 3);
+  const estadoOffset = isLikelyEstadoCell(afterPrices[0]) ? 1 : 0;
+  const estado = estadoOffset ? afterPrices[0] : "";
+  const storeStart = findStoreSequenceIndex(afterPrices, estadoOffset);
+
+  if (storeStart < 0) return null;
+
+  const dataIndex = storeStart + 5;
+  const rawItem = {
+    id: `auto-${index}-${codigo}`,
+    codigo,
+    artigo: codigo,
+    descricao,
+    pn,
+    ean,
+    pvp2Antes,
+    pvp2Atual,
+    pv3,
+    estado,
+    ae: pick(afterPrices, storeStart),
+    aea: pick(afterPrices, storeStart + 1),
+    aev: pick(afterPrices, storeStart + 2),
+    a10: pick(afterPrices, storeStart + 3),
+    a1e: pick(afterPrices, storeStart + 4),
+    data: pick(afterPrices, dataIndex),
+    dataInicio: pick(afterPrices, dataIndex + 1),
+    dataFim: pick(afterPrices, dataIndex + 2),
+    alterado: pick(afterPrices, dataIndex + 3),
+    info: afterPrices.slice(dataIndex + 4).join(" ").trim(),
+    parserSource: source,
+  };
+
+  const pricedItem = applyAutomaticCampaignPriceRules(rawItem);
+
+  if (!pricedItem.precoValido) return null;
+  if (isLikelyEan(pricedItem.pvp2Antes) || isLikelyEan(pricedItem.pvp2Atual) || isLikelyEan(pricedItem.pv3)) return null;
+
+  return pricedItem;
+}
+
+function rowFromCells(cells = [], index = 0, source = "cells") {
+  return buildProtectedRow({ cells, index, source });
 }
 
 function extractRowsFromHtml(html = "") {
@@ -80,7 +202,7 @@ function extractRowsFromHtml(html = "") {
         cells.push($(cell).text(" "));
       });
 
-    const row = rowFromCells(cells, rowIndex);
+    const row = rowFromCells(cells, rowIndex, "html-table");
     if (row) rows.push(row);
   });
 
@@ -96,52 +218,13 @@ function splitTabRow(line = "") {
 
 function rowFromTabLine(line = "", index = 0) {
   const cells = splitTabRow(line);
-  return rowFromCells(cells, index);
+  return rowFromCells(cells, index, "tab-line");
 }
 
 function buildRowFromLooseLine(line = "", index = 0) {
   const tokens = cleanText(line).split(/\s+/).filter(Boolean);
-
-  if (!CODE_RE.test(tokens[0] || "")) return null;
-
-  const eanIndex = tokens.findIndex((token, tokenIndex) => tokenIndex > 0 && EAN_RE.test(token));
-  if (eanIndex < 3) return null;
-
-  const priceStartIndex = eanIndex + 1;
-  const requiredAfterEan = 14;
-  if (tokens.length < priceStartIndex + requiredAfterEan) return null;
-
-  const afterEan = tokens.slice(priceStartIndex);
-  const beforeEan = tokens.slice(1, eanIndex);
-  const pn = beforeEan.slice(-1).join(" ");
-  const descricao = beforeEan.slice(0, -1).join(" ") || beforeEan.join(" ");
-
-  const infoStartIndex = priceStartIndex + 13;
-
-  return applyAutomaticCampaignPriceRules({
-    id: `auto-${index}-${tokens[0]}`,
-    codigo: tokens[0],
-    artigo: tokens[0],
-    descricao,
-    pn,
-    ean: tokens[eanIndex].replace(/\D/g, ""),
-    pvp2Antes: afterEan[0],
-    pvp2Atual: afterEan[1],
-    pv3: afterEan[2],
-    estado: afterEan[3],
-    ae: afterEan[4],
-    aea: afterEan[5],
-    aev: afterEan[6],
-    a10: afterEan[7],
-    a1e: afterEan[8],
-    data: afterEan[9],
-    dataInicio: afterEan[10],
-    dataFim: afterEan[11],
-    alterado: afterEan[12],
-    info: tokens.slice(infoStartIndex).join(" "),
-  });
+  return rowFromCells(tokens, index, "loose-line");
 }
-
 
 function lineLooksLikeCampaignBoundary(line = "") {
   const normalized = cleanText(line).toLowerCase();
@@ -159,19 +242,19 @@ function lineLooksLikeCampaignBoundary(line = "") {
 function cellsFromCampaignBlock(blockLines = []) {
   const joinedWithTabs = blockLines.join("\t");
   const tabCells = splitTabRow(joinedWithTabs);
-  if (tabCells.length >= 17 && CODE_RE.test(tabCells[0] || "")) {
+  if (tabCells.length >= 12 && CODE_RE.test(tabCells[0] || "")) {
     return tabCells;
   }
 
   const firstLineCells = splitTabRow(blockLines[0] || "");
-  if (firstLineCells.length >= 17 && CODE_RE.test(firstLineCells[0] || "")) {
+  if (firstLineCells.length >= 12 && CODE_RE.test(firstLineCells[0] || "")) {
     return firstLineCells;
   }
 
   const normalizedLines = blockLines.map(cleanText).filter(Boolean);
   if (!normalizedLines.length) return [];
 
-  if (normalizedLines.length >= 17 && CODE_RE.test(normalizedLines[0] || "")) {
+  if (normalizedLines.length >= 12 && CODE_RE.test(normalizedLines[0] || "")) {
     return normalizedLines;
   }
 
@@ -200,7 +283,7 @@ function extractRowsFromMultilineBlocks(text = "") {
     }
 
     const cells = cellsFromCampaignBlock(block);
-    const row = rowFromCells(cells, rows.length) || buildRowFromLooseLine(block.join(" "), rows.length);
+    const row = rowFromCells(cells, rows.length, "multiline-block") || buildRowFromLooseLine(block.join(" "), rows.length);
     if (row) rows.push(row);
   }
 

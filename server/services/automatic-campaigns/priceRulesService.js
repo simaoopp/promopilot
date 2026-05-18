@@ -1,5 +1,12 @@
 import { parseNumero } from "./numberUtils.js";
 
+const MAX_REASONABLE_PRICE = 50000;
+
+function isValidCampaignPrice(value) {
+  const price = parseNumero(value);
+  return Number.isFinite(price) && price > 0 && price <= MAX_REASONABLE_PRICE;
+}
+
 export function getAutomaticCampaignReferencePrice(item = {}) {
   const pvp2Antes = parseNumero(item.pvp2Antes ?? item.antes);
   const pv3 = parseNumero(item.pv3);
@@ -18,14 +25,21 @@ export function filterAutomaticCampaignDiscountItems(items = []) {
 }
 
 export function applyAutomaticCampaignPriceRules(item = {}) {
-  const pvp2Antes = parseNumero(item.pvp2Antes ?? item.antes);
-  const pvp2Atual = parseNumero(item.pvp2Atual ?? item.atual);
-  const pv3 = parseNumero(item.pv3);
+  const pvp2AntesRaw = item.pvp2Antes ?? item.antes;
+  const pvp2AtualRaw = item.pvp2Atual ?? item.atual;
+  const pv3Raw = item.pv3;
+  const pvp2Antes = parseNumero(pvp2AntesRaw);
+  const pvp2Atual = parseNumero(pvp2AtualRaw);
+  const pv3 = parseNumero(pv3Raw);
   const precoSemDesconto = Math.max(pvp2Antes, pv3);
-  const descontoValido = pvp2Atual > 0 && precoSemDesconto > 0 && pvp2Atual < precoSemDesconto;
+  const precoValido = isValidCampaignPrice(pvp2AntesRaw) && isValidCampaignPrice(pvp2AtualRaw) && isValidCampaignPrice(pv3Raw);
+  const descontoValido = precoValido && pvp2Atual < precoSemDesconto;
 
   return {
     ...item,
+    pvp2AntesRaw,
+    pvp2AtualRaw,
+    pv3Raw,
     pvp2Antes,
     pvp2Atual,
     pv3,
@@ -33,6 +47,7 @@ export function applyAutomaticCampaignPriceRules(item = {}) {
     atual: pvp2Atual,
     precoSemDesconto,
     precoComDesconto: pvp2Atual,
+    precoValido,
     descontoValido,
     ignoradoSemDesconto: !descontoValido,
     selecionado: descontoValido,

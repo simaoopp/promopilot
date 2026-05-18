@@ -93,7 +93,7 @@ export function buildEan13Bits(ean) {
   return bits;
 }
 
-export function renderEan13Svg(value, { width = 260, height = 70 } = {}) {
+export function renderEan13Svg(value, { width = 260, height = 70, showValue = false } = {}) {
   const ean = normalizeEan13(value);
 
   if (!ean) {
@@ -102,7 +102,7 @@ export function renderEan13Svg(value, { width = 260, height = 70 } = {}) {
 
   const bits = buildEan13Bits(ean);
   const moduleWidth = width / bits.length;
-  const barHeight = height - 18;
+  const barHeight = showValue ? height - 18 : height;
   let rects = "";
 
   for (let index = 0; index < bits.length; index += 1) {
@@ -113,7 +113,7 @@ export function renderEan13Svg(value, { width = 260, height = 70 } = {}) {
   return `
     <svg class="barcode-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="EAN ${ean}" xmlns="http://www.w3.org/2000/svg">
       <g fill="#111">${rects}</g>
-      <text x="${width / 2}" y="${height - 2}" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="#111">${ean}</text>
+      ${showValue ? `<text x="${width / 2}" y="${height - 2}" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="#111">${ean}</text>` : ""}
     </svg>
   `;
 }
