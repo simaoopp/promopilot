@@ -26,7 +26,7 @@ export async function runCampaignEmailWorkerOnce(options = {}) {
       processed.push(result);
 
       if (config.markSeen && !options.dryRun) {
-        await markEmailAsSeen(session.client, email.uid);
+        await markEmailAsSeen(session.client, email.uid, email.mailbox);
       }
     }
   } finally {
@@ -46,7 +46,12 @@ async function safeRun() {
 
   try {
     const result = await runCampaignEmailWorkerOnce();
-    console.log(`[campanhas-automaticas] Worker concluído: ${result.total} email(s) processado(s).`);
+    const lojas = result.processed
+      .flatMap((item) => item.results || [])
+      .filter((storeResult) => !storeResult.skipped)
+      .map((storeResult) => `${storeResult.store}:${storeResult.status || "ok"}`)
+      .join(", ");
+    console.log(`[campanhas-automaticas] Worker concluído: ${result.total} email(s) processado(s)${lojas ? ` | ${lojas}` : ""}.`);
   } catch (error) {
     console.error("[campanhas-automaticas] Erro no worker:", error);
   } finally {

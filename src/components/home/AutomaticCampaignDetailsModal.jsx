@@ -14,6 +14,21 @@ function getPdfUrl(campanha) {
   return campanha?.pdfUrl || campanha?.pdfs?.[campanha?.store] || "";
 }
 
+function countFormats(items = []) {
+  return (Array.isArray(items) ? items : []).reduce(
+    (acc, item) => {
+      const format = String(
+        item?._formato || item?.formato_final || item?.formatoEtiqueta || "a6",
+      ).toLowerCase();
+
+      if (format === "a5") acc.a5 += 1;
+      else acc.a6 += 1;
+      return acc;
+    },
+    { a5: 0, a6: 0 },
+  );
+}
+
 export default function AutomaticCampaignDetailsModal({
   campanha,
   onClose,
@@ -24,6 +39,7 @@ export default function AutomaticCampaignDetailsModal({
   if (!campanha) return null;
 
   const pdfUrl = getPdfUrl(campanha);
+  const formatCounts = countFormats(campanha.dados);
 
   return (
     <div className="popup-overlay" role="dialog" aria-modal="true">
@@ -51,7 +67,10 @@ export default function AutomaticCampaignDetailsModal({
             <span className="popup-chip">Loja: {campanha.store || "-"}</span>
             <span className="popup-chip">Estado: {getStatusLabel(campanha.status)}</span>
             <span className="popup-chip">
-              Formato base: {String(campanha.formatoEtiqueta || "a6").toUpperCase()}
+              Modo: {String(campanha.formatoEtiqueta || "automatico").toUpperCase()}
+            </span>
+            <span className="popup-chip">
+              A5: {formatCounts.a5} · A6: {formatCounts.a6}
             </span>
           </div>
 
@@ -96,6 +115,7 @@ export default function AutomaticCampaignDetailsModal({
                   <div className="historico-popup-prices">
                     <span>Antes: {item.antes ?? "-"}</span>
                     <span>Atual: {item.atual ?? "-"}</span>
+                    <span>Formato: {String(item._formato || item.formato_final || item.formatoEtiqueta || "a6").toUpperCase()}</span>
                   </div>
                 </div>
               ))

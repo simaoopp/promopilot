@@ -33,7 +33,7 @@ export function buildAutomaticCampaignRow({
 
   return {
     id: rowId,
-    titulo: title || email?.subject || "Campanha automática",
+    titulo: title || "PROMOÇÃO",
     dados: safeItems,
     ano_validade: new Date().getFullYear(),
     formato_etiqueta: format || "automatico",
@@ -89,6 +89,46 @@ export async function updateAutomaticCampaignRow(id, patch) {
   }
 
   return data;
+}
+
+export async function findAutomaticCampaignDuplicate({ emailMessageId, emailSubject, store, dedupeBySubject = true } = {}) {
+  assertSupabaseAdmin();
+
+  if (!store) return null;
+
+  if (emailMessageId) {
+    const { data, error } = await supabaseAdminClient
+      .from(TABLE)
+      .select("id,status,pdf_url,email_message_id,email_subject,store,created_at")
+      .eq("email_message_id", emailMessageId)
+      .eq("store", store)
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    if (data) return data;
+  }
+
+  if (dedupeBySubject && emailSubject) {
+    const { data, error } = await supabaseAdminClient
+      .from(TABLE)
+      .select("id,status,pdf_url,email_message_id,email_subject,store,created_at")
+      .eq("email_subject", emailSubject)
+      .eq("store", store)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    if (data) return data;
+  }
+
+  return null;
 }
 
 export async function findAutomaticCampaignByEmailAndStore(emailMessageId, store) {

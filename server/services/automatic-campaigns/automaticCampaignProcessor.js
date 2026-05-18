@@ -7,7 +7,7 @@ import { sendAutomaticCampaignEmail } from "./emailSenderService.js";
 import { applyAutomaticFormatRulesToItems, countAutomaticFormats, normalizeCampaignFormat } from "./formatRulesService.js";
 import {
   buildAutomaticCampaignRow,
-  findAutomaticCampaignByEmailAndStore,
+  findAutomaticCampaignDuplicate,
   updateAutomaticCampaignRow,
   upsertAutomaticCampaignRow,
 } from "./automaticCampaignRepository.js";
@@ -46,7 +46,7 @@ export async function processAutomaticCampaignEmail(emailInput = {}, options = {
   const sendEmails = Boolean(options.sendEmails ?? config.sendEmails);
   const dryRun = Boolean(options.dryRun);
   const format = normalizeCampaignFormat(options.format || config.defaultFormat);
-  const title = options.title || config.defaultTitle;
+  const title = options.title || config.defaultTitle || "PROMOÇÃO";
   const keepDays = Number.isFinite(options.keepDays) ? options.keepDays : config.keepDays;
 
   const parsed = parseAutomaticCampaignEmail({
@@ -55,6 +55,7 @@ export async function processAutomaticCampaignEmail(emailInput = {}, options = {
     subject: email.subject,
   });
 
+  const historyTitle = config.titleFromEmail ? (parsed?.title || email.subject || title) : title;
   const itemsByStore = splitAutomaticCampaignByStore(parsed.rows);
   const results = [];
 
@@ -74,11 +75,18 @@ export async function processAutomaticCampaignEmail(emailInput = {}, options = {
       continue;
     }
 
-    const existing = dryRun
+    const existing = dryRun || !config.dedupeEnabled
       ? null
-      : await findAutomaticCampaignByEmailAndStore(email.messageId, store.store);
+      : await findAutomaticCampaignDuplicate({
+          emailMessageId: email.messageId,
+          emailSubject: email.subject,
+          store: store.store,
+          dedupeBySubject: config.dedupeBySubject,
+        });
 
-    if (existing && !options.force) {
+    const canReprocessExistingError = existing?.status === "error" && config.reprocessErroredCampaigns;
+
+    if (existing && !options.force && !canReprocessExistingError) {
       results.push({
         storeKey: store.key,
         store: store.store,
@@ -91,10 +99,10 @@ export async function processAutomaticCampaignEmail(emailInput = {}, options = {
       continue;
     }
 
-    const rowId = `auto-${email.messageId.replace(/[^a-zA-Z0-9._-]+/g, "-")}-${store.key}`;
+    const rowId = existing?.id || `auto-${email.messageId.replace(/[^a-zA-Z0-9._-]+/g, "-")}-${store.key}`;
     const initialRow = buildAutomaticCampaignRow({
       id: rowId,
-      title: parsed.title || email.subject || title,
+      title: historyTitle,
       items,
       store,
       storeKey: store.key,
@@ -122,7 +130,7 @@ export async function processAutomaticCampaignEmail(emailInput = {}, options = {
           pdfBuffer,
           emailMessageId: email.messageId,
           storeKey: store.key,
-          title: email.subject,
+          title,
         });
       }
 

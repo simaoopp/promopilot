@@ -19,6 +19,27 @@ function readList(name) {
 export const AUTOMATIC_CAMPAIGN_BUCKET =
   process.env.AUTOMATIC_CAMPAIGN_BUCKET || "automatic-campaign-pdfs";
 
+function readTimeoutMs(name, fallback) {
+  const value = readNumber(name, fallback);
+  return Math.max(1000, value);
+}
+
+function parseSmtpFallbacks(value = "") {
+  return String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((item) => {
+      const [portPart, modePart] = item.split(":").map((part) => String(part || "").trim().toLowerCase());
+      const port = Number.parseInt(portPart, 10);
+      if (!Number.isFinite(port)) return null;
+      const secure = ["ssl", "secure", "tls", "1", "true"].includes(modePart);
+      const requireTLS = ["starttls", "tls-start", "start_tls"].includes(modePart);
+      return { port, secure, requireTLS };
+    })
+    .filter(Boolean);
+}
+
 export const automaticCampaignStores = {
   praia: {
     key: "praia",
@@ -52,7 +73,11 @@ export function getAutomaticCampaignConfig() {
     markSeen: readBoolean("CAMPAIGN_EMAIL_MARK_SEEN", false),
     sendEmails: readBoolean("CAMPAIGN_EMAIL_SEND_ENABLED", false),
     defaultFormat: process.env.CAMPAIGN_DEFAULT_FORMAT || "automatico",
-    defaultTitle: process.env.CAMPAIGN_DEFAULT_TITLE || "PROMO",
+    defaultTitle: process.env.CAMPAIGN_DEFAULT_TITLE || "PROMOÇÃO",
+    titleFromEmail: readBoolean("CAMPAIGN_TITLE_FROM_EMAIL", false),
+    dedupeEnabled: readBoolean("CAMPAIGN_DEDUPE_ENABLED", true),
+    dedupeBySubject: readBoolean("CAMPAIGN_DEDUPE_BY_SUBJECT", true),
+    reprocessErroredCampaigns: readBoolean("CAMPAIGN_REPROCESS_ERRORED", false),
     keepDays: readNumber("AUTOMATIC_CAMPAIGN_HISTORY_DAYS", 2),
     inbox: {
       host: process.env.CAMPAIGN_IMAP_HOST || "",
@@ -74,12 +99,19 @@ export function getAutomaticCampaignConfig() {
       host: process.env.CAMPAIGN_SMTP_HOST || "",
       port: readNumber("CAMPAIGN_SMTP_PORT", 587),
       secure: readBoolean("CAMPAIGN_SMTP_SECURE", false),
+      requireTLS: readBoolean("CAMPAIGN_SMTP_REQUIRE_TLS", true),
       user: process.env.CAMPAIGN_SMTP_USER || "",
       pass: process.env.CAMPAIGN_SMTP_PASS || "",
       from:
         process.env.CAMPAIGN_SMTP_FROM ||
         process.env.CAMPAIGN_SMTP_USER ||
         "",
+      connectionTimeoutMs: readTimeoutMs("CAMPAIGN_SMTP_CONNECTION_TIMEOUT_MS", 30000),
+      greetingTimeoutMs: readTimeoutMs("CAMPAIGN_SMTP_GREETING_TIMEOUT_MS", 30000),
+      socketTimeoutMs: readTimeoutMs("CAMPAIGN_SMTP_SOCKET_TIMEOUT_MS", 60000),
+      debug: readBoolean("CAMPAIGN_SMTP_DEBUG", false),
+      fallbackEnabled: readBoolean("CAMPAIGN_SMTP_FALLBACK_ENABLED", true),
+      fallbackAttempts: parseSmtpFallbacks(process.env.CAMPAIGN_SMTP_FALLBACKS || "465:ssl,587:starttls"),
     },
   };
 }

@@ -3,6 +3,7 @@ import { processAutomaticCampaignEmail } from "../services/automatic-campaigns/a
 import { runCampaignEmailWorkerOnce } from "../workers/campaignEmailWorker.js";
 import { listAutomaticCampaignRows } from "../services/automatic-campaigns/automaticCampaignRepository.js";
 import { createAutomaticCampaignPdfSignedUrl } from "../services/automatic-campaigns/storageService.js";
+import { verifyAutomaticCampaignSmtp } from "../services/automatic-campaigns/emailSenderService.js";
 
 function parseBoolean(value, fallback = false) {
   if (value === undefined || value === null || value === "") return fallback;
@@ -84,6 +85,20 @@ export function registerAutomaticCampaignRoutes(app, { requireAuth }) {
       return res.status(500).json({
         ok: false,
         error: error?.message || "Erro ao executar worker de campanhas automáticas.",
+      });
+    }
+  });
+
+
+  app.post("/api/campanhas-automaticas/testar-smtp", requireAuth, async (_req, res) => {
+    try {
+      const result = await verifyAutomaticCampaignSmtp();
+      return res.json(result);
+    } catch (error) {
+      console.error("Erro em POST /api/campanhas-automaticas/testar-smtp:", error);
+      return res.status(500).json({
+        ok: false,
+        error: error?.message || "Erro ao testar SMTP das campanhas automáticas.",
       });
     }
   });

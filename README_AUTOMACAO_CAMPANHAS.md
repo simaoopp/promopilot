@@ -220,3 +220,21 @@ Usar `dryRun: false` para gravar na tabela e gerar/upload dos PDFs.
 - O envio real só acontece com `CAMPAIGN_EMAIL_SEND_ENABLED=1`.
 - O email só é marcado como lido com `CAMPAIGN_EMAIL_MARK_SEEN=1`.
 - A tabela tem deduplicação por `email_message_id + store` para evitar repetir o mesmo email para a mesma loja.
+
+## Correção IMAP robusta
+
+Se o worker entra no Gmail mas devolve sempre `0 email(s) processado(s)`, ative temporariamente:
+
+```env
+CAMPAIGN_EMAIL_DEBUG=1
+CAMPAIGN_EMAIL_UNSEEN_ONLY=0
+CAMPAIGN_EMAIL_MARK_SEEN=0
+CAMPAIGN_EMAIL_SUBJECT_INCLUDES=Resumo
+CAMPAIGN_EMAIL_FROM=
+CAMPAIGN_IMAP_MAILBOXES=INBOX,[Gmail]/All Mail
+CAMPAIGN_IMAP_AUTO_DISCOVER_MAILBOXES=1
+CAMPAIGN_EMAIL_SCAN_LIMIT=100
+CAMPAIGN_EMAIL_MAX_MESSAGES=25
+```
+
+Nesta versão, o worker não depende apenas de `IMAP SEARCH`; ele abre as mailboxes, lê os emails recentes e aplica os filtros no código. Isto evita falhas de pesquisa por flags, labels, localização da caixa ou comportamento específico do Gmail.
