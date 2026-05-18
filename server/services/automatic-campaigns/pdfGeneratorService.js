@@ -2,9 +2,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import PDFDocument from "pdfkit";
+import { chromium } from "playwright";
 import { formatarEuro, parseNumero } from "./numberUtils.js";
 import { normalizeEan13, buildEan13Bits } from "./ean13Svg.js";
 import { buildAutomaticPrintPages, normalizeCampaignFormat } from "./formatRulesService.js";
+import { renderAutomaticCampaignHtml, DEFAULT_NOTE } from "./labelHtmlService.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,8 +14,6 @@ const projectRoot = path.resolve(__dirname, "../../..");
 const logoPath = path.join(projectRoot, "src", "logo.png");
 
 const A4 = { width: 595.28, height: 841.89 };
-const DEFAULT_NOTE =
-  "VÁLIDO ENQUANTO DURAR O STOCK. Limitado ao stock existente e não acumulável com outras promoções.";
 
 function bufferFromPdf(doc) {
   return new Promise((resolve, reject) => {
@@ -145,7 +145,7 @@ function drawCampaignLabel(doc, item, slot, options = {}) {
   });
   cursorY += isA5 ? 19 : 15;
 
-  textCentered(doc, options.title || "PROMO", innerX, cursorY, innerW, {
+  textCentered(doc, options.title || "PROMOÇÃO", innerX, cursorY, innerW, {
     font: "Helvetica-Bold",
     size: isA5 ? 34 : 24,
     height: isA5 ? 40 : 28,
@@ -216,11 +216,38 @@ function drawCampaignLabel(doc, item, slot, options = {}) {
   doc.restore();
 }
 
-export async function generateAutomaticCampaignPdf({ items, title, storeLabel, format = "automatico", anoValidade } = {}) {
-  if (!Array.isArray(items) || !items.length) {
-    throw new Error("Não existem artigos para gerar PDF.");
-  }
+async function generateWithPlaywright({ items, title, storeLabel, format = "automatico", anoValidade } = {}) {
+  const html = renderAutomaticCampaignHtml({
+    items,
+    title,
+    storeLabel,
+    format,
+    anoValidade,
+    note: DEFAULT_NOTE,
+  });
 
+  const browser = await chromium.launch({
+    headless: true,
+    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+  });
+
+  try {
+    const page = await browser.newPage({ viewport: { width: 794, height: 1123 }, deviceScaleFactor: 1 });
+    await page.emulateMedia({ media: "print" });
+    await page.setContent(html, { waitUntil: "load" });
+    await page.waitForFunction(() => globalThis.__labelsReady === true, null, { timeout: 10000 });
+    return await page.pdf({
+      format: "A4",
+      printBackground: true,
+      preferCSSPageSize: false,
+      margin: { top: "0", right: "0", bottom: "0", left: "0" },
+    });
+  } finally {
+    await browser.close();
+  }
+}
+
+async function generateWithPdfKit({ items, title, storeLabel, format = "automatico", anoValidade } = {}) {
   const normalizedFormat = normalizeCampaignFormat(format);
   const printPages = buildAutomaticPrintPages(items, normalizedFormat);
 
@@ -233,7 +260,7 @@ export async function generateAutomaticCampaignPdf({ items, title, storeLabel, f
     margin: 0,
     autoFirstPage: false,
     info: {
-      Title: `${title || "PROMO"} - ${storeLabel || "Loja"}`,
+      Title: `${title || "PROMOÇÃO"} - ${storeLabel || "Loja"}`,
       Author: "Expert Administração",
       Subject: "Etiquetas de campanha automáticas",
     },
@@ -258,4 +285,17 @@ export async function generateAutomaticCampaignPdf({ items, title, storeLabel, f
 
   doc.end();
   return done;
+}
+
+export async function generateAutomaticCampaignPdf({ items, title, storeLabel, format = "automatico", anoValidade } = {}) {
+  if (!Array.isArray(items) || !items.length) {
+    throw new Error("Não existem artigos para gerar PDF.");
+  }
+
+  try {
+    return await generateWithPlaywright({ items, title, storeLabel, format, anoValidade });
+  } catch (error) {
+    console.warn("[campanhas-automaticas] Fallback para PDFKit porque o render via Playwright falhou:", error?.message || error);
+    return generateWithPdfKit({ items, title, storeLabel, format, anoValidade });
+  }
 }
