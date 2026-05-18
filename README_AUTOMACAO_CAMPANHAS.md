@@ -41,6 +41,38 @@ Foram adicionadas estas dependências:
 - `nodemailer` — envio SMTP
 - `pdfkit` — geração dos PDFs de etiquetas no backend
 
+
+## Configuração de teste já preparada
+
+O `.env.example` foi deixado preparado para este cenário de teste:
+
+```env
+CAMPAIGN_IMAP_USER=etiquetaspromexp@gmail.com
+CAMPAIGN_SMTP_USER=etiquetaspromexp@gmail.com
+CAMPAIGN_SMTP_FROM=etiquetaspromexp@gmail.com
+
+CAMPAIGN_STORE_EMAIL_PRAIA=simaopereira308@gmail.com
+CAMPAIGN_STORE_EMAIL_ANGRA=simaopereira308@gmail.com
+CAMPAIGN_STORE_EMAIL_VALADOS=simaopereira308@gmail.com
+```
+
+Ou seja, a caixa `etiquetaspromexp@gmail.com` recebe os emails de campanha e, durante os testes, os PDFs da Praia, Angra e Valados são todos enviados para `simaopereira308@gmail.com`.
+
+Só falta substituir `COLOCAR_APP_PASSWORD_DO_GMAIL` pela App Password real do Gmail.
+
+Por segurança, deixei:
+
+```env
+CAMPAIGN_EMAIL_SEND_ENABLED=1
+CAMPAIGN_EMAIL_MARK_SEEN=0
+```
+
+Assim o envio de emails fica ativo, mas os emails recebidos não são marcados como lidos durante os primeiros testes. Depois de confirmares que está tudo certo, podes mudar para:
+
+```env
+CAMPAIGN_EMAIL_MARK_SEEN=1
+```
+
 ## Variáveis de ambiente
 
 ### Supabase
@@ -87,6 +119,9 @@ CAMPAIGN_IMAP_SECURE=1
 CAMPAIGN_IMAP_USER=email@dominio.pt
 CAMPAIGN_IMAP_PASS=password-ou-app-password
 CAMPAIGN_IMAP_MAILBOX=INBOX
+CAMPAIGN_IMAP_MAILBOXES=INBOX,[Gmail]/All Mail
+CAMPAIGN_IMAP_AUTO_DISCOVER_MAILBOXES=1
+CAMPAIGN_EMAIL_DEBUG=0
 CAMPAIGN_EMAIL_FROM=gabrielle@dominio.pt
 CAMPAIGN_EMAIL_SUBJECT_INCLUDES=Resumo Alterações_PV2
 CAMPAIGN_EMAIL_UNSEEN_ONLY=1

@@ -45,6 +45,7 @@ export const automaticCampaignStores = {
 
 export function getAutomaticCampaignConfig() {
   return {
+    debug: readBoolean("CAMPAIGN_EMAIL_DEBUG", false),
     enabled: readBoolean("CAMPAIGN_EMAIL_WORKER_ENABLED", false),
     intervalMs: readNumber("CAMPAIGN_EMAIL_WORKER_INTERVAL_MS", 5 * 60 * 1000),
     runOnStart: readBoolean("CAMPAIGN_EMAIL_WORKER_RUN_ON_START", false),
@@ -60,6 +61,8 @@ export function getAutomaticCampaignConfig() {
       user: process.env.CAMPAIGN_IMAP_USER || "",
       pass: process.env.CAMPAIGN_IMAP_PASS || "",
       mailbox: process.env.CAMPAIGN_IMAP_MAILBOX || "INBOX",
+      mailboxes: readList("CAMPAIGN_IMAP_MAILBOXES"),
+      autoDiscoverMailboxes: readBoolean("CAMPAIGN_IMAP_AUTO_DISCOVER_MAILBOXES", true),
       from: process.env.CAMPAIGN_EMAIL_FROM || "",
       subjectIncludes: readList("CAMPAIGN_EMAIL_SUBJECT_INCLUDES"),
       maxMessages: readNumber("CAMPAIGN_EMAIL_MAX_MESSAGES", 10),
