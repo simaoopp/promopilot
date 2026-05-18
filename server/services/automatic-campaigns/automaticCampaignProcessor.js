@@ -5,6 +5,7 @@ import { generateAutomaticCampaignPdf } from "./pdfGeneratorService.js";
 import { uploadAutomaticCampaignPdf } from "./storageService.js";
 import { sendAutomaticCampaignEmail } from "./emailSenderService.js";
 import { applyAutomaticFormatRulesToItems, countAutomaticFormats, normalizeCampaignFormat } from "./formatRulesService.js";
+import { filterAutomaticCampaignDiscountItems } from "./priceRulesService.js";
 import {
   buildAutomaticCampaignRow,
   findAutomaticCampaignDuplicate,
@@ -56,7 +57,9 @@ export async function processAutomaticCampaignEmail(emailInput = {}, options = {
   });
 
   const historyTitle = config.titleFromEmail ? (parsed?.title || email.subject || title) : title;
-  const itemsByStore = splitAutomaticCampaignByStore(parsed.rows);
+  const printableRows = filterAutomaticCampaignDiscountItems(parsed.rows);
+  const ignoredRows = parsed.rows.length - printableRows.length;
+  const itemsByStore = splitAutomaticCampaignByStore(printableRows);
   const results = [];
 
   for (const store of Object.values(automaticCampaignStores)) {
@@ -225,6 +228,8 @@ export async function processAutomaticCampaignEmail(emailInput = {}, options = {
       totalItems: parsed.totalItems,
       title: parsed.title,
       subjectDate: parsed.subjectDate,
+      printableItems: printableRows.length,
+      ignoredItems: ignoredRows,
     },
     results,
   };

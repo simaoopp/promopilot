@@ -193,7 +193,7 @@ function renderSheets(items = [], options = {}) {
 function renderStyle() {
   return `
     :root {
-      --color-primary: #d71920;
+      --color-primary: #ec6707;
       --color-surface: #ffffff;
       --color-text: #111111;
     }
