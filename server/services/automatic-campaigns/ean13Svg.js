@@ -24,11 +24,19 @@ export function renderEan13Svg(value, options = {}) {
 
   const bits = buildEan13Bits(ean);
   const svgWidth = bits.length * moduleWidth;
+  const guardHeight = barHeight + 6;
   let rects = "";
 
   for (let index = 0; index < bits.length; index += 1) {
     if (bits[index] !== "1") continue;
-    rects += `<rect x="${index * moduleWidth}" y="0" width="${moduleWidth}" height="${barHeight}" />`;
+
+    // O JsBarcode usado no frontend prolonga visualmente os guard bars
+    // do EAN-13. Mantemos esse detalhe para o PDF automático ficar
+    // indistinguível da impressão manual.
+    const isGuardModule = index <= 2 || (index >= 45 && index <= 49) || index >= 92;
+    const rectHeight = isGuardModule ? guardHeight : barHeight;
+
+    rects += `<rect x="${index * moduleWidth}" y="0" width="${moduleWidth}" height="${rectHeight}" />`;
   }
 
   return `

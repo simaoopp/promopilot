@@ -5,6 +5,8 @@ import { renderEan13Svg } from "./ean13Svg.js";
 import { buildAutomaticPrintPages, isAutomaticFormatMode, normalizeCampaignFormat } from "./formatRulesService.js";
 import {
   CAMPAIGN_AUTO_FONT_CLASS,
+  CAMPAIGN_LABEL_FONT_FAMILY,
+  CAMPAIGN_LABEL_HEAVY_FONT_FAMILY,
   DEFAULT_PROMOTION_NOTE,
   EXPERT_ORANGE,
   buildCampaignAutoFontBrowserScript,
@@ -22,6 +24,7 @@ const projectRoot = path.resolve(__dirname, "../../..");
 const srcRoot = path.join(projectRoot, "src");
 const logoPath = path.join(srcRoot, "logo.png");
 const tokensCssPath = path.join(srcRoot, "styles", "tokens.css");
+const baseCssPath = path.join(srcRoot, "styles", "base.css");
 const printCssPath = path.join(srcRoot, "styles", "print.css");
 
 export const DEFAULT_NOTE = DEFAULT_PROMOTION_NOTE;
@@ -141,9 +144,6 @@ function renderSheets(items = [], options = {}) {
   return pages
     .map((page, pageIndex) => {
       const format = page.layout === "a5" ? "a5" : "a6";
-      const perPage = format === "a5" ? 2 : 4;
-      const emptySlots = Math.max(0, perPage - page.items.length);
-
       return `
         <div class="sheet ${format === "a5" ? "sheet-a5" : "sheet-a6"}" data-page="${pageIndex + 1}">
           ${page.items
@@ -155,7 +155,6 @@ function renderSheets(items = [], options = {}) {
               }),
             )
             .join("\n")}
-          ${Array.from({ length: emptySlots }).map(() => renderEmptyLabel(format)).join("\n")}
         </div>
       `;
     })
@@ -164,10 +163,12 @@ function renderSheets(items = [], options = {}) {
 
 function renderSharedCss() {
   const tokensCss = readCssFile(tokensCssPath);
+  const baseCss = readCssFile(baseCssPath);
   const printCss = readCssFile(printCssPath);
 
   return `
     ${tokensCss}
+    ${baseCss}
     ${printCss}
 
     :root {
@@ -177,13 +178,19 @@ function renderSharedCss() {
       --color-surface: #ffffff;
     }
 
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+    }
+
     html, body {
       width: 210mm;
       min-height: 297mm;
       margin: 0;
       padding: 0;
       background: #ffffff !important;
-      font-family: Arial, Helvetica, sans-serif;
+      font-family: ${CAMPAIGN_LABEL_FONT_FAMILY};
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
@@ -216,9 +223,59 @@ function renderSharedCss() {
       border-top-color: ${EXPERT_ORANGE} !important;
     }
 
-    .desconto {
-      color: ${EXPERT_ORANGE} !important;
+    /* Tipografia senior: a etiqueta manual tem peso visual de bold/extra-bold.
+       Como a geração por email corre no Chromium do backend e pode não ter a
+       mesma fonte física do computador que imprime manualmente, aplicamos a
+       compensação apenas aos blocos de texto da etiqueta, sem mexer nos
+       formatters nem no auto-font-size partilhado. */
+    .label,
+    .label * {
+      font-family: ${CAMPAIGN_LABEL_FONT_FAMILY} !important;
+      font-kerning: normal;
+      font-variant-ligatures: none;
+      text-rendering: geometricPrecision;
+      font-synthesis: weight style;
+      font-synthesis-weight: auto;
     }
+
+    .titulo,
+    .descricao,
+    .antes,
+    .desconto,
+    .atual,
+    .validade {
+      font-family: ${CAMPAIGN_LABEL_HEAVY_FONT_FAMILY} !important;
+      font-weight: 900 !important;
+    }
+
+    .titulo,
+    .descricao {
+      letter-spacing: 0.12px;
+      -webkit-text-stroke: 0.34px currentColor;
+      paint-order: stroke fill;
+    }
+
+    .antes {
+      -webkit-text-stroke: 0.28px currentColor;
+      paint-order: stroke fill;
+    }
+
+    .desconto {
+      -webkit-text-stroke: 0.34px currentColor;
+      paint-order: stroke fill;
+    }
+
+    .atual {
+      -webkit-text-stroke: 0.42px currentColor;
+      paint-order: stroke fill;
+      text-shadow: 0 1px 0 rgba(0, 0, 0, 0.18);
+    }
+
+    .validade {
+      -webkit-text-stroke: 0.16px currentColor;
+      paint-order: stroke fill;
+    }
+
 
     .barcode-svg {
       overflow: visible;
@@ -243,6 +300,38 @@ function renderSharedCss() {
     .label.label-a5 .rodape .barcode-svg {
       height: 20px;
       max-height: 20px;
+    }
+
+
+    /* Ajustes finais para igualar o PDF manual de Etiquetas Campanha.
+       A página manual carrega o reset global e usa a área superior A6 com
+       uma pequena faixa branca entre a moldura e o logotipo. */
+    .label.label-a6 .label-inner {
+      padding: 12.5mm 9mm 9mm !important;
+    }
+
+    .label.label-a6 .topbar {
+      height: 86px !important;
+    }
+
+    .label.label-a6 .topo {
+      top: 28px !important;
+    }
+
+    .label.label-a6 .precos {
+      top: 53.4% !important;
+    }
+
+    .label.label-a6 .rodape {
+      bottom: 19px !important;
+    }
+
+    .label.label-a6 .rodape svg,
+    .label.label-a6 .rodape .barcode-svg {
+      width: 32% !important;
+      height: 20px !important;
+      max-height: 20px !important;
+      margin: 2px auto 4px !important;
     }
 
     .print-logo-fallback {
