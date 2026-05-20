@@ -7,6 +7,7 @@ import { formatarEuro, parseNumero } from "./numberUtils.js";
 import { normalizeEan13, buildEan13Bits } from "./ean13Svg.js";
 import { buildAutomaticPrintPages, normalizeCampaignFormat } from "./formatRulesService.js";
 import { renderAutomaticCampaignHtml, DEFAULT_NOTE } from "./labelHtmlService.js";
+import { getAutomaticCampaignConfig } from "./config.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -113,10 +114,9 @@ function drawEan13Barcode(doc, value, x, y, width, height) {
   }
 
   doc.restore();
-  doc.font("Helvetica").fontSize(8.5).fillColor("#111").text(ean, x, y + barHeight + 1, {
-    width,
-    align: "center",
-  });
+  // O layout manual/HTML não mostra o número do EAN por baixo do código de barras.
+  // Mantemos o fallback PDFKit consistente com esse comportamento.
+  void ean;
 }
 
 function drawCampaignLabel(doc, item, slot, options = {}) {
@@ -292,10 +292,21 @@ export async function generateAutomaticCampaignPdf({ items, title, storeLabel, f
     throw new Error("Não existem artigos para gerar PDF.");
   }
 
+  const config = getAutomaticCampaignConfig();
+  const engine = config.pdfEngine || "playwright";
+
+  if (engine === "pdfkit") {
+    return generateWithPdfKit({ items, title, storeLabel, format, anoValidade });
+  }
+
+  if (engine !== "playwright") {
+    throw new Error(`CAMPAIGN_PDF_ENGINE inválido: ${engine}. Usa "playwright" ou "pdfkit".`);
+  }
+
   try {
     return await generateWithPlaywright({ items, title, storeLabel, format, anoValidade });
   } catch (error) {
-    if (String(process.env.CAMPAIGN_PDF_ALLOW_APPROX_FALLBACK || "0") === "1") {
+    if (config.allowApproxPdfFallback) {
       console.warn("[campanhas-automaticas] Fallback aproximado para PDFKit porque o render via Playwright falhou:", error?.message || error);
       return generateWithPdfKit({ items, title, storeLabel, format, anoValidade });
     }

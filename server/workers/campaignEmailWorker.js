@@ -5,6 +5,13 @@ import { processAutomaticCampaignEmail } from "../services/automatic-campaigns/a
 let timer = null;
 let running = false;
 
+function summarizeStoreResults(result) {
+  return (result?.results || [])
+    .filter((storeResult) => !storeResult.skipped)
+    .map((storeResult) => `${storeResult.store}:${storeResult.status || "ok"}`)
+    .join(", ");
+}
+
 export async function runCampaignEmailWorkerOnce(options = {}) {
   const config = getAutomaticCampaignConfig();
 
@@ -14,19 +21,30 @@ export async function runCampaignEmailWorkerOnce(options = {}) {
 
   const session = await fetchAutomaticCampaignEmails();
   const processed = [];
+  const errors = [];
 
   try {
     for (const email of session.messages) {
-      const result = await processAutomaticCampaignEmail(email, {
-        sendEmails: options.sendEmails ?? config.sendEmails,
-        dryRun: options.dryRun || false,
-        force: options.force || false,
-      });
+      try {
+        const result = await processAutomaticCampaignEmail(email, {
+          sendEmails: options.sendEmails ?? config.sendEmails,
+          dryRun: Boolean(options.dryRun),
+          force: Boolean(options.force),
+        });
 
-      processed.push(result);
+        processed.push(result);
 
-      if (config.markSeen && !options.dryRun) {
-        await markEmailAsSeen(session.client, email.uid, email.mailbox);
+        if (config.markSeen && !options.dryRun) {
+          await markEmailAsSeen(session.client, email.uid, email.mailbox);
+        }
+      } catch (error) {
+        errors.push({
+          messageId: email.messageId,
+          subject: email.subject,
+          mailbox: email.mailbox,
+          uid: email.uid,
+          error: error?.message || String(error),
+        });
       }
     }
   } finally {
@@ -34,8 +52,12 @@ export async function runCampaignEmailWorkerOnce(options = {}) {
   }
 
   return {
-    ok: true,
+    ok: errors.length === 0,
+    dryRun: Boolean(options.dryRun),
+    sendEmails: Boolean(options.sendEmails ?? config.sendEmails),
+    scannedMailboxes: session.mailboxes || [],
     total: processed.length,
+    errors,
     processed,
   };
 }
@@ -46,12 +68,12 @@ async function safeRun() {
 
   try {
     const result = await runCampaignEmailWorkerOnce();
-    const lojas = result.processed
-      .flatMap((item) => item.results || [])
-      .filter((storeResult) => !storeResult.skipped)
-      .map((storeResult) => `${storeResult.store}:${storeResult.status || "ok"}`)
-      .join(", ");
-    console.log(`[campanhas-automaticas] Worker concluído: ${result.total} email(s) processado(s)${lojas ? ` | ${lojas}` : ""}.`);
+    const lojas = result.processed.map(summarizeStoreResults).filter(Boolean).join(" | ");
+    console.log(
+      `[campanhas-automaticas] Worker concluído: ${result.total} email(s) processado(s)` +
+        `${result.errors?.length ? ` | erros=${result.errors.length}` : ""}` +
+        `${lojas ? ` | ${lojas}` : ""}.`,
+    );
   } catch (error) {
     console.error("[campanhas-automaticas] Erro no worker:", error);
   } finally {

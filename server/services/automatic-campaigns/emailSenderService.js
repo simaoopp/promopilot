@@ -120,7 +120,7 @@ function buildMessageSubject(storeLabel) {
 
 async function sendViaResend({ config, to, storeLabel, pdfBuffer, filename, totalItems, subject }) {
   if (!hasEmailApiConfig(config)) {
-    throw new Error("API de email não configurada. Define CAMPAIGN_EMAIL_PROVIDER=resend, RESEND_API_KEY e CAMPAIGN_EMAIL_FROM.");
+    throw new Error("API de email não configurada. Define CAMPAIGN_EMAIL_PROVIDER=resend, RESEND_API_KEY e CAMPAIGN_EMAIL_FROM_ADDRESS.");
   }
 
   const endpoint = `${config.emailApi.baseUrl.replace(/\/+$/, "")}/emails`;
@@ -283,7 +283,7 @@ export async function verifyAutomaticCampaignEmailProvider() {
 
   if (config.emailProvider === "resend") {
     if (!hasEmailApiConfig(config)) {
-      throw new Error("API de email não configurada. Define CAMPAIGN_EMAIL_PROVIDER=resend, RESEND_API_KEY e CAMPAIGN_EMAIL_FROM.");
+      throw new Error("API de email não configurada. Define CAMPAIGN_EMAIL_PROVIDER=resend, RESEND_API_KEY e CAMPAIGN_EMAIL_FROM_ADDRESS.");
     }
 
     const controller = new AbortController();

@@ -25,6 +25,8 @@ export function registerAutomaticCampaignRoutes(app, { requireAuth }) {
       intervalMs: config.intervalMs,
       defaultFormat: config.defaultFormat,
       defaultTitle: config.defaultTitle,
+      pdfEngine: config.pdfEngine,
+      allowApproxPdfFallback: config.allowApproxPdfFallback,
     });
   });
 

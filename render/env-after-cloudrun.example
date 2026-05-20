@@ -1,0 +1,22 @@
+# Render depois de mover emails/PDF para Cloud Run.
+# Objetivo: deixar o Render leve e impedir Chromium/IMAP/Resend no Render.
+
+AUTOMATIC_CAMPAIGN_BUCKET=automatic-campaign-pdfs
+AUTOMATIC_CAMPAIGN_HISTORY_DAYS=30
+
+CAMPAIGN_DEDUPE_BY_SUBJECT=1
+CAMPAIGN_DEDUPE_ENABLED=1
+CAMPAIGN_DEFAULT_FORMAT=automatico
+CAMPAIGN_DEFAULT_TITLE=PROMOÇÃO
+
+CAMPAIGN_EMAIL_WORKER_ENABLED=0
+CAMPAIGN_EMAIL_WORKER_RUN_ON_START=0
+CAMPAIGN_EMAIL_SEND_ENABLED=0
+
+WARM_ARTICLES_CACHE=0
+NODE_OPTIONS=--max-old-space-size=384
+
+# Mantém apenas se a API do Render ainda precisar de consultar dados no Supabase.
+SUPABASE_URL=
+SUPABASE_PUBLISHABLE_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
