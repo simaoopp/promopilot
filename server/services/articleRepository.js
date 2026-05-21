@@ -3,8 +3,18 @@ import { supabaseAdminClient } from "../lib/supabaseClients.js";
 export const ARTICLES_TABLE = process.env.ARTICLES_TABLE || "articles";
 
 const ALL_ARTICLES_CACHE_TTL_MS = Number(process.env.ARTICLES_CACHE_TTL_MS || 30 * 60 * 1000);
-const ALL_ARTICLES_PAGE_SIZE = Number(process.env.ARTICLES_CACHE_PAGE_SIZE || 5000);
-const ALL_ARTICLES_MAX_CONCURRENCY = Math.max(1, Number(process.env.ARTICLES_CACHE_CONCURRENCY || 6));
+const SUPABASE_MAX_ROWS_PER_REQUEST = Math.min(
+  1000,
+  Math.max(1, Number(process.env.ARTICLES_SUPABASE_MAX_ROWS || 1000)),
+);
+const ALL_ARTICLES_PAGE_SIZE = Math.min(
+  SUPABASE_MAX_ROWS_PER_REQUEST,
+  Math.max(1, Number(process.env.ARTICLES_CACHE_PAGE_SIZE || 1000)),
+);
+const ALL_ARTICLES_MAX_CONCURRENCY = Math.min(
+  4,
+  Math.max(1, Number(process.env.ARTICLES_CACHE_CONCURRENCY || 2)),
+);
 const allArticlesCache = {
   value: null,
   updatedAt: 0,
@@ -208,14 +218,22 @@ function applySearch(queryBuilder, rawQuery) {
 
 export async function listArticles({ q = "", limit = 100, offset = 0, includeCount = true } = {}) {
   const client = getArticlesClient();
-  const normalizedLimit = Math.max(1, Number(limit) || 100);
-  const rangeLimit = includeCount ? normalizedLimit : normalizedLimit + 1;
+  const normalizedLimit = Math.min(
+    SUPABASE_MAX_ROWS_PER_REQUEST,
+    Math.max(1, Number(limit) || 100),
+  );
+  const normalizedOffset = Math.max(0, Number(offset) || 0);
+  // O Supabase limita por defeito a 1000 linhas por resposta. Nunca avançamos
+  // offsets com pageSize maior do que aquilo que o Supabase consegue devolver.
+  const rangeLimit = includeCount
+    ? normalizedLimit
+    : Math.min(SUPABASE_MAX_ROWS_PER_REQUEST, normalizedLimit + 1);
 
   let query = client
     .from(ARTICLES_TABLE)
     .select(ARTICLE_SELECT, includeCount ? { count: "exact" } : undefined)
     .order("artigo", { ascending: true })
-    .range(offset, offset + rangeLimit - 1);
+    .range(normalizedOffset, normalizedOffset + rangeLimit - 1);
 
   query = applySearch(query, q);
 
@@ -227,8 +245,8 @@ export async function listArticles({ q = "", limit = 100, offset = 0, includeCou
 
   const rows = Array.isArray(data) ? data : [];
   const hasMore = includeCount
-    ? offset + rows.length < (typeof count === "number" ? count : rows.length)
-    : rows.length > normalizedLimit;
+    ? normalizedOffset + rows.length < (typeof count === "number" ? count : rows.length)
+    : rows.length >= normalizedLimit;
   const visibleRows = includeCount ? rows : rows.slice(0, normalizedLimit);
   const items = visibleRows.map(mapRowToArticle);
 
@@ -236,7 +254,7 @@ export async function listArticles({ q = "", limit = 100, offset = 0, includeCou
     items,
     total: typeof count === "number" ? count : null,
     limit: normalizedLimit,
-    offset,
+    offset: normalizedOffset,
     hasMore,
   };
 }
@@ -289,6 +307,7 @@ export function getAllArticlesCacheStatus() {
     ready: Boolean(allArticlesCache.value),
     fresh: Boolean(isAllArticlesCacheFresh()),
     total: allArticlesCache.value?.total || 0,
+    loaded: allArticlesCache.value?.loaded || allArticlesCache.value?.items?.length || 0,
     updatedAt: allArticlesCache.updatedAt || null,
     pending: Boolean(allArticlesCache.promise),
   };
@@ -313,7 +332,10 @@ export async function listAllArticles({ forceRefresh = false, pageSize = ALL_ART
   }
 
   const request = (async () => {
-    const normalizedPageSize = Math.max(1000, Number(pageSize) || ALL_ARTICLES_PAGE_SIZE);
+    const normalizedPageSize = Math.min(
+      SUPABASE_MAX_ROWS_PER_REQUEST,
+      Math.max(1, Number(pageSize) || ALL_ARTICLES_PAGE_SIZE),
+    );
     const total = await getArticlesCount();
 
     if (total <= 0) {
@@ -350,7 +372,8 @@ export async function listAllArticles({ forceRefresh = false, pageSize = ALL_ART
     const items = pages.flatMap((page) => page.items);
     const value = {
       items,
-      total: items.length,
+      total,
+      loaded: items.length,
       limit: items.length,
       offset: 0,
       hasMore: false,

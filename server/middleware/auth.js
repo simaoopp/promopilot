@@ -1,4 +1,9 @@
-import { hasSupabaseAuthConfig, supabaseAuthClient } from "../lib/supabaseClients.js";
+import {
+  hasSupabaseAdminConfig,
+  hasSupabaseAuthConfig,
+  supabaseAdminClient,
+  supabaseAuthClient,
+} from "../lib/supabaseClients.js";
 
 function getBearerToken(req) {
   const header = req.headers.authorization || "";
@@ -8,6 +13,71 @@ function getBearerToken(req) {
   }
 
   return header.slice("Bearer ".length).trim();
+}
+
+function normalizeEmail(value = "") {
+  return String(value || "").trim().toLowerCase();
+}
+
+function readAdminEmails() {
+  return new Set(
+    String(process.env.ADMIN_EMAILS || "")
+      .split(",")
+      .map(normalizeEmail)
+      .filter(Boolean),
+  );
+}
+
+function normalizeRole(value = "") {
+  return String(value || "").trim().toLowerCase();
+}
+
+function isAdminRole(role = "") {
+  return ["admin", "owner", "super_admin", "superadmin"].includes(normalizeRole(role));
+}
+
+async function loadAuthProfile(userId) {
+  if (!userId || !hasSupabaseAdminConfig()) {
+    return null;
+  }
+
+  const { data, error } = await supabaseAdminClient
+    .from("profiles")
+    .select("id, first_name, last_name, store, role, allowed_stores, must_change_password")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error) {
+    console.warn("[auth] Não foi possível carregar profile para autorização:", error?.message || error);
+    return null;
+  }
+
+  return data || null;
+}
+
+function buildAuthContext(user, profile) {
+  const email = normalizeEmail(user?.email);
+  const adminEmails = readAdminEmails();
+  const appRole = normalizeRole(user?.app_metadata?.role || user?.app_metadata?.user_role);
+  const metadataRole = normalizeRole(user?.user_metadata?.role || user?.user_metadata?.user_role);
+  const profileRole = normalizeRole(profile?.role);
+  const isAdmin =
+    adminEmails.has(email) ||
+    isAdminRole(appRole) ||
+    isAdminRole(metadataRole) ||
+    isAdminRole(profileRole);
+
+  return {
+    user,
+    profile,
+    email,
+    isAdmin,
+    role: profileRole || appRole || metadataRole || "user",
+    store: String(profile?.store || "").trim(),
+    allowedStores: Array.isArray(profile?.allowed_stores)
+      ? profile.allowed_stores.map((store) => String(store || "").trim()).filter(Boolean)
+      : [],
+  };
 }
 
 export async function requireAuth(req, res, next) {
@@ -38,7 +108,14 @@ export async function requireAuth(req, res, next) {
       });
     }
 
+    const profile = await loadAuthProfile(data.user.id);
+    const auth = buildAuthContext(data.user, profile);
+
     req.authUser = data.user;
+    req.authProfile = profile;
+    req.auth = auth;
+    req.isAdmin = auth.isAdmin;
+
     return next();
   } catch (error) {
     console.error("Erro no middleware requireAuth:", error);
@@ -48,4 +125,25 @@ export async function requireAuth(req, res, next) {
       error: "Erro ao validar autenticação.",
     });
   }
+}
+
+export function requireAdmin(req, res, next) {
+  if (req.auth?.isAdmin || req.isAdmin) {
+    return next();
+  }
+
+  return res.status(403).json({
+    ok: false,
+    error: "Permissão insuficiente para esta operação administrativa.",
+  });
+}
+
+export function canAccessStore(req, store = "") {
+  const normalizedStore = String(store || "").trim();
+
+  if (!normalizedStore) return false;
+  if (req.auth?.isAdmin || req.isAdmin) return true;
+  if (String(req.auth?.store || "").trim() === normalizedStore) return true;
+
+  return Array.isArray(req.auth?.allowedStores) && req.auth.allowedStores.includes(normalizedStore);
 }

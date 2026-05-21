@@ -2,6 +2,14 @@ import { hasSupabaseAdminConfig, supabaseAdminClient } from "../../lib/supabaseC
 
 const TABLE = "automatic_campaigns";
 
+const SAFE_CAMPAIGN_SELECT = "id,titulo,dados,ano_validade,formato_etiqueta,origem,created_by,created_by_email,created_at,expires_at,total_artigos,store,user_id,email_message_id,email_subject,email_from,email_received_at,processed_at,status,pdf_url,pdfs,error_message";
+
+function readBoolean(name, fallback = false) {
+  const value = process.env[name];
+  if (value === undefined || value === null || value === "") return fallback;
+  return ["1", "true", "sim", "yes", "y", "on"].includes(String(value).toLowerCase().trim());
+}
+
 function plusDaysIso(days = 2) {
   return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
 }
@@ -54,7 +62,9 @@ export function buildAutomaticCampaignRow({
     pdf_url: pdfUrl || "",
     pdfs,
     error_message: errorMessage || "",
-    raw_email_text: email?.rawText || email?.text || "",
+    raw_email_text: readBoolean("CAMPAIGN_STORE_RAW_EMAIL", false)
+      ? String(email?.rawText || email?.text || "").slice(0, 50000)
+      : "",
   };
 }
 
@@ -64,7 +74,7 @@ export async function upsertAutomaticCampaignRow(row) {
   const { data, error } = await supabaseAdminClient
     .from(TABLE)
     .upsert(row, { onConflict: "id" })
-    .select("*")
+    .select(SAFE_CAMPAIGN_SELECT)
     .single();
 
   if (error) {
@@ -81,7 +91,7 @@ export async function updateAutomaticCampaignRow(id, patch) {
     .from(TABLE)
     .update(patch)
     .eq("id", id)
-    .select("*")
+    .select(SAFE_CAMPAIGN_SELECT)
     .single();
 
   if (error) {
@@ -150,14 +160,95 @@ export async function findAutomaticCampaignByEmailAndStore(emailMessageId, store
   return data || null;
 }
 
-export async function listAutomaticCampaignRows({ limit = 50 } = {}) {
+export async function listAutomaticCampaignRows({ limit = 50, store = "" } = {}) {
   assertSupabaseAdmin();
+
+  const safeLimit = Math.min(200, Math.max(1, Number(limit) || 50));
+  let query = supabaseAdminClient
+    .from(TABLE)
+    .select(SAFE_CAMPAIGN_SELECT)
+    .order("created_at", { ascending: false })
+    .limit(safeLimit);
+
+  if (store) {
+    query = query.eq("store", store);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw error;
+  }
+
+  return Array.isArray(data) ? data : [];
+}
+
+export async function findAutomaticCampaignByPdfPath({ path, store = "", limit = 200 } = {}) {
+  assertSupabaseAdmin();
+
+  const safePath = String(path || "").trim();
+  if (!safePath) return null;
+
+  let query = supabaseAdminClient
+    .from(TABLE)
+    .select("id,store,pdf_url,pdfs,created_at,expires_at,status")
+    .order("created_at", { ascending: false })
+    .limit(Math.min(500, Math.max(1, Number(limit) || 200)));
+
+  if (store) {
+    query = query.eq("store", store);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw error;
+  }
+
+  const rows = Array.isArray(data) ? data : [];
+  return rows.find((row) => {
+    if (row?.pdf_url && String(row.pdf_url).includes(safePath)) return true;
+    const pdfs = row?.pdfs && typeof row.pdfs === "object" ? row.pdfs : {};
+    return Object.values(pdfs).some((value) => String(value || "").includes(safePath));
+  }) || null;
+}
+
+function daysAgoIso(days = 5) {
+  return new Date(Date.now() - Math.max(1, Number(days) || 5) * 24 * 60 * 60 * 1000).toISOString();
+}
+
+export async function listExpiredAutomaticCampaignRows({ maxAgeDays = 5, limit = 100 } = {}) {
+  assertSupabaseAdmin();
+
+  const cutoffIso = daysAgoIso(maxAgeDays);
+  const nowIso = new Date().toISOString();
+  const safeLimit = Math.min(500, Math.max(1, Number(limit) || 100));
 
   const { data, error } = await supabaseAdminClient
     .from(TABLE)
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(limit);
+    .select("id,created_at,expires_at,pdf_url,pdfs,status,email_subject,store")
+    .or(`created_at.lt.${cutoffIso},expires_at.lt.${nowIso}`)
+    .order("created_at", { ascending: true })
+    .limit(safeLimit);
+
+  if (error) {
+    throw error;
+  }
+
+  return Array.isArray(data) ? data : [];
+}
+
+export async function deleteAutomaticCampaignRowsByIds(ids = []) {
+  assertSupabaseAdmin();
+
+  const safeIds = [...new Set((Array.isArray(ids) ? ids : []).filter(Boolean))];
+  if (!safeIds.length) return [];
+
+  const { data, error } = await supabaseAdminClient
+    .from(TABLE)
+    .delete()
+    .in("id", safeIds)
+    .select("id");
 
   if (error) {
     throw error;

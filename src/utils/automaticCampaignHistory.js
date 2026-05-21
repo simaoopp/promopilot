@@ -46,7 +46,7 @@ function mapRowToAutomaticCampaign(row = {}) {
     pdfUrl: row.pdf_url || "",
     pdfs: safeObject(row.pdfs),
     errorMessage: row.error_message || "",
-    rawEmailText: row.raw_email_text || "",
+    rawEmailText: "",
   };
 }
 
@@ -81,7 +81,7 @@ export function normalizeAutomaticCampaignSnapshot(snapshot = {}) {
     pdfUrl: String(snapshot.pdfUrl || "").trim(),
     pdfs: safeObject(snapshot.pdfs),
     errorMessage: String(snapshot.errorMessage || "").trim(),
-    rawEmailText: String(snapshot.rawEmailText || ""),
+    rawEmailText: "",
   };
 
   if (!normalized.store) {
@@ -117,7 +117,7 @@ function mapAutomaticSnapshotToRow(snapshot = {}) {
     pdf_url: normalized.pdfUrl,
     pdfs: normalized.pdfs,
     error_message: normalized.errorMessage,
-    raw_email_text: normalized.rawEmailText,
+
   };
 }
 
@@ -200,7 +200,7 @@ export async function loadAutomaticCampaignHistory(store) {
   const { data, error } = await supabase
     .from(AUTOMATIC_CAMPAIGNS_TABLE)
     .select(
-      "id, titulo, dados, ano_validade, formato_etiqueta, origem, created_by, created_by_email, created_at, expires_at, total_artigos, store, user_id, email_message_id, email_subject, email_from, email_received_at, processed_at, status, pdf_url, pdfs, error_message, raw_email_text",
+      "id, titulo, dados, ano_validade, formato_etiqueta, origem, created_by, created_by_email, created_at, expires_at, total_artigos, store, user_id, email_message_id, email_subject, email_from, email_received_at, processed_at, status, pdf_url, pdfs, error_message",
     )
     .eq("store", storeValue)
     .gt("expires_at", nowIso())
@@ -225,7 +225,7 @@ export async function addAutomaticCampaignToHistory(snapshot) {
     .from(AUTOMATIC_CAMPAIGNS_TABLE)
     .upsert(row, { onConflict: "id" })
     .select(
-      "id, titulo, dados, ano_validade, formato_etiqueta, origem, created_by, created_by_email, created_at, expires_at, total_artigos, store, user_id, email_message_id, email_subject, email_from, email_received_at, processed_at, status, pdf_url, pdfs, error_message, raw_email_text",
+      "id, titulo, dados, ano_validade, formato_etiqueta, origem, created_by, created_by_email, created_at, expires_at, total_artigos, store, user_id, email_message_id, email_subject, email_from, email_received_at, processed_at, status, pdf_url, pdfs, error_message",
     )
     .single();
 

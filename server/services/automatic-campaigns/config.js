@@ -79,7 +79,12 @@ export function getAutomaticCampaignConfig() {
     dedupeEnabled: readBoolean("CAMPAIGN_DEDUPE_ENABLED", true),
     dedupeBySubject: readBoolean("CAMPAIGN_DEDUPE_BY_SUBJECT", true),
     reprocessErroredCampaigns: readBoolean("CAMPAIGN_REPROCESS_ERRORED", false),
-    keepDays: readNumber("AUTOMATIC_CAMPAIGN_HISTORY_DAYS", 30),
+    keepDays: Math.max(1, readNumber("AUTOMATIC_CAMPAIGN_HISTORY_DAYS", 5)),
+    cleanup: {
+      enabled: readBoolean("AUTOMATIC_CAMPAIGN_CLEANUP_ENABLED", true),
+      maxAgeDays: Math.max(1, readNumber("AUTOMATIC_CAMPAIGN_CLEANUP_DAYS", readNumber("AUTOMATIC_CAMPAIGN_HISTORY_DAYS", 5))),
+      batchSize: Math.min(500, Math.max(1, readNumber("AUTOMATIC_CAMPAIGN_CLEANUP_BATCH_SIZE", 100))),
+    },
     pdfEngine: String(process.env.CAMPAIGN_PDF_ENGINE || "playwright").toLowerCase().trim(),
     allowApproxPdfFallback: readBoolean("CAMPAIGN_PDF_ALLOW_APPROX_FALLBACK", false),
     inbox: {

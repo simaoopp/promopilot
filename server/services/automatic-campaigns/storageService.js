@@ -87,3 +87,32 @@ export async function createAutomaticCampaignPdfSignedUrl(path, expiresInSeconds
 
   return data?.signedUrl || "";
 }
+
+export async function deleteAutomaticCampaignPdfPaths(paths = []) {
+  if (!hasSupabaseAdminConfig()) {
+    throw new Error("Supabase service role não configurado no servidor.");
+  }
+
+  const safePaths = [...new Set((Array.isArray(paths) ? paths : [])
+    .map((path) => String(path || "").trim())
+    .filter(Boolean))];
+
+  if (!safePaths.length) {
+    return { ok: true, deletedPaths: 0, paths: [] };
+  }
+
+  const { data, error } = await supabaseAdminClient.storage
+    .from(AUTOMATIC_CAMPAIGN_BUCKET)
+    .remove(safePaths);
+
+  if (error) {
+    throw error;
+  }
+
+  return {
+    ok: true,
+    deletedPaths: safePaths.length,
+    paths: safePaths,
+    data,
+  };
+}

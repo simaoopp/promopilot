@@ -4,9 +4,9 @@ import {
   prepareArticlesForSearch,
   buildPreparedArticlesIndex,
 } from "../utils/articleSearch";
-import { loadAllArtigos, refreshAllArtigosInBackground } from "./artigosService";
+import { loadAllArtigos, refreshAllArtigosInBackground, searchArtigos } from "./artigosService";
 
-const DEFAULT_PAGE_SIZE = 5000;
+const DEFAULT_PAGE_SIZE = 1000;
 
 const catalogoPesquisaState = {
   ready: false,
@@ -103,6 +103,17 @@ export function pesquisarNoCatalogoPreparado(rawQuery = "", { limit = Infinity }
 
   const deduped = [exact, ...ranked.filter((item) => item._id !== exact._id)];
   return Number.isFinite(limit) ? deduped.slice(0, limit) : deduped;
+}
+
+export async function pesquisarNoCatalogoRemoto(rawQuery = "", { limit = 20, offset = 0, signal } = {}) {
+  const termo = String(rawQuery || "").trim();
+
+  if (termo.length < 2) {
+    return [];
+  }
+
+  const result = await searchArtigos({ q: termo, limit, offset, signal });
+  return prepareArticlesForSearch(result?.items || []);
 }
 
 export function syncUpdatedArtigoToCatalogoPesquisa(updatedArtigo = {}) {

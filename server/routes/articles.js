@@ -30,7 +30,7 @@ function shouldReturnFullCatalog(req) {
 async function sendFullCatalogResponse(req, res) {
   try {
     const forceRefresh = parseBooleanQueryFlag(req.query.refresh);
-    const pageSize = Math.min(parsePositiveInt(req.query.pageSize, 5000), 10000);
+    const pageSize = Math.min(parsePositiveInt(req.query.pageSize, 1000), 1000);
     const result = await listAllArticles({ forceRefresh, pageSize });
 
     res.set("Cache-Control", "private, max-age=300");
@@ -41,6 +41,7 @@ async function sendFullCatalogResponse(req, res) {
       items: result.items,
       artigos: result.items,
       total: result.total,
+      loaded: result.loaded ?? result.items?.length ?? 0,
       limit: result.limit,
       offset: result.offset,
       hasMore: false,

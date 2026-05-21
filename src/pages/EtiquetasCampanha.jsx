@@ -137,7 +137,7 @@ export default function EtiquetasPage() {
 
     async function syncCatalogo() {
       try {
-        const snapshot = await ensureCatalogoPesquisaPronto({ pageSize: 5000 });
+        const snapshot = await ensureCatalogoPesquisaPronto({ pageSize: 1000 });
 
         if (ativo) {
           setCatalogoArtigos(snapshot.items || []);

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../components/ToastProvider";
@@ -18,10 +18,8 @@ import {
   syncUpdatedArtigoToCache,
 } from "../services/artigosService";
 import {
-  ensureCatalogoPesquisaPronto,
   getCatalogoPesquisaSnapshot,
-  pesquisarNoCatalogoPreparado,
-  preloadCatalogoPesquisa,
+  pesquisarNoCatalogoRemoto,
   syncUpdatedArtigoToCatalogoPesquisa,
 } from "../services/catalogoPesquisaService";
 import { normalizeArticleCompact } from "../utils/articleSearch";
@@ -54,7 +52,7 @@ export default function HomePage() {
   const [sugestoesErro, setSugestoesErro] = useState("");
   const [sugestoes, setSugestoes] = useState([]);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
-  const [catalogoTotal, setCatalogoTotal] = useState(initialCatalogo.total || 0);
+  const [catalogoTotal] = useState(initialCatalogo.total || 0);
   const [artigoSelecionado, setArtigoSelecionado] = useState(null);
   const [aiAberta, setAiAberta] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
@@ -66,30 +64,11 @@ export default function HomePage() {
   const [campanhaAutomaticaSelecionada, setCampanhaAutomaticaSelecionada] = useState(null);
   const [campanhaPendenteRemocao, setCampanhaPendenteRemocao] = useState(null);
   const [campanhaAutomaticaPendenteRemocao, setCampanhaAutomaticaPendenteRemocao] = useState(null);
-  const [catalogoPesquisaPronto, setCatalogoPesquisaPronto] = useState(initialCatalogo.ready);
-
-  const ensureCatalogoPesquisa = useCallback(async () => {
-    const snapshot = await ensureCatalogoPesquisaPronto({ pageSize: 5000 });
-    setCatalogoTotal(snapshot.total || 0);
-    setCatalogoPesquisaPronto(snapshot.ready);
-    return snapshot;
-  }, []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setPesquisaDebounced(pesquisa), 120);
     return () => window.clearTimeout(timer);
   }, [pesquisa]);
-
-  useEffect(() => {
-    preloadCatalogoPesquisa({ pageSize: 5000 })
-      .then((snapshot) => {
-        setCatalogoTotal(snapshot.total || 0);
-        setCatalogoPesquisaPronto(snapshot.ready);
-      })
-      .catch((error) => {
-        console.warn("Não foi possível preparar a pesquisa rápida do catálogo.", error);
-      });
-  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -142,6 +121,7 @@ export default function HomePage() {
       return undefined;
     }
 
+    const controller = new AbortController();
     let isMounted = true;
 
     async function syncSugestoes() {
@@ -149,19 +129,17 @@ export default function HomePage() {
       setSugestoesErro("");
 
       try {
-        if (!catalogoPesquisaPronto) {
-          await ensureCatalogoPesquisa();
-        }
+        const ranked = await pesquisarNoCatalogoRemoto(pesquisaDebounced, {
+          limit: HOME_SUGGESTIONS_LIMIT,
+          signal: controller.signal,
+        });
 
         if (!isMounted) return;
-
-        const ranked = pesquisarNoCatalogoPreparado(pesquisaDebounced, {
-          limit: HOME_SUGGESTIONS_LIMIT,
-        });
 
         setSugestoes(ranked);
         setHighlightedIndex(ranked.length ? 0 : -1);
       } catch (error) {
+        if (controller.signal.aborted) return;
         console.error("Erro ao carregar sugestões da homepage.", error);
 
         if (isMounted) {
@@ -178,8 +156,9 @@ export default function HomePage() {
 
     return () => {
       isMounted = false;
+      controller.abort();
     };
-  }, [catalogoPesquisaPronto, ensureCatalogoPesquisa, pesquisaDebounced]);
+  }, [pesquisaDebounced]);
 
   const historicoPreview = useMemo(
     () => (Array.isArray(historicoCampanhas) ? historicoCampanhas : []).filter(Boolean).slice(0, 4),
@@ -336,11 +315,7 @@ export default function HomePage() {
       <HomeHero
         pesquisa={pesquisa}
         onPesquisaChange={setPesquisa}
-        onPesquisaFocus={() => {
-          ensureCatalogoPesquisa().catch((error) => {
-            console.warn("Não foi possível preparar a pesquisa rápida do catálogo.", error);
-          });
-        }}
+        onPesquisaFocus={() => {}}
         onKeyDown={handleSearchKeyDown}
         loading={suggestionsLoading}
         erro={sugestoesErro}

@@ -1,6 +1,7 @@
 import { getAutomaticCampaignConfig, hasInboxConfig } from "../services/automatic-campaigns/config.js";
 import { fetchAutomaticCampaignEmails, markEmailAsSeen } from "../services/automatic-campaigns/inboxService.js";
 import { processAutomaticCampaignEmail } from "../services/automatic-campaigns/automaticCampaignProcessor.js";
+import { cleanupExpiredAutomaticCampaigns } from "../services/automatic-campaigns/cleanupService.js";
 
 let timer = null;
 let running = false;
@@ -19,6 +20,22 @@ export async function runCampaignEmailWorkerOnce(options = {}) {
     throw new Error("Worker de campanhas automáticas sem configuração IMAP.");
   }
 
+  let cleanup = null;
+
+  if (config.cleanup?.enabled && !options.dryRun) {
+    try {
+      cleanup = await cleanupExpiredAutomaticCampaigns({ config });
+      if (cleanup.matchedRows > 0) {
+        console.log(
+          `[campanhas-automaticas] Limpeza automática: ${cleanup.deletedRows}/${cleanup.matchedRows} campanha(s) removida(s), ${cleanup.deletedPdfPaths} PDF(s) removido(s), limite=${cleanup.maxAgeDays} dias.`,
+        );
+      }
+    } catch (error) {
+      cleanup = { ok: false, error: error?.message || String(error) };
+      console.warn("[campanhas-automaticas] Limpeza automática falhou sem bloquear o worker:", cleanup.error);
+    }
+  }
+
   const session = await fetchAutomaticCampaignEmails();
   const processed = [];
   const errors = [];
@@ -34,8 +51,16 @@ export async function runCampaignEmailWorkerOnce(options = {}) {
 
         processed.push(result);
 
-        if (config.markSeen && !options.dryRun) {
+        const storeErrors = (result?.results || []).filter(
+          (storeResult) => storeResult?.status === "error" || storeResult?.error,
+        );
+
+        if (config.markSeen && !options.dryRun && storeErrors.length === 0) {
           await markEmailAsSeen(session.client, email.uid, email.mailbox);
+        } else if (config.markSeen && !options.dryRun && storeErrors.length > 0) {
+          console.warn(
+            `[campanhas-automaticas] Email não marcado como lido porque houve ${storeErrors.length} erro(s) no processamento: ${email.subject}`,
+          );
         }
       } catch (error) {
         errors.push({
@@ -56,6 +81,7 @@ export async function runCampaignEmailWorkerOnce(options = {}) {
     dryRun: Boolean(options.dryRun),
     sendEmails: Boolean(options.sendEmails ?? config.sendEmails),
     scannedMailboxes: session.mailboxes || [],
+    cleanup,
     total: processed.length,
     errors,
     processed,

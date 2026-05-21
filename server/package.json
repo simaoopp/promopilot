@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "smoke": "node --check index.js && node --check app.js && node --check bootstrap/runtimeInfo.js && node --check lib/supabaseClients.js && node --check services/articleRepository.js && node --check services/aiProdutoService.js && node --check config/cors.js && node --check middleware/auth.js && node --check middleware/aiRateLimit.js && node --check routes/health.js && node --check routes/articles.js && node --check routes/aiProduto.js && node --check routes/automaticCampaigns.js && node --check services/automatic-campaigns/config.js && node --check services/automatic-campaigns/formatRulesService.js && node --check services/automatic-campaigns/numberUtils.js && node --check services/automatic-campaigns/priceRulesService.js && node --check services/automatic-campaigns/storeSplitterService.js && node --check services/automatic-campaigns/campaignEmailParser.js && node --check services/automatic-campaigns/ean13Svg.js && node --check services/automatic-campaigns/labelHtmlService.js && node --check services/automatic-campaigns/pdfGeneratorService.js && node --check services/automatic-campaigns/storageService.js && node --check services/automatic-campaigns/automaticCampaignRepository.js && node --check services/automatic-campaigns/emailSenderService.js && node --check services/automatic-campaigns/inboxService.js && node --check services/automatic-campaigns/automaticCampaignProcessor.js && node --check workers/campaignEmailWorker.js && node --check scripts/runCampaignEmailWorker.js",
+    "smoke": "node --check index.js && node --check app.js && node --check bootstrap/runtimeInfo.js && node --check lib/supabaseClients.js && node --check services/articleRepository.js && node --check services/aiProdutoService.js && node --check config/cors.js && node --check middleware/auth.js && node --check middleware/security.js && node --check middleware/aiRateLimit.js && node --check routes/health.js && node --check routes/articles.js && node --check routes/aiProduto.js && node --check routes/automaticCampaigns.js && node --check services/automatic-campaigns/config.js && node --check services/automatic-campaigns/formatRulesService.js && node --check services/automatic-campaigns/numberUtils.js && node --check services/automatic-campaigns/priceRulesService.js && node --check services/automatic-campaigns/storeSplitterService.js && node --check services/automatic-campaigns/campaignEmailParser.js && node --check services/automatic-campaigns/ean13Svg.js && node --check services/automatic-campaigns/labelHtmlService.js && node --check services/automatic-campaigns/pdfGeneratorService.js && node --check services/automatic-campaigns/storageService.js && node --check services/automatic-campaigns/cleanupService.js && node --check services/automatic-campaigns/automaticCampaignRepository.js && node --check services/automatic-campaigns/emailSenderService.js && node --check services/automatic-campaigns/inboxService.js && node --check services/automatic-campaigns/automaticCampaignProcessor.js && node --check workers/campaignEmailWorker.js && node --check scripts/runCampaignEmailWorker.js",
     "worker:campaigns": "node scripts/runCampaignEmailWorker.js",
     "worker:campaigns:dry-run": "node scripts/runCampaignEmailWorker.js --dry-run --no-send",
     "worker:campaigns:send": "node scripts/runCampaignEmailWorker.js --send"
@@ -18,10 +18,10 @@
     "cors": "^2.8.6",
     "dotenv": "^16.6.1",
     "express": "^5.2.1",
-    "playwright": "^1.59.1",
     "imapflow": "^1.0.194",
     "mailparser": "^3.7.4",
     "nodemailer": "^6.10.1",
-    "pdfkit": "^0.17.2"
+    "pdfkit": "^0.17.2",
+    "playwright": "1.60.0"
   }
 }

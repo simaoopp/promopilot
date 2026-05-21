@@ -8,7 +8,6 @@ import React, {
   useState,
 } from "react";
 import { supabase } from "../lib/supabase";
-import { preloadCatalogoPesquisa } from "../services/catalogoPesquisaService";
 import { getProfile, upsertProfile } from "../services/profileService";
 import {
   hasMissingProfileFields,
@@ -28,16 +27,9 @@ export function AuthProvider({ children }) {
   const profileRef = useRef(null);
   const preloadedCatalogUserId = useRef(null);
 
-  const preloadCatalogForUser = useCallback((userId) => {
-    if (!userId || preloadedCatalogUserId.current === userId) {
-      return;
-    }
-
-    preloadedCatalogUserId.current = userId;
-    preloadCatalogoPesquisa({ pageSize: 5000 }).catch((error) => {
-      console.warn("Não foi possível pré-carregar o catálogo de artigos.", error);
-      preloadedCatalogUserId.current = null;
-    });
+  const preloadCatalogForUser = useCallback((_userId) => {
+    // Catálogo completo com centenas de milhares de artigos não deve ser carregado no login.
+    // As páginas pesquisam server-side e só carregam resultados necessários.
   }, []);
 
   const loadProfile = useCallback(async (userId, options = {}) => {
