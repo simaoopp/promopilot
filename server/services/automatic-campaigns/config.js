@@ -9,6 +9,13 @@ function readNumber(name, fallback) {
   return Number.isFinite(value) ? value : fallback;
 }
 
+function normalizeUuid(value = "") {
+  const text = String(value || "").trim();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(text)
+    ? text
+    : "";
+}
+
 function readList(name) {
   return String(process.env[name] || "")
     .split(",")
@@ -80,6 +87,7 @@ export function getAutomaticCampaignConfig() {
     dedupeBySubject: readBoolean("CAMPAIGN_DEDUPE_BY_SUBJECT", true),
     reprocessErroredCampaigns: readBoolean("CAMPAIGN_REPROCESS_ERRORED", false),
     keepDays: Math.max(1, readNumber("AUTOMATIC_CAMPAIGN_HISTORY_DAYS", 5)),
+    defaultOrganizationId: normalizeUuid(process.env.CAMPAIGN_DEFAULT_ORGANIZATION_ID || process.env.DEFAULT_ORGANIZATION_ID || ""),
     cleanup: {
       enabled: readBoolean("AUTOMATIC_CAMPAIGN_CLEANUP_ENABLED", true),
       maxAgeDays: Math.max(1, readNumber("AUTOMATIC_CAMPAIGN_CLEANUP_DAYS", readNumber("AUTOMATIC_CAMPAIGN_HISTORY_DAYS", 5))),

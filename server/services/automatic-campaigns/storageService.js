@@ -35,7 +35,7 @@ export async function ensureAutomaticCampaignBucket() {
   return data;
 }
 
-export async function uploadAutomaticCampaignPdf({ pdfBuffer, emailMessageId, storeKey, title }) {
+export async function uploadAutomaticCampaignPdf({ pdfBuffer, emailMessageId, storeKey, title, organizationId = "" }) {
   if (!Buffer.isBuffer(pdfBuffer) || !pdfBuffer.length) {
     throw new Error("PDF inválido para upload.");
   }
@@ -46,7 +46,8 @@ export async function uploadAutomaticCampaignPdf({ pdfBuffer, emailMessageId, st
   const datePart = date.toISOString().slice(0, 10);
   const safeMessage = normalizePathPart(emailMessageId || title || `email-${date.getTime()}`);
   const safeStore = normalizePathPart(storeKey || "loja");
-  const filePath = `${datePart}/${safeMessage}/${safeStore}.pdf`;
+  const safeOrganization = normalizePathPart(organizationId || "legacy");
+  const filePath = `${safeOrganization}/${datePart}/${safeMessage}/${safeStore}.pdf`;
 
   const { error } = await supabaseAdminClient.storage
     .from(AUTOMATIC_CAMPAIGN_BUCKET)

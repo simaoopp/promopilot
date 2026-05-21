@@ -49,6 +49,7 @@ export async function processAutomaticCampaignEmail(emailInput = {}, options = {
   const format = normalizeCampaignFormat(options.format || config.defaultFormat);
   const title = options.title || config.defaultTitle || "PROMOÇÃO";
   const keepDays = Number.isFinite(options.keepDays) ? options.keepDays : config.keepDays;
+  const organizationId = options.organizationId || config.defaultOrganizationId || null;
 
   const parsed = parseAutomaticCampaignEmail({
     text: email.text,
@@ -85,6 +86,7 @@ export async function processAutomaticCampaignEmail(emailInput = {}, options = {
           emailSubject: email.subject,
           store: store.store,
           dedupeBySubject: config.dedupeBySubject,
+          organizationId,
         });
 
     const canReprocessExistingError = existing?.status === "error" && config.reprocessErroredCampaigns;
@@ -113,6 +115,7 @@ export async function processAutomaticCampaignEmail(emailInput = {}, options = {
       email,
       status: dryRun ? "processed" : "processing",
       keepDays,
+      organizationId,
     });
 
     let savedRow = dryRun ? initialRow : await upsertAutomaticCampaignRow(initialRow);
@@ -134,6 +137,7 @@ export async function processAutomaticCampaignEmail(emailInput = {}, options = {
           emailMessageId: email.messageId,
           storeKey: store.key,
           title,
+          organizationId,
         });
       }
 

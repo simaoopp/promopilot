@@ -235,6 +235,7 @@ export async function listArticles({
   includeCount = true,
   accessToken = "",
   useAdmin = false,
+  organizationId = null,
 } = {}) {
   const normalizedLimit = Math.min(100, Math.max(1, Number(limit) || 50));
   const normalizedOffset = Math.max(0, Number(offset) || 0);
@@ -258,6 +259,7 @@ export async function listArticles({
       p_query: q,
       p_limit: normalizedLimit,
       p_offset: normalizedOffset,
+      p_organization_id: organizationId || null,
     });
 
     if (error) {
@@ -464,7 +466,7 @@ export function warmArticlesCache() {
   });
 }
 
-export async function findArticleByIdentifiers({ artigoInterno = "", codigoBarras = "", accessToken = "" } = {}) {
+export async function findArticleByIdentifiers({ artigoInterno = "", codigoBarras = "", accessToken = "", organizationId = null } = {}) {
   const artigo = String(artigoInterno || "").trim();
   const barcode = String(codigoBarras || "").trim();
   const lookup = artigo || barcode;
@@ -477,6 +479,7 @@ export async function findArticleByIdentifiers({ artigoInterno = "", codigoBarra
     const client = getUserClient(accessToken);
     const { data, error } = await client.rpc("get_article_for_label", {
       p_code: lookup,
+      p_organization_id: organizationId || null,
     });
 
     if (error) {

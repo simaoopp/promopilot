@@ -1,0 +1,11 @@
+NODE_ENV=staging
+SUPABASE_URL=https://<staging-project>.supabase.co
+SUPABASE_PUBLISHABLE_KEY=<staging-publishable-key>
+AUTOMATIC_CAMPAIGN_BUCKET=automatic-campaign-pdfs-staging
+CAMPAIGN_EMAIL_SEND_ENABLED=0
+CAMPAIGN_EMAIL_WORKER_ENABLED=0
+CAMPAIGN_EMAIL_WORKER_RUN_ON_START=0
+WARM_ARTICLES_CACHE=0
+NODE_OPTIONS=--max-old-space-size=384
+ALLOWED_ORIGINS=https://staging.teudominio.pt,http://localhost:3000
+ADMIN_EMAILS=<teu-email>

@@ -29,6 +29,8 @@ export function registerAiProdutoRoutes(app, { requireAuth, aiRateLimit, aiEnabl
         artigoInterno,
         codigoBarras,
         descricao,
+        accessToken: req.accessToken,
+        organizationId: req.organizationId || null,
       });
 
       return res.json({

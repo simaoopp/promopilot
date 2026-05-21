@@ -86,6 +86,7 @@ export function registerArticleRoutes(app, { requireAuth }) {
         includeCount,
         accessToken: req.accessToken,
         useAdmin: Boolean(req.isAdmin && req.query.admin === "1"),
+        organizationId: req.organizationId || null,
       });
 
       return res.json({

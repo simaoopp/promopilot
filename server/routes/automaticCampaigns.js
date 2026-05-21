@@ -67,7 +67,7 @@ export function registerAutomaticCampaignRoutes(app, { requireAuth, requireAdmin
       const limit = Math.min(Number.parseInt(req.query.limit || "50", 10) || 50, 200);
       const store = req.isAdmin && req.query.store ? String(req.query.store).trim() : requireStoreScope(req, res);
       if (store === null) return;
-      const rows = await listAutomaticCampaignRows({ limit, store });
+      const rows = await listAutomaticCampaignRows({ limit, store, organizationId: req.organizationId || null });
       return res.json({ ok: true, items: rows });
     } catch (error) {
       console.error("Erro em GET /api/campanhas-automaticas:", error);
@@ -189,6 +189,7 @@ export function registerAutomaticCampaignRoutes(app, { requireAuth, requireAdmin
       const matchingCampaign = await findAutomaticCampaignByPdfPath({
         path,
         store: req.isAdmin ? store : getUserStore(req),
+        organizationId: req.organizationId || null,
       });
 
       if (!matchingCampaign || (!req.isAdmin && !canAccessStore(req, matchingCampaign.store))) {

@@ -2,7 +2,7 @@ import { hasSupabaseAdminConfig, supabaseAdminClient } from "../../lib/supabaseC
 
 const TABLE = "automatic_campaigns";
 
-const SAFE_CAMPAIGN_SELECT = "id,titulo,dados,ano_validade,formato_etiqueta,origem,created_by,created_by_email,created_at,expires_at,total_artigos,store,user_id,email_message_id,email_subject,email_from,email_received_at,processed_at,status,pdf_url,pdfs,error_message";
+const SAFE_CAMPAIGN_SELECT = "id,organization_id,titulo,dados,ano_validade,formato_etiqueta,origem,created_by,created_by_email,created_at,expires_at,total_artigos,store,user_id,email_message_id,email_subject,email_from,email_received_at,processed_at,status,pdf_url,pdfs,error_message";
 
 function readBoolean(name, fallback = false) {
   const value = process.env[name];
@@ -33,6 +33,7 @@ export function buildAutomaticCampaignRow({
   pdfs = {},
   errorMessage = "",
   keepDays = 2,
+  organizationId = null,
 }) {
   const now = new Date().toISOString();
   const safeItems = Array.isArray(items) ? items : [];
@@ -41,6 +42,7 @@ export function buildAutomaticCampaignRow({
 
   return {
     id: rowId,
+    organization_id: organizationId || null,
     titulo: title || "PROMOÇÃO",
     dados: safeItems,
     ano_validade: new Date().getFullYear(),
@@ -101,7 +103,7 @@ export async function updateAutomaticCampaignRow(id, patch) {
   return data;
 }
 
-export async function findAutomaticCampaignDuplicate({ emailMessageId, emailSubject, store, dedupeBySubject = true } = {}) {
+export async function findAutomaticCampaignDuplicate({ emailMessageId, emailSubject, store, dedupeBySubject = true, organizationId = null } = {}) {
   assertSupabaseAdmin();
 
   if (!store) return null;
@@ -112,6 +114,7 @@ export async function findAutomaticCampaignDuplicate({ emailMessageId, emailSubj
       .select("id,status,pdf_url,email_message_id,email_subject,store,created_at")
       .eq("email_message_id", emailMessageId)
       .eq("store", store)
+      .match(organizationId ? { organization_id: organizationId } : {})
       .maybeSingle();
 
     if (error) {
@@ -127,6 +130,7 @@ export async function findAutomaticCampaignDuplicate({ emailMessageId, emailSubj
       .select("id,status,pdf_url,email_message_id,email_subject,store,created_at")
       .eq("email_subject", emailSubject)
       .eq("store", store)
+      .match(organizationId ? { organization_id: organizationId } : {})
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -141,7 +145,7 @@ export async function findAutomaticCampaignDuplicate({ emailMessageId, emailSubj
   return null;
 }
 
-export async function findAutomaticCampaignByEmailAndStore(emailMessageId, store) {
+export async function findAutomaticCampaignByEmailAndStore(emailMessageId, store, organizationId = null) {
   assertSupabaseAdmin();
 
   if (!emailMessageId || !store) return null;
@@ -151,6 +155,7 @@ export async function findAutomaticCampaignByEmailAndStore(emailMessageId, store
     .select("id,status,pdf_url,email_message_id,store")
     .eq("email_message_id", emailMessageId)
     .eq("store", store)
+    .match(organizationId ? { organization_id: organizationId } : {})
     .maybeSingle();
 
   if (error) {
@@ -160,7 +165,7 @@ export async function findAutomaticCampaignByEmailAndStore(emailMessageId, store
   return data || null;
 }
 
-export async function listAutomaticCampaignRows({ limit = 50, store = "" } = {}) {
+export async function listAutomaticCampaignRows({ limit = 50, store = "", organizationId = null } = {}) {
   assertSupabaseAdmin();
 
   const safeLimit = Math.min(200, Math.max(1, Number(limit) || 50));
@@ -174,6 +179,10 @@ export async function listAutomaticCampaignRows({ limit = 50, store = "" } = {})
     query = query.eq("store", store);
   }
 
+  if (organizationId) {
+    query = query.eq("organization_id", organizationId);
+  }
+
   const { data, error } = await query;
 
   if (error) {
@@ -183,7 +192,7 @@ export async function listAutomaticCampaignRows({ limit = 50, store = "" } = {})
   return Array.isArray(data) ? data : [];
 }
 
-export async function findAutomaticCampaignByPdfPath({ path, store = "", limit = 200 } = {}) {
+export async function findAutomaticCampaignByPdfPath({ path, store = "", organizationId = null, limit = 200 } = {}) {
   assertSupabaseAdmin();
 
   const safePath = String(path || "").trim();
@@ -197,6 +206,10 @@ export async function findAutomaticCampaignByPdfPath({ path, store = "", limit =
 
   if (store) {
     query = query.eq("store", store);
+  }
+
+  if (organizationId) {
+    query = query.eq("organization_id", organizationId);
   }
 
   const { data, error } = await query;

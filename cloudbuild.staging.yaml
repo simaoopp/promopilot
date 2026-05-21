@@ -1,0 +1,56 @@
+substitutions:
+  _REGION: europe-southwest1
+  _REPOSITORY: etiquetas-prom
+  _IMAGE: email-worker-staging
+  _JOB: etiquetas-prom-email-worker-staging
+  _DEFAULT_ORGANIZATION_ID: ""
+  _RUNTIME_SERVICE_ACCOUNT: cloud-run-campaign-worker-staging@etiquetas-prom-prod.iam.gserviceaccount.com
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - Dockerfile.cloudrun-worker
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$SHORT_SHA
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:latest
+      - .
+
+  - name: gcr.io/cloud-builders/docker
+    args: ["push", "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$SHORT_SHA"]
+
+  - name: gcr.io/cloud-builders/docker
+    args: ["push", "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:latest"]
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - jobs
+      - deploy
+      - ${_JOB}
+      - --image
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$SHORT_SHA
+      - --region
+      - ${_REGION}
+      - --service-account
+      - ${_RUNTIME_SERVICE_ACCOUNT}
+      - --tasks
+      - "1"
+      - --parallelism
+      - "1"
+      - --max-retries
+      - "0"
+      - --task-timeout
+      - "15m"
+      - --cpu
+      - "1"
+      - --memory
+      - "2Gi"
+      - --set-env-vars
+      - NODE_ENV=staging,CAMPAIGN_DEFAULT_ORGANIZATION_ID=${_DEFAULT_ORGANIZATION_ID},CAMPAIGN_PDF_ENGINE=playwright,CAMPAIGN_PDF_ALLOW_APPROX_FALLBACK=0,CAMPAIGN_EMAIL_SEND_ENABLED=0,CAMPAIGN_EMAIL_MAX_MESSAGES=1,CAMPAIGN_EMAIL_SCAN_LIMIT=10,CAMPAIGN_EMAIL_WORKER_ENABLED=0,CAMPAIGN_EMAIL_WORKER_RUN_ON_START=0,WARM_ARTICLES_CACHE=0
+
+options:
+  logging: CLOUD_LOGGING_ONLY

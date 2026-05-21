@@ -1112,8 +1112,8 @@ function mapArtigoToResultado(art, marca = "", modelo = "") {
 /* =========================================================
    MAIN FLOW
    ========================================================= */
-export async function enrichSingleArticle({ artigoInterno, codigoBarras, descricao }) {
-  const art = await findArticleByIdentifiers({ artigoInterno, codigoBarras });
+export async function enrichSingleArticle({ artigoInterno, codigoBarras, descricao, accessToken = "", organizationId = null }) {
+  const art = await findArticleByIdentifiers({ artigoInterno, codigoBarras, accessToken, organizationId });
 
   if (!art) {
     throw new Error("Artigo não encontrado na base de dados.");
@@ -1162,7 +1162,12 @@ export async function enrichSingleArticle({ artigoInterno, codigoBarras, descric
       texto_grounding: grounded.texto || "",
     });
 
-    const artigoAtualizado = await upsertArticle(art);
+    let artigoAtualizado = art;
+    try {
+      artigoAtualizado = await upsertArticle(art);
+    } catch (error) {
+      console.warn("[ai-produto] Enriquecimento gerado, mas não foi possível persistir o artigo:", error?.message || error);
+    }
 
     return {
       fromCache: false,
@@ -1259,7 +1264,12 @@ export async function enrichSingleArticle({ artigoInterno, codigoBarras, descric
       texto_grounding: "",
     });
 
-    const artigoAtualizado = await upsertArticle(art);
+    let artigoAtualizado = art;
+    try {
+      artigoAtualizado = await upsertArticle(art);
+    } catch (error) {
+      console.warn("[ai-produto] Enriquecimento gerado, mas não foi possível persistir o artigo:", error?.message || error);
+    }
 
     return {
       fromCache: false,

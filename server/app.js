@@ -4,11 +4,15 @@ import compression from "compression";
 import { corsOptions } from "./config/cors.js";
 import { requireAdmin, requireAuth } from "./middleware/auth.js";
 import { apiRateLimit, securityHeaders } from "./middleware/security.js";
+import { requestContext } from "./middleware/requestContext.js";
+import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
+import { attachTenantContext } from "./middleware/tenant.js";
 import { aiRateLimit } from "./middleware/aiRateLimit.js";
 import { registerHealthRoutes } from "./routes/health.js";
 import { registerArticleRoutes } from "./routes/articles.js";
 import { registerAiProdutoRoutes } from "./routes/aiProduto.js";
 import { registerAutomaticCampaignRoutes } from "./routes/automaticCampaigns.js";
+import { registerSaasAdminRoutes } from "./routes/saasAdmin.js";
 import { isAiEnabled } from "./services/aiProdutoService.js";
 
 export function createApp() {
@@ -16,6 +20,7 @@ export function createApp() {
 
   app.set("trust proxy", 1);
   app.disable("x-powered-by");
+  app.use(requestContext);
   app.use(securityHeaders);
   app.use(compression({ threshold: 1024 }));
   app.use(cors(corsOptions));
@@ -24,13 +29,19 @@ export function createApp() {
   app.use("/api", apiRateLimit);
 
   registerHealthRoutes(app, { aiEnabled: isAiEnabled() });
-  registerArticleRoutes(app, { requireAuth });
+  const authStack = [requireAuth, attachTenantContext];
+
+  registerArticleRoutes(app, { requireAuth: authStack });
   registerAiProdutoRoutes(app, {
-    requireAuth,
+    requireAuth: authStack,
     aiRateLimit,
     aiEnabled: isAiEnabled(),
   });
-  registerAutomaticCampaignRoutes(app, { requireAuth, requireAdmin });
+  registerAutomaticCampaignRoutes(app, { requireAuth: authStack, requireAdmin });
+  registerSaasAdminRoutes(app, { requireAuth: authStack, requireAdmin });
+
+  app.use(notFoundHandler);
+  app.use(errorHandler);
 
   return app;
 }
