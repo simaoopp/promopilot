@@ -4,12 +4,10 @@ import {
   prepareArticlesForSearch,
   buildPreparedArticlesIndex,
 } from "../utils/articleSearch";
-import { loadAllArtigos, refreshAllArtigosInBackground, searchArtigos } from "./artigosService";
-
-const DEFAULT_PAGE_SIZE = 1000;
+import { searchArtigos } from "./artigosService";
 
 const catalogoPesquisaState = {
-  ready: false,
+  ready: true,
   total: 0,
   items: [],
   index: null,
@@ -19,7 +17,7 @@ const catalogoPesquisaState = {
 function hydrateCatalogoPesquisa(items = []) {
   const preparedItems = prepareArticlesForSearch(items);
 
-  catalogoPesquisaState.ready = preparedItems.length > 0;
+  catalogoPesquisaState.ready = true;
   catalogoPesquisaState.total = preparedItems.length;
   catalogoPesquisaState.items = preparedItems;
   catalogoPesquisaState.index = buildPreparedArticlesIndex(preparedItems);
@@ -36,45 +34,14 @@ export function getCatalogoPesquisaSnapshot() {
   };
 }
 
-export async function ensureCatalogoPesquisaPronto({ forceRefresh = false, pageSize = DEFAULT_PAGE_SIZE } = {}) {
-  if (!forceRefresh && catalogoPesquisaState.ready && catalogoPesquisaState.items.length > 0) {
-    return getCatalogoPesquisaSnapshot();
-  }
-
-  if (!forceRefresh && catalogoPesquisaState.promise) {
-    return catalogoPesquisaState.promise;
-  }
-
-  const request = loadAllArtigos({ forceRefresh, pageSize })
-    .then((data) => {
-      const snapshot = hydrateCatalogoPesquisa(data?.items || []);
-
-      if (!forceRefresh && data?.source === "indexeddb") {
-        refreshAllArtigosInBackground({ pageSize })
-          .then((freshData) => {
-            if (freshData?.items?.length) {
-              hydrateCatalogoPesquisa(freshData.items);
-            }
-          })
-          .catch((error) => {
-            console.warn("Não foi possível atualizar a pesquisa do catálogo em segundo plano.", error);
-          });
-      }
-
-      return snapshot;
-    })
-    .finally(() => {
-      if (catalogoPesquisaState.promise === request) {
-        catalogoPesquisaState.promise = null;
-      }
-    });
-
-  catalogoPesquisaState.promise = request;
-  return request;
+export async function ensureCatalogoPesquisaPronto() {
+  // Desde que o catálogo passou para ~250k artigos, o comportamento sénior é não
+  // carregar tudo para memória/browser. As páginas devem usar pesquisa remota.
+  return getCatalogoPesquisaSnapshot();
 }
 
-export function preloadCatalogoPesquisa(options) {
-  return ensureCatalogoPesquisaPronto(options);
+export function preloadCatalogoPesquisa() {
+  return Promise.resolve(getCatalogoPesquisaSnapshot());
 }
 
 export function procurarArtigoExatoNoCatalogo(rawQuery = "") {
@@ -113,7 +80,12 @@ export async function pesquisarNoCatalogoRemoto(rawQuery = "", { limit = 20, off
   }
 
   const result = await searchArtigos({ q: termo, limit, offset, signal });
-  return prepareArticlesForSearch(result?.items || []);
+  const prepared = prepareArticlesForSearch(result?.items || []);
+
+  // Mantemos uma pequena cache de resultados recentes apenas para seleção/scan,
+  // nunca o catálogo completo.
+  hydrateCatalogoPesquisa(prepared);
+  return prepared;
 }
 
 export function syncUpdatedArtigoToCatalogoPesquisa(updatedArtigo = {}) {
@@ -134,7 +106,7 @@ export function syncUpdatedArtigoToCatalogoPesquisa(updatedArtigo = {}) {
 }
 
 export function __resetCatalogoPesquisaForTests() {
-  catalogoPesquisaState.ready = false;
+  catalogoPesquisaState.ready = true;
   catalogoPesquisaState.total = 0;
   catalogoPesquisaState.items = [];
   catalogoPesquisaState.index = null;

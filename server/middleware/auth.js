@@ -1,4 +1,5 @@
 import {
+  createSupabaseUserClient,
   hasSupabaseAdminConfig,
   hasSupabaseAuthConfig,
   supabaseAdminClient,
@@ -36,14 +37,25 @@ function isAdminRole(role = "") {
   return ["admin", "owner", "super_admin", "superadmin"].includes(normalizeRole(role));
 }
 
-async function loadAuthProfile(userId) {
-  if (!userId || !hasSupabaseAdminConfig()) {
+async function loadAuthProfile(userId, accessToken = "") {
+  if (!userId) {
     return null;
   }
 
-  const { data, error } = await supabaseAdminClient
+  // Com service role disponível, o backend pode ler o profile sem depender das RLS.
+  // No Render, por segurança, o service role não deve existir; nesse caso usamos
+  // o JWT do próprio utilizador e deixamos o Supabase/RLS autorizar a leitura.
+  const client = hasSupabaseAdminConfig()
+    ? supabaseAdminClient
+    : createSupabaseUserClient(accessToken);
+
+  if (!client) {
+    return null;
+  }
+
+  const { data, error } = await client
     .from("profiles")
-    .select("id, first_name, last_name, store, role, allowed_stores, must_change_password")
+    .select("*")
     .eq("id", userId)
     .maybeSingle();
 
@@ -108,7 +120,9 @@ export async function requireAuth(req, res, next) {
       });
     }
 
-    const profile = await loadAuthProfile(data.user.id);
+    req.accessToken = token;
+
+    const profile = await loadAuthProfile(data.user.id, token);
     const auth = buildAuthContext(data.user, profile);
 
     req.authUser = data.user;

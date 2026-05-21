@@ -1,4 +1,4 @@
-import { supabaseAdminClient } from "../lib/supabaseClients.js";
+import { createSupabaseUserClient, supabaseAdminClient } from "../lib/supabaseClients.js";
 
 export const ARTICLES_TABLE = process.env.ARTICLES_TABLE || "articles";
 
@@ -15,6 +15,8 @@ const ALL_ARTICLES_MAX_CONCURRENCY = Math.min(
   4,
   Math.max(1, Number(process.env.ARTICLES_CACHE_CONCURRENCY || 2)),
 );
+const FULL_CATALOG_ENABLED = String(process.env.ARTICLES_FULL_CATALOG_ENABLED || "0") === "1";
+
 const allArticlesCache = {
   value: null,
   updatedAt: 0,
@@ -48,14 +50,24 @@ const ARTICLE_SELECT = [
   "updated_at",
 ].join(", ");
 
-function getArticlesClient() {
+function requireAdminClient(operation = "operação de artigos") {
   if (!supabaseAdminClient) {
     throw new Error(
-      "Supabase não configurado para artigos. Define SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY.",
+      `${operation} requer SUPABASE_SERVICE_ROLE_KEY no ambiente seguro. Não coloques esta chave no frontend.`,
     );
   }
 
   return supabaseAdminClient;
+}
+
+function getUserClient(accessToken = "") {
+  const client = createSupabaseUserClient(accessToken);
+
+  if (!client) {
+    throw new Error("Sessão Supabase indisponível para consultar artigos.");
+  }
+
+  return client;
 }
 
 function normalizeSearchValue(value = "") {
@@ -216,24 +228,60 @@ function applySearch(queryBuilder, rawQuery) {
   return queryBuilder.or(clauses.join(","));
 }
 
-export async function listArticles({ q = "", limit = 100, offset = 0, includeCount = true } = {}) {
-  const client = getArticlesClient();
-  const normalizedLimit = Math.min(
-    SUPABASE_MAX_ROWS_PER_REQUEST,
-    Math.max(1, Number(limit) || 100),
-  );
+export async function listArticles({
+  q = "",
+  limit = 50,
+  offset = 0,
+  includeCount = true,
+  accessToken = "",
+  useAdmin = false,
+} = {}) {
+  const normalizedLimit = Math.min(100, Math.max(1, Number(limit) || 50));
   const normalizedOffset = Math.max(0, Number(offset) || 0);
-  // O Supabase limita por defeito a 1000 linhas por resposta. Nunca avançamos
-  // offsets com pageSize maior do que aquilo que o Supabase consegue devolver.
-  const rangeLimit = includeCount
-    ? normalizedLimit
-    : Math.min(SUPABASE_MAX_ROWS_PER_REQUEST, normalizedLimit + 1);
+  const normalizedQuery = normalizeSearchValue(q || "");
 
+  // Catálogo grande: utilizadores normais nunca recebem a tabela completa.
+  // Isto mantém o Render sem service_role e evita carregar 250 mil artigos.
+  if (!useAdmin && (!normalizedQuery || normalizedQuery.length < 2)) {
+    return {
+      items: [],
+      total: 0,
+      limit: normalizedLimit,
+      offset: normalizedOffset,
+      hasMore: false,
+    };
+  }
+
+  if (!useAdmin) {
+    const client = getUserClient(accessToken);
+    const { data, error } = await client.rpc("search_articles_for_labels", {
+      p_query: q,
+      p_limit: normalizedLimit,
+      p_offset: normalizedOffset,
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    const rows = Array.isArray(data) ? data : [];
+    const total = Number(rows[0]?.total_count || rows.length || 0);
+
+    return {
+      items: rows.map(mapRowToArticle),
+      total,
+      limit: normalizedLimit,
+      offset: normalizedOffset,
+      hasMore: normalizedOffset + rows.length < total,
+    };
+  }
+
+  const client = requireAdminClient("Pesquisa administrativa de artigos");
   let query = client
     .from(ARTICLES_TABLE)
     .select(ARTICLE_SELECT, includeCount ? { count: "exact" } : undefined)
     .order("artigo", { ascending: true })
-    .range(normalizedOffset, normalizedOffset + rangeLimit - 1);
+    .range(normalizedOffset, normalizedOffset + normalizedLimit - 1);
 
   query = applySearch(query, q);
 
@@ -244,24 +292,20 @@ export async function listArticles({ q = "", limit = 100, offset = 0, includeCou
   }
 
   const rows = Array.isArray(data) ? data : [];
-  const hasMore = includeCount
-    ? normalizedOffset + rows.length < (typeof count === "number" ? count : rows.length)
-    : rows.length >= normalizedLimit;
-  const visibleRows = includeCount ? rows : rows.slice(0, normalizedLimit);
-  const items = visibleRows.map(mapRowToArticle);
+  const items = rows.map(mapRowToArticle);
+  const total = typeof count === "number" ? count : items.length;
 
   return {
     items,
-    total: typeof count === "number" ? count : null,
+    total,
     limit: normalizedLimit,
     offset: normalizedOffset,
-    hasMore,
+    hasMore: normalizedOffset + items.length < total,
   };
 }
 
-
 async function getArticlesCount() {
-  const client = getArticlesClient();
+  const client = requireAdminClient("Contagem administrativa de artigos");
   const { count, error } = await client
     .from(ARTICLES_TABLE)
     .select("artigo", { count: "exact", head: true });
@@ -310,10 +354,17 @@ export function getAllArticlesCacheStatus() {
     loaded: allArticlesCache.value?.loaded || allArticlesCache.value?.items?.length || 0,
     updatedAt: allArticlesCache.updatedAt || null,
     pending: Boolean(allArticlesCache.promise),
+    fullCatalogEnabled: FULL_CATALOG_ENABLED,
   };
 }
 
 export async function listAllArticles({ forceRefresh = false, pageSize = ALL_ARTICLES_PAGE_SIZE } = {}) {
+  if (!FULL_CATALOG_ENABLED) {
+    throw new Error(
+      "Catálogo completo desativado por segurança. Usa pesquisa server-side por termo/código.",
+    );
+  }
+
   if (!forceRefresh && isAllArticlesCacheFresh()) {
     return {
       ...allArticlesCache.value,
@@ -361,10 +412,11 @@ export async function listAllArticles({ forceRefresh = false, pageSize = ALL_ART
     const pages = await runWithConcurrency(
       offsets.map((offset) => async () =>
         listArticles({
-          q: "",
+          q: "*",
           limit: normalizedPageSize,
           offset,
           includeCount: false,
+          useAdmin: true,
         }),
       ),
     );
@@ -402,21 +454,40 @@ export async function listAllArticles({ forceRefresh = false, pageSize = ALL_ART
 }
 
 export function warmArticlesCache() {
+  if (!FULL_CATALOG_ENABLED) {
+    return Promise.resolve(null);
+  }
+
   return listAllArticles({ forceRefresh: false }).catch((error) => {
     console.warn("Não foi possível aquecer a cache de artigos.", error?.message || error);
     return null;
   });
 }
 
-export async function findArticleByIdentifiers({ artigoInterno = "", codigoBarras = "" } = {}) {
-  const client = getArticlesClient();
+export async function findArticleByIdentifiers({ artigoInterno = "", codigoBarras = "", accessToken = "" } = {}) {
   const artigo = String(artigoInterno || "").trim();
   const barcode = String(codigoBarras || "").trim();
+  const lookup = artigo || barcode;
 
-  if (!artigo && !barcode) {
+  if (!lookup) {
     return null;
   }
 
+  if (accessToken) {
+    const client = getUserClient(accessToken);
+    const { data, error } = await client.rpc("get_article_for_label", {
+      p_code: lookup,
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    const [row] = Array.isArray(data) ? data : [];
+    return row ? mapRowToArticle(row) : null;
+  }
+
+  const client = requireAdminClient("Pesquisa exata administrativa de artigos");
   let query = client.from(ARTICLES_TABLE).select(ARTICLE_SELECT).limit(1);
 
   if (artigo && barcode) {
@@ -437,7 +508,7 @@ export async function findArticleByIdentifiers({ artigoInterno = "", codigoBarra
 }
 
 export async function upsertArticle(article = {}) {
-  const client = getArticlesClient();
+  const client = requireAdminClient("Gravação de artigos");
   const row = mapArticleToRow(article);
 
   if (!row.artigo) {
@@ -458,8 +529,15 @@ export async function upsertArticle(article = {}) {
 }
 
 export async function getArticlesHealthcheck() {
-  const client = getArticlesClient();
-  const { count, error } = await client
+  if (!supabaseAdminClient) {
+    return {
+      ok: true,
+      mode: "controlled-rpc",
+      total: null,
+    };
+  }
+
+  const { count, error } = await supabaseAdminClient
     .from(ARTICLES_TABLE)
     .select("artigo", { count: "exact", head: true });
 
@@ -469,6 +547,7 @@ export async function getArticlesHealthcheck() {
 
   return {
     ok: true,
+    mode: "admin",
     total: typeof count === "number" ? count : 0,
   };
 }

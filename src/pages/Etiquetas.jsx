@@ -7,6 +7,7 @@ import {
   getCatalogoPesquisaSnapshot,
   procurarArtigoExatoNoCatalogo,
   pesquisarNoCatalogoPreparado,
+  pesquisarNoCatalogoRemoto,
 } from "../services/catalogoPesquisaService";
 import { filterAndRankPreparedArticles, normalizeArticleCompact } from "../utils/articleSearch";
 import "../styles/styles.css";
@@ -114,16 +115,16 @@ export default function EtiquetasCampanhaExcelPage() {
 
     async function syncArtigos() {
       try {
-        const snapshot = await ensureCatalogoPesquisaPronto({ pageSize: 1000 });
+        const snapshot = await ensureCatalogoPesquisaPronto();
 
         if (ativo) {
           setArtigos(snapshot.items || []);
         }
       } catch (error) {
-        console.error("Não foi possível carregar artigos.", error);
+        console.error("Não foi possível inicializar a pesquisa de artigos.", error);
 
         if (ativo) {
-          setMensagem("Não foi possível carregar o catálogo de artigos.");
+          setMensagem("Não foi possível preparar a pesquisa de artigos.");
         }
       } finally {
         if (ativo) {
@@ -138,6 +139,51 @@ export default function EtiquetasCampanhaExcelPage() {
       ativo = false;
     };
   }, []);
+
+  useEffect(() => {
+    const termo = String(pesquisaDebounced || "").trim();
+
+    if (termo.length < 2) {
+      setArtigos([]);
+      setArtigosLoading(false);
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    let ativo = true;
+
+    async function pesquisarRemoto() {
+      try {
+        setArtigosLoading(true);
+        const resultados = await pesquisarNoCatalogoRemoto(termo, {
+          limit: LIMITE_RESULTADOS,
+          signal: controller.signal,
+        });
+
+        if (ativo) {
+          setArtigos(resultados);
+        }
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        console.error("Não foi possível pesquisar artigos.", error);
+
+        if (ativo) {
+          setMensagem("Não foi possível pesquisar artigos.");
+        }
+      } finally {
+        if (ativo) {
+          setArtigosLoading(false);
+        }
+      }
+    }
+
+    pesquisarRemoto();
+
+    return () => {
+      ativo = false;
+      controller.abort();
+    };
+  }, [pesquisaDebounced]);
 
   const artigosPreparados = useMemo(() => artigos, [artigos]);
 
@@ -178,16 +224,27 @@ export default function EtiquetasCampanhaExcelPage() {
   }
 
   const procurarArtigoPorCodigoBarras = useCallback(
-    (codigo) => {
+    async (codigo) => {
       const codigoNormalizado = normalizeArticleCompact(codigo);
 
-      const encontrado =
+      const encontradoLocal =
         procurarArtigoExatoNoCatalogo(codigoNormalizado) ||
         artigosPreparados.find(
           (item) => item._searchIndex?.codigoBarras?.compact === codigoNormalizado,
         );
 
-      abrirResultado(codigo, encontrado || null);
+      if (encontradoLocal) {
+        abrirResultado(codigo, encontradoLocal);
+        return;
+      }
+
+      try {
+        const [encontradoRemoto] = await pesquisarNoCatalogoRemoto(codigo, { limit: 1 });
+        abrirResultado(codigo, encontradoRemoto || null);
+      } catch (error) {
+        console.error("Não foi possível pesquisar o código lido.", error);
+        abrirResultado(codigo, null);
+      }
     },
     [artigosPreparados]
   );

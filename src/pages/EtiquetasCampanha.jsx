@@ -13,6 +13,7 @@ import {
   ensureCatalogoPesquisaPronto,
   getCatalogoPesquisaSnapshot,
   pesquisarNoCatalogoPreparado,
+  pesquisarNoCatalogoRemoto,
 } from "../services/catalogoPesquisaService";
 import EditableCampaignDate from "../components/EditableCampaignDate";
 import { obterDataInputCampanha } from "../utils/campaignDates";
@@ -137,17 +138,17 @@ export default function EtiquetasPage() {
 
     async function syncCatalogo() {
       try {
-        const snapshot = await ensureCatalogoPesquisaPronto({ pageSize: 1000 });
+        const snapshot = await ensureCatalogoPesquisaPronto();
 
         if (ativo) {
           setCatalogoArtigos(snapshot.items || []);
           setCatalogoErro("");
         }
       } catch (error) {
-        console.error("Não foi possível carregar o catálogo da campanha.", error);
+        console.error("Não foi possível preparar a pesquisa da campanha.", error);
 
         if (ativo) {
-          setCatalogoErro("Não foi possível carregar o catálogo de artigos.");
+          setCatalogoErro("Não foi possível preparar a pesquisa de artigos.");
         }
       } finally {
         if (ativo) {
@@ -162,6 +163,53 @@ export default function EtiquetasPage() {
       ativo = false;
     };
   }, []);
+
+  useEffect(() => {
+    const termo = String(pesquisaCampanha || "").trim();
+
+    if (termo.length < 2) {
+      setCatalogoArtigos([]);
+      setCatalogoLoading(false);
+      setCatalogoErro("");
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    let ativo = true;
+
+    async function pesquisarRemoto() {
+      try {
+        setCatalogoLoading(true);
+        const resultados = await pesquisarNoCatalogoRemoto(termo, {
+          limit: 10,
+          signal: controller.signal,
+        });
+
+        if (ativo) {
+          setCatalogoArtigos(resultados);
+          setCatalogoErro("");
+        }
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        console.error("Não foi possível pesquisar artigos para a campanha.", error);
+
+        if (ativo) {
+          setCatalogoErro("Não foi possível pesquisar artigos.");
+        }
+      } finally {
+        if (ativo) {
+          setCatalogoLoading(false);
+        }
+      }
+    }
+
+    pesquisarRemoto();
+
+    return () => {
+      ativo = false;
+      controller.abort();
+    };
+  }, [pesquisaCampanha]);
 
 
   useEffect(() => {

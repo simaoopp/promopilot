@@ -28,6 +28,13 @@ function shouldReturnFullCatalog(req) {
 }
 
 async function sendFullCatalogResponse(req, res) {
+  if (!req.isAdmin) {
+    return res.status(403).json({
+      ok: false,
+      error: "Catálogo completo disponível apenas para administradores.",
+    });
+  }
+
   try {
     const forceRefresh = parseBooleanQueryFlag(req.query.refresh);
     const pageSize = Math.min(parsePositiveInt(req.query.pageSize, 1000), 1000);
@@ -68,11 +75,18 @@ export function registerArticleRoutes(app, { requireAuth }) {
 
     try {
       const q = normalizeSearchValue(req.query.q || "");
-      const limit = Math.min(parsePositiveInt(req.query.limit, 100), 1000);
+      const limit = Math.min(parsePositiveInt(req.query.limit, 50), 100);
       const offset = parsePositiveInt(req.query.offset, 0);
       const includeCount = String(req.query.includeCount || "1") !== "0";
 
-      const result = await listArticles({ q, limit, offset, includeCount });
+      const result = await listArticles({
+        q,
+        limit,
+        offset,
+        includeCount,
+        accessToken: req.accessToken,
+        useAdmin: Boolean(req.isAdmin && req.query.admin === "1"),
+      });
 
       return res.json({
         ok: true,
