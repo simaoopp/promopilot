@@ -1,19 +1,25 @@
-# Worker one-shot para Google Cloud Run Jobs.
-# Não arranca Express/API; executa apenas o processamento de emails/campanhas e termina.
 FROM mcr.microsoft.com/playwright:v1.59.1-jammy
 
 WORKDIR /app
 
+ENV NODE_ENV=production
+ENV PLAYWRIGHT_SKIP_BROWSER_GC=1
+ENV NPM_CONFIG_AUDIT=false
+ENV NPM_CONFIG_FUND=false
+ENV NPM_CONFIG_UPDATE_NOTIFIER=false
+ENV NPM_CONFIG_PROGRESS=false
+
+# Evita bug do npm incluído na imagem base
+RUN npm install -g npm@10.9.2 && npm --version
+
 COPY server/package*.json ./server/
-RUN cd server && npm ci --omit=dev
+
+RUN cd server && npm ci --omit=dev --no-audit --no-fund
 
 COPY server ./server
 COPY src/shared ./src/shared
 COPY src/styles ./src/styles
 COPY src/logo.png ./src/logo.png
-
-ENV NODE_ENV=production
-ENV PLAYWRIGHT_SKIP_BROWSER_GC=1
 
 WORKDIR /app/server
 
