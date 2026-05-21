@@ -3,6 +3,7 @@ substitutions:
   _REPOSITORY: etiquetas-prom
   _IMAGE: email-worker
   _JOB: etiquetas-prom-email-worker
+  _RUNTIME_SERVICE_ACCOUNT: cloud-run-campaign-worker@etiquetas-prom-prod.iam.gserviceaccount.com
 
 steps:
   - name: gcr.io/cloud-builders/docker
@@ -37,6 +38,8 @@ steps:
       - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$SHORT_SHA
       - --region
       - ${_REGION}
+      - --service-account
+      - ${_RUNTIME_SERVICE_ACCOUNT}
       - --tasks
       - "1"
       - --parallelism
@@ -49,3 +52,7 @@ steps:
       - "1"
       - --memory
       - "2Gi"
+
+images:
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$SHORT_SHA
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:latest
