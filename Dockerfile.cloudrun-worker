@@ -1,20 +1,31 @@
-FROM mcr.microsoft.com/playwright:v1.59.1-jammy
+# Instala dependências num Node estável, fora da imagem pesada do Playwright
+FROM node:22-bookworm-slim AS deps
 
-WORKDIR /app
+WORKDIR /app/server
 
 ENV NODE_ENV=production
-ENV PLAYWRIGHT_SKIP_BROWSER_GC=1
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 ENV NPM_CONFIG_AUDIT=false
 ENV NPM_CONFIG_FUND=false
 ENV NPM_CONFIG_UPDATE_NOTIFIER=false
 ENV NPM_CONFIG_PROGRESS=false
 
-# Evita bug do npm incluído na imagem base
-RUN npm install -g npm@10.9.2 && npm --version
+COPY server/package*.json ./
 
-COPY server/package*.json ./server/
+RUN npm ci --omit=dev --no-audit --no-fund
 
-RUN cd server && npm ci --omit=dev --no-audit --no-fund
+
+# Runtime final com Chromium/Playwright já preparado
+FROM mcr.microsoft.com/playwright:v1.59.1-jammy AS runner
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV PLAYWRIGHT_SKIP_BROWSER_GC=1
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+
+COPY --from=deps /app/server/node_modules ./server/node_modules
+COPY --from=deps /app/server/package*.json ./server/
 
 COPY server ./server
 COPY src/shared ./src/shared
@@ -23,4 +34,4 @@ COPY src/logo.png ./src/logo.png
 
 WORKDIR /app/server
 
-CMD ["npm", "run", "worker:campaigns:send"]
+CMD ["node", "scripts/runCampaignEmailWorker.js", "--send"]
