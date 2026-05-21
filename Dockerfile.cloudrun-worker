@@ -24,7 +24,7 @@ RUN npm install \
 
 
 # Runtime final com Playwright/Chromium
-FROM mcr.microsoft.com/playwright:v1.59.1-jammy AS runner
+FROM mcr.microsoft.com/playwright:v1.60.0-jammy AS runner
 
 WORKDIR /app
 
