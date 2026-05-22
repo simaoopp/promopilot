@@ -46,9 +46,11 @@ function parseSvixSignatures(signatureHeader = "") {
 export function getResendInboundConfig() {
   return {
     enabled: readBoolean("CAMPAIGN_RESEND_INBOUND_ENABLED", false),
+    apiKey: process.env.RESEND_API_KEY || "",
     webhookSecret: process.env.RESEND_WEBHOOK_SECRET || process.env.CAMPAIGN_RESEND_WEBHOOK_SECRET || "",
     allowUnsignedInDev: readBoolean("CAMPAIGN_RESEND_INBOUND_ALLOW_UNSIGNED_DEV", false),
     maxTimestampSkewSeconds: Number.parseInt(process.env.RESEND_WEBHOOK_MAX_SKEW_SECONDS || "300", 10) || 300,
+    fetchContentTimeoutMs: Number.parseInt(process.env.RESEND_INBOUND_FETCH_TIMEOUT_MS || "15000", 10) || 15000,
   };
 }
 
@@ -107,7 +109,95 @@ function pickBody(data = {}) {
   return { text: String(text || ""), html: String(html || "") };
 }
 
-export function parseResendInboundPayload(rawBody) {
+function extractResendApiError(payload) {
+  if (!payload) return "";
+  if (typeof payload === "string") return payload;
+  return payload.message || payload.error || payload.name || JSON.stringify(payload).slice(0, 500);
+}
+
+async function fetchResendReceivedEmail(emailId, config = getResendInboundConfig()) {
+  const normalizedEmailId = String(emailId || "").trim();
+  if (!normalizedEmailId) return null;
+
+  if (!config.apiKey) {
+    throw new Error("RESEND_API_KEY em falta: o webhook email.received não traz o corpo do email; é obrigatório consultar a Receiving API da Resend pelo email_id.");
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), config.fetchContentTimeoutMs);
+
+  try {
+    const response = await fetch(`https://api.resend.com/emails/receiving/${encodeURIComponent(normalizedEmailId)}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${config.apiKey}`,
+        Accept: "application/json",
+      },
+      signal: controller.signal,
+    });
+
+    const responseText = await response.text();
+    let payload = null;
+    try {
+      payload = responseText ? JSON.parse(responseText) : null;
+    } catch {
+      payload = responseText;
+    }
+
+    if (!response.ok) {
+      throw new Error(`Falha ao obter conteúdo do email recebido na Resend (${response.status}): ${extractResendApiError(payload)}`);
+    }
+
+    return payload?.data || payload || null;
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error("Timeout ao obter conteúdo do email recebido na Resend.");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function pickMessageId(source = {}, fallback = {}) {
+  const headers = source.headers || fallback.headers || fallback.email_headers || {};
+  return (
+    source.message_id ||
+    source.messageId ||
+    fallback.message_id ||
+    fallback.messageId ||
+    fallback.email_id ||
+    fallback.id ||
+    source.id ||
+    headers["message-id"] ||
+    headers["Message-ID"] ||
+    `resend-${Date.now()}`
+  );
+}
+
+function buildEmailFromSources({ webhookData = {}, receivedEmail = null } = {}) {
+  const source = receivedEmail || webhookData;
+  const fallback = webhookData || {};
+  const { text, html } = pickBody(source);
+  const headers = source.headers || fallback.headers || fallback.email_headers || {};
+  const messageId = pickMessageId(source, fallback);
+
+  return {
+    messageId: String(messageId).trim(),
+    subject: source.subject || fallback.subject || "Campanha automática",
+    from: normalizeAddress(source.from || fallback.from || fallback.sender),
+    to: normalizeAddress(source.to || fallback.to || fallback.recipients),
+    receivedAt: source.created_at || source.received_at || source.receivedAt || fallback.created_at || fallback.received_at || new Date().toISOString(),
+    text,
+    html,
+    rawText: text || html,
+    headers,
+    provider: "resend-inbound",
+    resendEmailId: fallback.email_id || source.id || "",
+  };
+}
+
+export async function parseResendInboundPayload(rawBody, { config = getResendInboundConfig() } = {}) {
   const body = Buffer.isBuffer(rawBody) ? rawBody.toString("utf8") : String(rawBody || "");
   const payload = JSON.parse(body || "{}");
   const eventType = payload.type || payload.event || "";
@@ -121,30 +211,22 @@ export function parseResendInboundPayload(rawBody) {
     };
   }
 
-  const { text, html } = pickBody(data);
-  const headers = data.headers || data.email_headers || {};
-  const messageId =
-    data.message_id ||
-    data.messageId ||
-    data.email_id ||
-    data.id ||
-    headers["message-id"] ||
-    headers["Message-ID"] ||
-    `resend-${Date.now()}`;
+  const webhookBody = pickBody(data);
+  const emailId = data.email_id || data.emailId || data.id || "";
+
+  // A Resend envia o webhook com metadados; por desenho, o body/headers/anexos devem ser obtidos
+  // pela Receiving API usando data.email_id. Mantemos fallback para payloads locais/testes.
+  const shouldFetchContent = Boolean(emailId) && (!webhookBody.text || !webhookBody.html || process.env.RESEND_INBOUND_ALWAYS_FETCH !== "0");
+  const receivedEmail = shouldFetchContent ? await fetchResendReceivedEmail(emailId, config) : null;
+  const email = buildEmailFromSources({ webhookData: data, receivedEmail });
+
+  if (!email.text && !email.html) {
+    throw new Error("Email recebido pela Resend sem corpo disponível. Confirma RESEND_API_KEY e acesso à Receiving API.");
+  }
 
   return {
     ignored: false,
     eventType: eventType || "email.received",
-    email: {
-      messageId: String(messageId).trim(),
-      subject: data.subject || "Campanha automática",
-      from: normalizeAddress(data.from || data.sender),
-      to: normalizeAddress(data.to || data.recipients),
-      receivedAt: data.created_at || data.received_at || data.receivedAt || new Date().toISOString(),
-      text,
-      html,
-      rawText: text || html,
-      provider: "resend-inbound",
-    },
+    email,
   };
 }

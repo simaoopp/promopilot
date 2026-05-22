@@ -35,7 +35,7 @@ export function registerResendInboundWebhookRoute(app) {
       }
 
       try {
-        const payload = parseResendInboundPayload(req.body);
+        const payload = await parseResendInboundPayload(req.body, { config: inboundConfig });
 
         if (payload.ignored) {
           return res.status(202).json({ ok: true, ignored: true, eventType: payload.eventType, reason: payload.reason });
