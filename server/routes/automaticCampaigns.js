@@ -49,6 +49,8 @@ export function registerAutomaticCampaignRoutes(app, { requireAuth, requireAdmin
       inboxConfigured: hasInboxConfig(config),
       smtpConfigured: hasSmtpConfig(config),
       emailProvider: config.emailProvider,
+      inboundProvider: config.inbound?.provider,
+      resendInboundEnabled: Boolean(config.inbound?.resendEnabled),
       emailApiConfigured: hasEmailApiConfig(config),
       sendEmailsEnabled: config.sendEmails,
       intervalMs: config.intervalMs,

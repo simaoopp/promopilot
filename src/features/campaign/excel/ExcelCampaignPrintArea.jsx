@@ -21,6 +21,12 @@ export default function ExcelCampaignPrintArea({ paginasA5, paginasA6, anoValida
 
   return (
     <div className="print-area">
+      {paginasA6.map((pagina, pageIndex) => (
+        <div key={`a6-${pageIndex}`} className="sheet sheet-a6">
+          {pagina.map((item) => renderEtiqueta(item, "a6"))}
+        </div>
+      ))}
+
       {paginasA5.map((pagina, pageIndex) => (
         <div key={`a5-${pageIndex}`} className="sheet sheet-a5">
           {pagina.map((item) => renderEtiqueta(item, "a5"))}
@@ -30,12 +36,6 @@ export default function ExcelCampaignPrintArea({ paginasA5, paginasA6, anoValida
               <div className="label-inner"></div>
             </div>
           ) : null}
-        </div>
-      ))}
-
-      {paginasA6.map((pagina, pageIndex) => (
-        <div key={`a6-${pageIndex}`} className="sheet sheet-a6">
-          {pagina.map((item) => renderEtiqueta(item, "a6"))}
         </div>
       ))}
     </div>

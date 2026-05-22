@@ -8,6 +8,7 @@ const API_BASE_URL =
     : "");
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
+const SEARCH_REQUEST_TIMEOUT_MS = 4500;
 const PERSISTENT_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 const BACKGROUND_REFRESH_DEBOUNCE_MS = 60 * 1000;
 const ALL_ARTIGOS_CACHE_KEY = "all-artigos";
@@ -74,6 +75,36 @@ async function readJsonResponse(response) {
       `Resposta inválida do servidor em ${url}: esperava JSON, recebi ${contentType} (${status}).`,
     );
   }
+}
+
+
+function createAbortSignalWithTimeout(externalSignal, timeoutMs = SEARCH_REQUEST_TIMEOUT_MS) {
+  const controller = new AbortController();
+  let timeout = null;
+
+  const abort = () => {
+    if (!controller.signal.aborted) {
+      controller.abort();
+    }
+  };
+
+  if (externalSignal?.aborted) {
+    abort();
+  } else if (externalSignal) {
+    externalSignal.addEventListener("abort", abort, { once: true });
+  }
+
+  if (timeoutMs > 0) {
+    timeout = setTimeout(abort, timeoutMs);
+  }
+
+  return {
+    signal: controller.signal,
+    cleanup() {
+      if (timeout) clearTimeout(timeout);
+      if (externalSignal) externalSignal.removeEventListener("abort", abort);
+    },
+  };
 }
 
 async function getAccessToken() {
@@ -145,12 +176,24 @@ export async function fetchArtigosPage({
   }
 
   const token = await getAccessToken();
-  const response = await fetch(buildApiUrl(`/api/artigos?${params.toString()}`), {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-    signal,
-  });
+  const requestSignal = createAbortSignalWithTimeout(signal);
+  let response;
+
+  try {
+    response = await fetch(buildApiUrl(`/api/artigos?${params.toString()}`), {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      signal: requestSignal.signal,
+    });
+  } catch (error) {
+    if (requestSignal.signal.aborted) {
+      throw new Error("Pesquisa de artigos demorou demasiado. Refina a pesquisa ou tenta por código/EAN.");
+    }
+    throw error;
+  } finally {
+    requestSignal.cleanup();
+  }
 
   const data = await readJsonResponse(response);
 

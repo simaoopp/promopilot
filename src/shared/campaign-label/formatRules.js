@@ -130,54 +130,22 @@ export function buildAutomaticPrintPages(items = [], format = "automatico") {
     }));
   }
 
-  const paginas = [];
-  let bufferA5 = [];
-  let bufferA6 = [];
+  // Regra operacional de impressão: em modo automático misto, imprimimos sempre
+  // todas as folhas A6 primeiro e só depois as A5. Isto evita alternância física
+  // de formatos na impressora e torna o fluxo previsível para loja/produção.
+  const itemsA6 = formattedItems.filter((item) => item._formato !== "a5");
+  const itemsA5 = formattedItems.filter((item) => item._formato === "a5");
 
-  const fecharBufferA5 = () => {
-    if (!bufferA5.length) return;
-
-    dividirEmPaginas(bufferA5, 2).forEach((pageItems) => {
-      paginas.push({ layout: "a5", items: pageItems });
-    });
-
-    bufferA5 = [];
-  };
-
-  const fecharBufferA6 = () => {
-    if (!bufferA6.length) return;
-
-    dividirEmPaginas(bufferA6, 4).forEach((pageItems) => {
-      paginas.push({ layout: "a6", items: pageItems });
-    });
-
-    bufferA6 = [];
-  };
-
-  formattedItems.forEach((item) => {
-    if (item._formato === "a5") {
-      fecharBufferA6();
-      bufferA5.push(item);
-
-      if (bufferA5.length === 2) {
-        fecharBufferA5();
-      }
-
-      return;
-    }
-
-    fecharBufferA5();
-    bufferA6.push(item);
-
-    if (bufferA6.length === 4) {
-      fecharBufferA6();
-    }
-  });
-
-  fecharBufferA5();
-  fecharBufferA6();
-
-  return paginas;
+  return [
+    ...dividirEmPaginas(itemsA6, 4).map((pageItems) => ({
+      layout: "a6",
+      items: pageItems,
+    })),
+    ...dividirEmPaginas(itemsA5, 2).map((pageItems) => ({
+      layout: "a5",
+      items: pageItems,
+    })),
+  ];
 }
 
 export function buildManualCampaignPrintPages(items = [], modoAutomatico = true, formatoManual = "a6") {

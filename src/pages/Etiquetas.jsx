@@ -13,7 +13,7 @@ import { filterAndRankPreparedArticles, normalizeArticleCompact } from "../utils
 import "../styles/styles.css";
 import { normalizarValorPvp } from "../utils/articlePrices";
 
-const LIMITE_RESULTADOS = 100;
+const LIMITE_RESULTADOS = 30;
 
 function extrairMelhorTextoOCR(texto) {
   const linhas = String(texto || "")

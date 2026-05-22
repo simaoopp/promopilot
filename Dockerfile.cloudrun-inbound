@@ -1,0 +1,47 @@
+# Cloud Run Service para receber webhooks Resend Inbound e processar campanhas automáticas.
+# Mantém Playwright/Chromium disponível porque o processamento gera PDFs oficiais.
+FROM node:20-bookworm-slim AS deps
+
+WORKDIR /app/server
+
+ENV NODE_ENV=production
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+ENV NPM_CONFIG_REGISTRY=https://registry.npmjs.org/
+ENV NPM_CONFIG_AUDIT=false
+ENV NPM_CONFIG_FUND=false
+ENV NPM_CONFIG_UPDATE_NOTIFIER=false
+ENV NPM_CONFIG_PROGRESS=false
+
+RUN npm install -g npm@10.8.2 && npm --version
+
+COPY server/package.json ./
+
+RUN npm install \
+  --omit=dev \
+  --no-package-lock \
+  --no-audit \
+  --no-fund \
+  --registry=https://registry.npmjs.org/
+
+FROM mcr.microsoft.com/playwright:v1.60.0-jammy AS runner
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV PLAYWRIGHT_SKIP_BROWSER_GC=1
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+ENV CAMPAIGN_EMAIL_WORKER_ENABLED=0
+ENV CAMPAIGN_EMAIL_WORKER_RUN_ON_START=0
+ENV WARM_ARTICLES_CACHE=0
+
+COPY --from=deps /app/server/node_modules ./server/node_modules
+COPY --from=deps /app/server/package.json ./server/package.json
+
+COPY server ./server
+COPY src/shared ./src/shared
+COPY src/styles ./src/styles
+COPY src/logo.png ./src/logo.png
+
+WORKDIR /app/server
+
+CMD ["npm", "start"]

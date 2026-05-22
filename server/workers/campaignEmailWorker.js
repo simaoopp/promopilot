@@ -17,6 +17,17 @@ export async function runCampaignEmailWorkerOnce(options = {}) {
   const config = getAutomaticCampaignConfig();
 
   if (!hasInboxConfig(config)) {
+    if (config.inbound?.resendEnabled) {
+      return {
+        ok: true,
+        skipped: true,
+        reason: "Modo Resend Inbound ativo. O processamento é acionado por webhook, não por IMAP.",
+        total: 0,
+        errors: [],
+        processed: [],
+      };
+    }
+
     throw new Error("Worker de campanhas automáticas sem configuração IMAP.");
   }
 
@@ -115,6 +126,11 @@ export function startCampaignEmailWorker() {
   }
 
   if (!hasInboxConfig(config)) {
+    if (config.inbound?.resendEnabled) {
+      console.log("[campanhas-automaticas] Resend Inbound ativo; worker IMAP permanente não será iniciado.");
+      return null;
+    }
+
     console.warn("[campanhas-automaticas] Worker ativado, mas IMAP não está configurado.");
     return null;
   }

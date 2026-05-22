@@ -12,6 +12,7 @@ import { registerHealthRoutes } from "./routes/health.js";
 import { registerArticleRoutes } from "./routes/articles.js";
 import { registerAiProdutoRoutes } from "./routes/aiProduto.js";
 import { registerAutomaticCampaignRoutes } from "./routes/automaticCampaigns.js";
+import { registerResendInboundWebhookRoute } from "./routes/resendInboundWebhook.js";
 import { registerSaasAdminRoutes } from "./routes/saasAdmin.js";
 import { isAiEnabled } from "./services/aiProdutoService.js";
 
@@ -25,6 +26,11 @@ export function createApp() {
   app.use(compression({ threshold: 1024 }));
   app.use(cors(corsOptions));
   app.options('/{*splat}', cors(corsOptions));
+
+  // Webhook público assinado do Resend. Tem de entrar antes do express.json
+  // para preservarmos o raw body usado na validação Svix.
+  registerResendInboundWebhookRoute(app);
+
   app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || "2mb" }));
   app.use("/api", apiRateLimit);
 
