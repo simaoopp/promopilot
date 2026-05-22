@@ -75,7 +75,7 @@ export function registerArticleRoutes(app, { requireAuth }) {
 
     try {
       const q = normalizeSearchValue(req.query.q || "");
-      const limit = Math.min(parsePositiveInt(req.query.limit, 50), 100);
+      const limit = Math.min(parsePositiveInt(req.query.limit, 30), 50);
       const offset = parsePositiveInt(req.query.offset, 0);
       const includeCount = String(req.query.includeCount || "1") !== "0";
 

@@ -111,6 +111,10 @@ export function getAutomaticCampaignConfig() {
       seenOnly: readBoolean("CAMPAIGN_EMAIL_SEEN_ONLY", false),
       unseenOnly: readBoolean("CAMPAIGN_EMAIL_UNSEEN_ONLY", true),
     },
+    inbound: {
+      provider: readBoolean("CAMPAIGN_RESEND_INBOUND_ENABLED", false) ? "resend" : "imap",
+      resendEnabled: readBoolean("CAMPAIGN_RESEND_INBOUND_ENABLED", false),
+    },
     emailApi: {
       provider: String(process.env.CAMPAIGN_EMAIL_PROVIDER || "resend").toLowerCase().trim(),
       apiKey: process.env.RESEND_API_KEY || process.env.CAMPAIGN_EMAIL_API_KEY || "",
