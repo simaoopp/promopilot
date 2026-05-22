@@ -72,3 +72,14 @@ RESEND_WEBHOOK_SECRET
 ## Importante
 
 O endpoint é público porque o Resend precisa chamá-lo, mas fica protegido pela assinatura Svix/Resend. Sem assinatura válida, responde `401`.
+
+## Nota crítica: webhook `email.received` não traz o corpo completo
+
+A Resend envia o webhook `email.received` com metadados do email. O corpo HTML/texto deve ser obtido pela Receiving API usando `data.email_id`. O serviço inbound faz essa chamada automaticamente com `RESEND_API_KEY`, por isso este secret é obrigatório no Cloud Run Service inbound.
+
+Se os logs mostrarem `Não foi encontrada uma tabela válida de campanha no email`, confirmar primeiro:
+
+1. O serviço tem `RESEND_API_KEY` configurada.
+2. A API key tem permissões para Receiving API.
+3. O Cloud Run Service foi redeployado depois de atualizar secrets.
+4. O email real contém a tabela no corpo HTML/texto e não apenas imagem/anexo.
