@@ -156,6 +156,8 @@ export function normalizeArtigosApiResponse(data, fallbackLimit = 100, fallbackO
     offset: Number.isFinite(data?.offset) ? data.offset : fallbackOffset,
     hasMore: Boolean(data?.hasMore),
     q: data?.q || "",
+    searchTimedOut: Boolean(data?.searchTimedOut),
+    degraded: Boolean(data?.degraded),
   };
 }
 
