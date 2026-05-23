@@ -23,6 +23,14 @@ function parseBooleanQueryFlag(value) {
   return ["1", "true", "sim", "yes", "y"].includes(normalized);
 }
 
+
+function isSupabaseStatementTimeout(error = {}) {
+  const code = String(error?.code || "").trim();
+  const message = String(error?.message || "").toLowerCase();
+
+  return code === "57014" || message.includes("statement timeout") || message.includes("canceling statement due to statement timeout");
+}
+
 function shouldReturnFullCatalog(req) {
   return parseBooleanQueryFlag(req.query.catalogo) || parseBooleanQueryFlag(req.query.all);
 }
@@ -99,8 +107,30 @@ export function registerArticleRoutes(app, { requireAuth }) {
         hasMore: result.hasMore,
         q,
         searchMs: result.searchMs ?? null,
+        searchTimedOut: Boolean(result.searchTimedOut),
+        degraded: Boolean(result.degraded),
       });
     } catch (error) {
+      if (isSupabaseStatementTimeout(error)) {
+        console.warn("GET /api/artigos excedeu o timeout; devolvendo resultado vazio controlado.", {
+          q: req.query.q || "",
+          code: error.code,
+        });
+
+        return res.json({
+          ok: true,
+          items: [],
+          artigos: [],
+          total: 0,
+          limit: Math.min(parsePositiveInt(req.query.limit, 30), 50),
+          offset: parsePositiveInt(req.query.offset, 0),
+          hasMore: false,
+          q: normalizeSearchValue(req.query.q || ""),
+          searchTimedOut: true,
+          degraded: true,
+        });
+      }
+
       console.error("Erro em GET /api/artigos:", error);
 
       return res.status(500).json({

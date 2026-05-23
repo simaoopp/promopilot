@@ -13,16 +13,15 @@ import AutomaticCampaignDetailsModal from "../components/home/AutomaticCampaignD
 import ConfirmDeleteModal from "../components/home/ConfirmDeleteModal";
 import {
   enrichArtigoWithAi,
+  warmupApi,
   mergeArtigoData,
   mergeArtigosIntoList,
   syncUpdatedArtigoToCache,
 } from "../services/artigosService";
 import {
   getCatalogoPesquisaSnapshot,
-  pesquisarNoCatalogoRemoto,
   syncUpdatedArtigoToCatalogoPesquisa,
 } from "../services/catalogoPesquisaService";
-import { normalizeArticleCompact } from "../utils/articleSearch";
 import { loadCampaignHistory, removeCampaignFromHistory } from "../utils/campaignHistory";
 import {
   loadAutomaticCampaignHistory,
@@ -37,8 +36,6 @@ import {
 } from "../utils/homepageAi";
 import "../styles/styles.css";
 
-const HOME_SUGGESTIONS_LIMIT = 8;
-
 export default function HomePage() {
   const navigate = useNavigate();
   const { profile } = useAuth();
@@ -47,8 +44,7 @@ export default function HomePage() {
   const initialCatalogo = getCatalogoPesquisaSnapshot();
 
   const [pesquisa, setPesquisa] = useState("");
-  const [pesquisaDebounced, setPesquisaDebounced] = useState("");
-  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const suggestionsLoading = false;
   const [sugestoesErro, setSugestoesErro] = useState("");
   const [sugestoes, setSugestoes] = useState([]);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
@@ -66,9 +62,9 @@ export default function HomePage() {
   const [campanhaAutomaticaPendenteRemocao, setCampanhaAutomaticaPendenteRemocao] = useState(null);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setPesquisaDebounced(pesquisa), 250);
-    return () => window.clearTimeout(timer);
-  }, [pesquisa]);
+    // Warmup leve: evita que a primeira pesquisa da homepage pague sozinha o cold start do Render.
+    warmupApi();
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -111,54 +107,13 @@ export default function HomePage() {
   }, [profile?.store]);
 
   useEffect(() => {
-    const termoCompacto = normalizeArticleCompact(pesquisaDebounced);
-
-    if (termoCompacto.length < 2) {
-      setSugestoes([]);
-      setHighlightedIndex(-1);
-      setSugestoesErro("");
-      setSuggestionsLoading(false);
-      return undefined;
-    }
-
-    const controller = new AbortController();
-    let isMounted = true;
-
-    async function syncSugestoes() {
-      setSuggestionsLoading(true);
-      setSugestoesErro("");
-
-      try {
-        const ranked = await pesquisarNoCatalogoRemoto(pesquisaDebounced, {
-          limit: HOME_SUGGESTIONS_LIMIT,
-          signal: controller.signal,
-        });
-
-        if (!isMounted) return;
-
-        setSugestoes(ranked);
-        setHighlightedIndex(ranked.length ? 0 : -1);
-      } catch (error) {
-        if (controller.signal.aborted) return;
-        console.error("Erro ao carregar sugestões da homepage.", error);
-
-        if (isMounted) {
-          setSugestoes([]);
-          setHighlightedIndex(-1);
-          setSugestoesErro("Não foi possível carregar sugestões neste momento.");
-        }
-      } finally {
-        if (isMounted) setSuggestionsLoading(false);
-      }
-    }
-
-    syncSugestoes();
-
-    return () => {
-      isMounted = false;
-      controller.abort();
-    };
-  }, [pesquisaDebounced]);
+    // A homepage deixou de consultar /api/artigos automaticamente.
+    // Pesquisa de artigos é uma ação explícita do utilizador na página Etiquetas,
+    // evitando timeouts e ruído em produção quando a homepage abre.
+    setSugestoes([]);
+    setHighlightedIndex(-1);
+    setSugestoesErro("");
+  }, [pesquisa]);
 
   const historicoPreview = useMemo(
     () => (Array.isArray(historicoCampanhas) ? historicoCampanhas : []).filter(Boolean).slice(0, 4),
@@ -277,8 +232,23 @@ export default function HomePage() {
     }
   }
 
+  function abrirPesquisaEmEtiquetas() {
+    const termo = String(pesquisa || "").trim();
+
+    if (!termo) {
+      navigate("/Etiquetas");
+      return;
+    }
+
+    navigate(`/Etiquetas?search=${encodeURIComponent(termo)}`);
+  }
+
   function abrirPrimeiraSugestao() {
-    if (!sugestoes.length) return;
+    if (!sugestoes.length) {
+      abrirPesquisaEmEtiquetas();
+      return;
+    }
+
     abrirPopupArtigo(sugestoes[highlightedIndex >= 0 ? highlightedIndex : 0]);
   }
 

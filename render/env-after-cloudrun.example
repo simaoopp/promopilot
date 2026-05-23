@@ -28,10 +28,11 @@ ADMIN_RATE_LIMIT_WINDOW_MS=900000
 ADMIN_RATE_LIMIT_MAX=60
 JSON_BODY_LIMIT=2mb
 
-# Mantém apenas se a API do Render ainda precisar de consultar dados no Supabase.
+# Render normal deve operar sem service_role. A pesquisa usa RPC autenticada com JWT do utilizador.
+# Service role fica no Cloud Run/Secret Manager para inbound, PDF, limpeza e rotas administrativas controladas.
 SUPABASE_URL=
 SUPABASE_PUBLISHABLE_KEY=
-SUPABASE_SERVICE_ROLE_KEY=
+# SUPABASE_SERVICE_ROLE_KEY=
 
 # Catálogo grande/Supabase: nunca pedir mais do que 1000 linhas por página.
 ARTICLES_CACHE_PAGE_SIZE=1000

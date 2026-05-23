@@ -56,12 +56,13 @@ export function prepareArticleForSearch(item = {}, index = 0) {
       item._id ||
       [
         item.artigo || item.artigo_interno || "",
-        item.armazem || "",
-        item.codigoBarras || item.codigo_barras || "",
-        index,
+        item.armazem || item.store || item.loja || "",
+        item.codigoBarras || item.codigo_barras || item.ean || "",
       ]
+        .filter(Boolean)
         .join("-")
-        .replace(/^-+|-+$/g, ""),
+        .replace(/^-+|-+$/g, "") ||
+      `article-${index}`,
     _searchIndex: {
       artigo,
       descricao,

@@ -1,4 +1,8 @@
 import { supabase } from "../lib/supabase";
+import {
+  isSupabaseRefreshTokenError,
+  recoverFromInvalidSupabaseSession,
+} from "../utils/supabaseAuthRecovery";
 import { readPersistedArtigos, writePersistedArtigos } from "./artigosPersistentCache";
 
 const API_BASE_URL =
@@ -8,7 +12,8 @@ const API_BASE_URL =
     : "");
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
-const SEARCH_REQUEST_TIMEOUT_MS = 8000;
+const SEARCH_REQUEST_TIMEOUT_MS = Number(process.env.REACT_APP_ARTICLES_SEARCH_TIMEOUT_MS || 15000);
+const SEARCH_SUGGESTIONS_TIMEOUT_MS = Number(process.env.REACT_APP_ARTICLES_SUGGESTIONS_TIMEOUT_MS || 18000);
 const PERSISTENT_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 const BACKGROUND_REFRESH_DEBOUNCE_MS = 60 * 1000;
 const ALL_ARTIGOS_CACHE_KEY = "all-artigos";
@@ -108,12 +113,30 @@ function createAbortSignalWithTimeout(externalSignal, timeoutMs = SEARCH_REQUEST
 }
 
 async function getAccessToken() {
+  let authResult;
+
+  try {
+    authResult = await supabase.auth.getSession();
+  } catch (error) {
+    if (isSupabaseRefreshTokenError(error)) {
+      await recoverFromInvalidSupabaseSession(supabase);
+      throw new Error("Sessão expirada. Inicia sessão novamente.");
+    }
+
+    throw error;
+  }
+
   const {
     data: { session },
     error,
-  } = await supabase.auth.getSession();
+  } = authResult;
 
   if (error) {
+    if (isSupabaseRefreshTokenError(error)) {
+      await recoverFromInvalidSupabaseSession(supabase);
+      throw new Error("Sessão expirada. Inicia sessão novamente.");
+    }
+
     throw new Error(error.message || "Não foi possível obter a sessão.");
   }
 
@@ -155,6 +178,8 @@ export function normalizeArtigosApiResponse(data, fallbackLimit = 100, fallbackO
     offset: Number.isFinite(data?.offset) ? data.offset : fallbackOffset,
     hasMore: Boolean(data?.hasMore),
     q: data?.q || "",
+    searchTimedOut: Boolean(data?.searchTimedOut),
+    degraded: Boolean(data?.degraded),
   };
 }
 
@@ -163,7 +188,8 @@ export async function fetchArtigosPage({
   limit = 100,
   offset = 0,
   signal,
-  includeCount = true,
+  includeCount = false,
+  timeoutMs = SEARCH_REQUEST_TIMEOUT_MS,
 } = {}) {
   const params = new URLSearchParams();
 
@@ -176,7 +202,7 @@ export async function fetchArtigosPage({
   }
 
   const token = await getAccessToken();
-  const requestSignal = createAbortSignalWithTimeout(signal);
+  const requestSignal = createAbortSignalWithTimeout(signal, timeoutMs);
   let response;
 
   try {
@@ -397,7 +423,7 @@ function buildSearchCacheKey({ q = "", limit = 20, offset = 0 } = {}) {
   return `search:${normalizedQ}:${limit}:${offset}`;
 }
 
-export async function searchArtigos({ q = "", limit = 20, offset = 0, signal } = {}) {
+export async function searchArtigos({ q = "", limit = 20, offset = 0, signal, timeoutMs } = {}) {
   const cacheKey = buildSearchCacheKey({ q, limit, offset });
   const cached = cacheGet(cacheKey);
 
@@ -411,9 +437,17 @@ export async function searchArtigos({ q = "", limit = 20, offset = 0, signal } =
     return pending;
   }
 
-  const request = fetchArtigosPage({ q, limit, offset, signal }).then((result) =>
-    cacheSet(cacheKey, result),
-  );
+  const normalizedQuery = String(q || "").trim();
+  const effectiveTimeoutMs = timeoutMs || (normalizedQuery.length < 5 ? SEARCH_SUGGESTIONS_TIMEOUT_MS : SEARCH_REQUEST_TIMEOUT_MS);
+
+  const request = fetchArtigosPage({
+    q,
+    limit,
+    offset,
+    signal,
+    includeCount: false,
+    timeoutMs: effectiveTimeoutMs,
+  }).then((result) => cacheSet(cacheKey, result));
 
   if (!signal) {
     setPendingRequest(cacheKey, request);
@@ -425,6 +459,20 @@ export async function searchArtigos({ q = "", limit = 20, offset = 0, signal } =
     if (!signal) {
       clearPendingRequest(cacheKey, request);
     }
+  }
+}
+
+export async function warmupApi() {
+  try {
+    const response = await fetch(buildApiUrl("/api/ping"), {
+      method: "GET",
+      cache: "no-store",
+      keepalive: true,
+    });
+
+    return response.ok;
+  } catch {
+    return false;
   }
 }
 
