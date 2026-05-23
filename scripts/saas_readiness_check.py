@@ -26,6 +26,7 @@ def main() -> int:
         "supabase/tests/rls_multitenant_permissions.template.sql",
         "supabase/tests/rls_multitenant_permissions.executable.sql",
         "supabase/migrations/20260523_saas_tenant_backfill_activation.sql",
+        "supabase/migrations/20260525_instant_article_search_index.sql",
         "supabase/staging/03_enforce_tenant_constraints_after_backfill.sql",
         "supabase/staging/README.md",
         "render/staging-env.example",
@@ -66,6 +67,13 @@ def main() -> int:
         "p_organization_id",
         "resolve_article_rpc_organization",
         "articles_org_admin_all",
+    ])
+    contains("supabase/migrations/20260525_instant_article_search_index.sql", [
+        "create table if not exists public.article_search_index",
+        "rebuild_article_search_index",
+        "article_search_index_articles_trigger",
+        "search_articles_for_labels",
+        "statement_timeout",
     ])
     contains("supabase/tests/rls_multitenant_permissions.executable.sql", [
         "RLS FAIL",

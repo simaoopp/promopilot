@@ -16,6 +16,10 @@ const ALL_ARTICLES_MAX_CONCURRENCY = Math.min(
   Math.max(1, Number(process.env.ARTICLES_CACHE_CONCURRENCY || 2)),
 );
 const FULL_CATALOG_ENABLED = String(process.env.ARTICLES_FULL_CATALOG_ENABLED || "0") === "1";
+const ARTICLE_SEARCH_CACHE_TTL_MS = Math.max(0, Number(process.env.ARTICLES_SEARCH_CACHE_TTL_MS || 60 * 1000));
+const ARTICLE_SEARCH_CACHE_MAX_ITEMS = Math.max(20, Number(process.env.ARTICLES_SEARCH_CACHE_MAX_ITEMS || 250));
+
+const articleSearchCache = new Map();
 
 const allArticlesCache = {
   value: null,
@@ -68,6 +72,42 @@ function getUserClient(accessToken = "") {
   }
 
   return client;
+}
+
+function getArticleSearchCacheKey({ q = "", limit = 0, offset = 0, organizationId = "" } = {}) {
+  return [String(organizationId || "default"), String(q || "").trim().toLowerCase(), limit, offset].join("::");
+}
+
+function getArticleSearchCache(key) {
+  if (!ARTICLE_SEARCH_CACHE_TTL_MS) return null;
+  const entry = articleSearchCache.get(key);
+  if (!entry) return null;
+
+  if (Date.now() - entry.updatedAt > ARTICLE_SEARCH_CACHE_TTL_MS) {
+    articleSearchCache.delete(key);
+    return null;
+  }
+
+  // Refresh recency for basic LRU behavior.
+  articleSearchCache.delete(key);
+  articleSearchCache.set(key, entry);
+  return entry.value;
+}
+
+function setArticleSearchCache(key, value) {
+  if (!ARTICLE_SEARCH_CACHE_TTL_MS) return value;
+
+  articleSearchCache.set(key, {
+    value,
+    updatedAt: Date.now(),
+  });
+
+  while (articleSearchCache.size > ARTICLE_SEARCH_CACHE_MAX_ITEMS) {
+    const oldestKey = articleSearchCache.keys().next().value;
+    articleSearchCache.delete(oldestKey);
+  }
+
+  return value;
 }
 
 function normalizeSearchValue(value = "") {
@@ -254,6 +294,19 @@ export async function listArticles({
   }
 
   if (!useAdmin) {
+    const cacheKey = getArticleSearchCacheKey({
+      q: normalizedQuery,
+      limit: normalizedLimit,
+      offset: normalizedOffset,
+      organizationId,
+    });
+    const cached = getArticleSearchCache(cacheKey);
+
+    if (cached) {
+      return cached;
+    }
+
+    const startedAt = Date.now();
     const client = getUserClient(accessToken);
     const { data, error } = await client.rpc("search_articles_for_labels", {
       p_query: q,
@@ -268,14 +321,16 @@ export async function listArticles({
 
     const rows = Array.isArray(data) ? data : [];
     const total = Number(rows[0]?.total_count || rows.length || 0);
-
-    return {
+    const result = {
       items: rows.map(mapRowToArticle),
       total,
       limit: normalizedLimit,
       offset: normalizedOffset,
       hasMore: normalizedOffset + rows.length < total,
+      searchMs: Date.now() - startedAt,
     };
+
+    return setArticleSearchCache(cacheKey, result);
   }
 
   const client = requireAdminClient("Pesquisa administrativa de artigos");
