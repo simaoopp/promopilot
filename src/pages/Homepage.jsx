@@ -13,6 +13,7 @@ import AutomaticCampaignDetailsModal from "../components/home/AutomaticCampaignD
 import ConfirmDeleteModal from "../components/home/ConfirmDeleteModal";
 import {
   enrichArtigoWithAi,
+  warmupApi,
   mergeArtigoData,
   mergeArtigosIntoList,
   syncUpdatedArtigoToCache,
@@ -38,6 +39,17 @@ import {
 import "../styles/styles.css";
 
 const HOME_SUGGESTIONS_LIMIT = 8;
+const HOME_SUGGESTIONS_TIMEOUT_MS = 18000;
+
+function isTransientSuggestionsError(error) {
+  const message = String(error?.message || "").toLowerCase();
+  return (
+    message.includes("demorou demasiado") ||
+    message.includes("timeout") ||
+    message.includes("aborted") ||
+    error?.name === "AbortError"
+  );
+}
 
 export default function HomePage() {
   const navigate = useNavigate();
@@ -64,6 +76,11 @@ export default function HomePage() {
   const [campanhaAutomaticaSelecionada, setCampanhaAutomaticaSelecionada] = useState(null);
   const [campanhaPendenteRemocao, setCampanhaPendenteRemocao] = useState(null);
   const [campanhaAutomaticaPendenteRemocao, setCampanhaAutomaticaPendenteRemocao] = useState(null);
+
+  useEffect(() => {
+    // Warmup leve: evita que a primeira pesquisa da homepage pague sozinha o cold start do Render.
+    warmupApi();
+  }, []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setPesquisaDebounced(pesquisa), 250);
@@ -132,6 +149,7 @@ export default function HomePage() {
         const ranked = await pesquisarNoCatalogoRemoto(pesquisaDebounced, {
           limit: HOME_SUGGESTIONS_LIMIT,
           signal: controller.signal,
+          timeoutMs: HOME_SUGGESTIONS_TIMEOUT_MS,
         });
 
         if (!isMounted) return;
@@ -140,12 +158,17 @@ export default function HomePage() {
         setHighlightedIndex(ranked.length ? 0 : -1);
       } catch (error) {
         if (controller.signal.aborted) return;
-        console.error("Erro ao carregar sugestões da homepage.", error);
+
+        if (!isTransientSuggestionsError(error)) {
+          console.warn("Sugestões da homepage indisponíveis temporariamente.", error);
+        }
 
         if (isMounted) {
           setSugestoes([]);
           setHighlightedIndex(-1);
-          setSugestoesErro("Não foi possível carregar sugestões neste momento.");
+          // Sugestões são conteúdo secundário. A homepage não deve mostrar erro visual
+          // nem bloquear a experiência quando o Render/Supabase ainda está a aquecer.
+          setSugestoesErro("");
         }
       } finally {
         if (isMounted) setSuggestionsLoading(false);
