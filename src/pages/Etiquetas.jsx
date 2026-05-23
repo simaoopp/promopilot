@@ -15,6 +15,17 @@ import { normalizarValorPvp } from "../utils/articlePrices";
 
 const LIMITE_RESULTADOS = 30;
 
+function getArticleSelectionKey(item = {}) {
+  const artigo = String(item.artigo || item.artigo_interno || "").trim();
+  const armazem = String(item.armazem || item.store || item.loja || "").trim();
+  const codigoBarras = String(item.codigoBarras || item.codigo_barras || item.ean || "").trim();
+
+  return (
+    [artigo, armazem, codigoBarras].filter(Boolean).join("|") ||
+    String(item._id || "").trim()
+  );
+}
+
 function extrairMelhorTextoOCR(texto) {
   const linhas = String(texto || "")
     .split("\n")
@@ -343,15 +354,29 @@ export default function EtiquetasCampanhaExcelPage() {
   );
 
   const artigosSelecionados = useMemo(
-    () => artigosPreparados.filter((item) => selecionados[item._id]),
-    [artigosPreparados, selecionados],
+    () => Object.values(selecionados).filter(Boolean),
+    [selecionados],
   );
 
-  function alternarSelecionado(id) {
-    setSelecionados((prev) => ({
-      ...prev,
-      [id]: !prev[id],
-    }));
+  function alternarSelecionado(item) {
+    const key = getArticleSelectionKey(item);
+
+    if (!key) {
+      setMensagem("Não foi possível identificar este artigo.");
+      return;
+    }
+
+    setSelecionados((prev) => {
+      const next = { ...prev };
+
+      if (next[key]) {
+        delete next[key];
+      } else {
+        next[key] = item;
+      }
+
+      return next;
+    });
   }
 
   function selecionarTodosVisiveis() {
@@ -364,7 +389,11 @@ export default function EtiquetasCampanhaExcelPage() {
       const next = { ...prev };
 
       resultadosVisiveis.forEach((item) => {
-        next[item._id] = true;
+        const key = getArticleSelectionKey(item);
+
+        if (key) {
+          next[key] = item;
+        }
       });
 
       return next;
@@ -423,11 +452,18 @@ export default function EtiquetasCampanhaExcelPage() {
   }
 
   function selecionarArtigoDoScan() {
-    if (!resultadoScan?.item?._id) return;
+    if (!resultadoScan?.item) return;
+
+    const key = getArticleSelectionKey(resultadoScan.item);
+
+    if (!key) {
+      setMensagem("Não foi possível identificar este artigo.");
+      return;
+    }
 
     setSelecionados((prev) => ({
       ...prev,
-      [resultadoScan.item._id]: true,
+      [key]: resultadoScan.item,
     }));
 
     setMensagem("Artigo selecionado com sucesso.");
@@ -637,20 +673,22 @@ export default function EtiquetasCampanhaExcelPage() {
                   </td>
                 </tr>
               ) : (
-                resultadosVisiveis.map((item) => (
+                resultadosVisiveis.map((item) => {
+                  const selectionKey = getArticleSelectionKey(item);
+                  const selecionado = !!selecionados[selectionKey];
+
+                  return (
                   <tr
-                    key={item._id}
-                    className={
-                      selecionados[item._id] ? "linha-selecionada" : ""
-                    }
-                    onClick={() => alternarSelecionado(item._id)}
+                    key={selectionKey || item._id}
+                    className={selecionado ? "linha-selecionada" : ""}
+                    onClick={() => alternarSelecionado(item)}
                     style={{ cursor: "pointer" }}
                   >
                     <td className="col-select">
                       <input
                         type="checkbox"
-                        checked={!!selecionados[item._id]}
-                        onChange={() => alternarSelecionado(item._id)}
+                        checked={selecionado}
+                        onChange={() => alternarSelecionado(item)}
                         onClick={(e) => e.stopPropagation()}
                         aria-label={`Selecionar artigo ${item.artigo}`}
                       />
@@ -664,7 +702,8 @@ export default function EtiquetasCampanhaExcelPage() {
                     <td>{item.armazem}</td>
                     <td>{item.stock}</td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>
