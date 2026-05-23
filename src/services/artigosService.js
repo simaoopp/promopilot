@@ -8,7 +8,7 @@ const API_BASE_URL =
     : "");
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
-const SEARCH_REQUEST_TIMEOUT_MS = 4500;
+const SEARCH_REQUEST_TIMEOUT_MS = 8000;
 const PERSISTENT_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 const BACKGROUND_REFRESH_DEBOUNCE_MS = 60 * 1000;
 const ALL_ARTIGOS_CACHE_KEY = "all-artigos";
@@ -188,7 +188,7 @@ export async function fetchArtigosPage({
     });
   } catch (error) {
     if (requestSignal.signal.aborted) {
-      throw new Error("Pesquisa de artigos demorou demasiado. Refina a pesquisa ou tenta por código/EAN.");
+      throw new Error("Pesquisa de artigos demorou demasiado. Tenta por código/EAN ou refina o termo.");
     }
     throw error;
   } finally {

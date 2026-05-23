@@ -66,7 +66,7 @@ export default function HomePage() {
   const [campanhaAutomaticaPendenteRemocao, setCampanhaAutomaticaPendenteRemocao] = useState(null);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setPesquisaDebounced(pesquisa), 120);
+    const timer = window.setTimeout(() => setPesquisaDebounced(pesquisa), 250);
     return () => window.clearTimeout(timer);
   }, [pesquisa]);
 

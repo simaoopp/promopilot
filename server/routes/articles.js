@@ -98,6 +98,7 @@ export function registerArticleRoutes(app, { requireAuth }) {
         offset: result.offset,
         hasMore: result.hasMore,
         q,
+        searchMs: result.searchMs ?? null,
       });
     } catch (error) {
       console.error("Erro em GET /api/artigos:", error);
