@@ -109,7 +109,7 @@ export const apiRateLimit = createRateLimit({
   label: "api",
   windowMs: readNumber("API_RATE_LIMIT_WINDOW_MS", 15 * 60 * 1000),
   max: readNumber("API_RATE_LIMIT_MAX", 600),
-  skip: (req) => normalizePath(req.path) === "/health" || normalizePath(req.path) === "/api/health",
+  skip: (req) => normalizePath(req.path) === "/health" || normalizePath(req.path) === "/api/health" || normalizePath(req.path) === "/ping" || normalizePath(req.path) === "/api/ping",
 });
 
 export const adminActionRateLimit = createRateLimit({

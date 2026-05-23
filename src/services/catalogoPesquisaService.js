@@ -72,14 +72,14 @@ export function pesquisarNoCatalogoPreparado(rawQuery = "", { limit = Infinity }
   return Number.isFinite(limit) ? deduped.slice(0, limit) : deduped;
 }
 
-export async function pesquisarNoCatalogoRemoto(rawQuery = "", { limit = 20, offset = 0, signal } = {}) {
+export async function pesquisarNoCatalogoRemoto(rawQuery = "", { limit = 20, offset = 0, signal, timeoutMs } = {}) {
   const termo = String(rawQuery || "").trim();
 
   if (termo.length < 2) {
     return [];
   }
 
-  const result = await searchArtigos({ q: termo, limit, offset, signal });
+  const result = await searchArtigos({ q: termo, limit, offset, signal, timeoutMs });
   const prepared = prepareArticlesForSearch(result?.items || []);
 
   // Mantemos uma pequena cache de resultados recentes apenas para seleção/scan,
