@@ -648,27 +648,25 @@ export default function EtiquetasCampanhaExcelPage() {
                 <th scope="col">PVP2</th>
                 <th scope="col">PVP3</th>
                 <th scope="col">Cód. Barras</th>
-                <th scope="col">Armazém</th>
-                <th scope="col">Stock</th>
               </tr>
             </thead>
 
             <tbody>
               {artigosLoading ? (
                 <tr>
-                  <td colSpan={9} className="empty-cell">
+                  <td colSpan={7} className="empty-cell">
                     A carregar catálogo de artigos...
                   </td>
                 </tr>
               ) : pesquisaDebounced.trim().length < 2 ? (
                 <tr>
-                  <td colSpan={9} className="empty-cell">
+                  <td colSpan={7} className="empty-cell">
                     Escreve pelo menos 2 caracteres para pesquisar.
                   </td>
                 </tr>
               ) : resultadosVisiveis.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="empty-cell">
+                  <td colSpan={7} className="empty-cell">
                     Nenhum artigo encontrado.
                   </td>
                 </tr>
@@ -699,8 +697,6 @@ export default function EtiquetasCampanhaExcelPage() {
                     <td>{normalizarValorPvp(item.pvp2)}</td>
                     <td>{normalizarValorPvp(item.pvp3)}</td>
                     <td>{item.codigoBarras}</td>
-                    <td>{item.armazem}</td>
-                    <td>{item.stock}</td>
                   </tr>
                   );
                 })
@@ -836,12 +832,6 @@ export default function EtiquetasCampanhaExcelPage() {
                     </p>
                     <p>
                       <strong>PVP3:</strong> {normalizarValorPvp(resultadoScan.item.pvp3)}
-                    </p>
-                    <p>
-                      <strong>Armazém:</strong> {resultadoScan.item.armazem}
-                    </p>
-                    <p>
-                      <strong>Stock:</strong> {resultadoScan.item.stock}
                     </p>
                   </div>
 

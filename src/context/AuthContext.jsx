@@ -14,6 +14,11 @@ import {
   isOnboardingRequired,
   profileRequiresPasswordChange,
 } from "../utils/accessControl";
+import {
+  clearSupabaseAuthStorage,
+  isSupabaseRefreshTokenError,
+  recoverFromInvalidSupabaseSession,
+} from "../utils/supabaseAuthRecovery";
 
 const AuthContext = createContext(null);
 
@@ -76,16 +81,11 @@ export function AuthProvider({ children }) {
         if (!active) return;
 
         if (error) {
-          console.error("Erro ao buscar sessão:", error.message);
-
-          if (/refresh token/i.test(error.message || "")) {
-            await supabase.auth.signOut({ scope: "local" }).catch(() => {});
-
-            if (typeof window !== "undefined") {
-              Object.keys(window.localStorage)
-                .filter((key) => key.startsWith("sb-"))
-                .forEach((key) => window.localStorage.removeItem(key));
-            }
+          if (isSupabaseRefreshTokenError(error)) {
+            console.warn("Sessão local Supabase inválida/removida. A limpar sessão local.");
+            await recoverFromInvalidSupabaseSession(supabase);
+          } else {
+            console.error("Erro ao buscar sessão:", error.message);
           }
 
           setUser(null);
@@ -112,7 +112,14 @@ export function AuthProvider({ children }) {
         }
       } catch (error) {
         if (!active) return;
-        console.error("Erro inesperado ao carregar sessão:", error);
+
+        if (isSupabaseRefreshTokenError(error)) {
+          console.warn("Sessão local Supabase expirada ou revogada. A limpar sessão local.");
+          await recoverFromInvalidSupabaseSession(supabase);
+        } else {
+          console.error("Erro inesperado ao carregar sessão:", error);
+        }
+
         setUser(null);
         setProfile(null);
         lastLoadedProfileUserId.current = null;
@@ -166,7 +173,11 @@ export function AuthProvider({ children }) {
   const signOut = useCallback(async () => {
     const { error } = await supabase.auth.signOut();
 
-    if (error) throw error;
+    if (error && !isSupabaseRefreshTokenError(error)) throw error;
+
+    if (error) {
+      clearSupabaseAuthStorage();
+    }
 
     setUser(null);
     setProfile(null);

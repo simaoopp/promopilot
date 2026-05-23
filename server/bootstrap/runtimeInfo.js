@@ -17,7 +17,7 @@ export function warnMissingRuntimeConfig() {
 
   if (!hasSupabaseAdminConfig()) {
     console.warn(
-      "[BOOT] SUPABASE_SERVICE_ROLE_KEY em falta. A base de dados de artigos fica indisponível.",
+      "[BOOT] SUPABASE_SERVICE_ROLE_KEY em falta. Rotas administrativas e processos automáticos que usam service_role ficam indisponíveis; a pesquisa normal de artigos deve continuar via RPC autenticada.",
     );
   }
 }

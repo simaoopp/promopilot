@@ -1,4 +1,8 @@
 import { supabase } from "../lib/supabase";
+import {
+  isSupabaseRefreshTokenError,
+  recoverFromInvalidSupabaseSession,
+} from "../utils/supabaseAuthRecovery";
 import { readPersistedArtigos, writePersistedArtigos } from "./artigosPersistentCache";
 
 const API_BASE_URL =
@@ -109,12 +113,30 @@ function createAbortSignalWithTimeout(externalSignal, timeoutMs = SEARCH_REQUEST
 }
 
 async function getAccessToken() {
+  let authResult;
+
+  try {
+    authResult = await supabase.auth.getSession();
+  } catch (error) {
+    if (isSupabaseRefreshTokenError(error)) {
+      await recoverFromInvalidSupabaseSession(supabase);
+      throw new Error("Sessão expirada. Inicia sessão novamente.");
+    }
+
+    throw error;
+  }
+
   const {
     data: { session },
     error,
-  } = await supabase.auth.getSession();
+  } = authResult;
 
   if (error) {
+    if (isSupabaseRefreshTokenError(error)) {
+      await recoverFromInvalidSupabaseSession(supabase);
+      throw new Error("Sessão expirada. Inicia sessão novamente.");
+    }
+
     throw new Error(error.message || "Não foi possível obter a sessão.");
   }
 
