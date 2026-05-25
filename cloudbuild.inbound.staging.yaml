@@ -11,7 +11,7 @@ substitutions:
   # Obrigatório no trigger ou no submit manual. Deixar vazio apenas para primeiro deploy técnico.
   _DEFAULT_ORGANIZATION_ID: ""
   # Usar endereço/domínio validado no Resend staging quando existir.
-  _EMAIL_FROM_ADDRESS: "Etiquetas Promo Staging <onboarding@resend.dev>"
+  _EMAIL_FROM_ADDRESS: PromoPilot Staging <staging@send.promopilot.pt>
   _EMAIL_REPLY_TO: "simaopereira308@gmail.com"
 
 steps:
