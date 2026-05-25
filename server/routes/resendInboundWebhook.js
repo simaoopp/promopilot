@@ -8,8 +8,19 @@ import {
   verifyResendWebhookSignature,
 } from "../services/automatic-campaigns/resendInboundService.js";
 
+function getStoreProcessingErrors(result = {}) {
+  return (result.results || [])
+    .filter((item) => item?.status === "error" || item?.error)
+    .map((item) => ({
+      storeKey: item?.storeKey || "",
+      store: item?.store || "",
+      totalItems: item?.totalItems || 0,
+      error: item?.error || item?.row?.error_message || "Erro desconhecido",
+    }));
+}
+
 function countStoreErrors(result = {}) {
-  return (result.results || []).filter((item) => item?.status === "error" || item?.error).length;
+  return getStoreProcessingErrors(result).length;
 }
 
 export function registerResendInboundWebhookRoute(app) {
@@ -56,11 +67,26 @@ export function registerResendInboundWebhookRoute(app) {
           organizationId: campaignConfig.defaultOrganizationId || null,
         });
 
+        const storeProcessingErrors = getStoreProcessingErrors(result);
+
+        if (storeProcessingErrors.length > 0) {
+          console.error(
+            "[resend-inbound] Store processing errors:",
+            JSON.stringify({
+              messageId: result?.email?.messageId || payload?.email?.messageId || "",
+              subject: result?.email?.subject || payload?.email?.subject || "",
+              organizationId: campaignConfig.defaultOrganizationId || null,
+              storeErrors: storeProcessingErrors.length,
+              errors: storeProcessingErrors,
+            }),
+          );
+        }
+
         return res.status(202).json({
           ok: true,
           provider: "resend-inbound",
           cleanup,
-          storeErrors: countStoreErrors(result),
+          storeErrors: storeProcessingErrors.length,
           result,
         });
       } catch (error) {
