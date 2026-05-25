@@ -7,7 +7,7 @@ substitutions:
   _REPOSITORY: etiquetas-prom
   _IMAGE: email-inbound-service-staging
   _SERVICE: etiquetas-prom-inbound-webhook-staging
-  _RUNTIME_SERVICE_ACCOUNT: cloud-run-campaign-worker-staging@etiquetas-prom-prod.iam.gserviceaccount.com
+  _RUNTIME_SERVICE_ACCOUNT: cr-runtime-staging@etiquetas-prom-staging-2026.iam.gserviceaccount.com
   # Obrigatório no trigger ou no submit manual. Deixar vazio apenas para primeiro deploy técnico.
   _DEFAULT_ORGANIZATION_ID: ""
   # Usar endereço/domínio validado no Resend staging quando existir.
