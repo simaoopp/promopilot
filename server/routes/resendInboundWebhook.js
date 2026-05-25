@@ -23,6 +23,17 @@ function countStoreErrors(result = {}) {
   return getStoreProcessingErrors(result).length;
 }
 
+function isNonRetryableInboundError(error) {
+  const message = error?.message || String(error || "");
+
+  return [
+    "Não foi encontrada uma tabela válida de campanha no email",
+    "Nao foi encontrada uma tabela valida de campanha no email",
+    "tabela válida de campanha",
+    "tabela valida de campanha",
+  ].some((pattern) => message.includes(pattern));
+}
+
 export function registerResendInboundWebhookRoute(app) {
   app.post(
     "/api/webhooks/resend/inbound",
@@ -45,11 +56,18 @@ export function registerResendInboundWebhookRoute(app) {
         return res.status(401).json({ ok: false, error: signature.reason || "Assinatura inválida." });
       }
 
+      let payload = null;
+
       try {
-        const payload = await parseResendInboundPayload(req.body, { config: inboundConfig });
+        payload = await parseResendInboundPayload(req.body, { config: inboundConfig });
 
         if (payload.ignored) {
-          return res.status(202).json({ ok: true, ignored: true, eventType: payload.eventType, reason: payload.reason });
+          return res.status(202).json({
+            ok: true,
+            ignored: true,
+            eventType: payload.eventType,
+            reason: payload.reason,
+          });
         }
 
         let cleanup = null;
@@ -86,14 +104,37 @@ export function registerResendInboundWebhookRoute(app) {
           ok: true,
           provider: "resend-inbound",
           cleanup,
-          storeErrors: storeProcessingErrors.length,
+          storeErrors: countStoreErrors(result),
           result,
         });
       } catch (error) {
+        const errorMessage = error?.message || "Erro ao processar webhook Resend inbound.";
+
+        if (isNonRetryableInboundError(error)) {
+          console.warn(
+            "[resend-inbound] Ignored invalid campaign email:",
+            JSON.stringify({
+              messageId: payload?.email?.messageId || "",
+              subject: payload?.email?.subject || "",
+              from: payload?.email?.from || "",
+              organizationId: campaignConfig.defaultOrganizationId || null,
+              reason: errorMessage,
+            }),
+          );
+
+          return res.status(202).json({
+            ok: true,
+            ignored: true,
+            provider: "resend-inbound",
+            reason: errorMessage,
+          });
+        }
+
         console.error("[resend-inbound] Erro ao processar webhook:", error);
+
         return res.status(500).json({
           ok: false,
-          error: error?.message || "Erro ao processar webhook Resend inbound.",
+          error: errorMessage,
         });
       }
     },
