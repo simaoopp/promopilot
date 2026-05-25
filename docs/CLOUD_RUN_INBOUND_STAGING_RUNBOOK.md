@@ -1,8 +1,22 @@
 # Runbook sénior — Cloud Run Inbound Staging
 
-## Objetivo
+## Estado validado
 
-Criar um staging real para o webhook Resend Inbound, sem tocar em produção e sem reutilizar secrets de produção.
+Este runbook documenta o staging isolado do webhook Resend Inbound.
+
+Ambiente oficial:
+
+```text
+Projeto Google Cloud: etiquetas-prom-staging-2026
+Região: europe-southwest1
+Branch: staging
+Cloud Build Trigger: etiquetas-prom-inbound-staging
+Cloud Build service account: cb-deploy-staging@etiquetas-prom-staging-2026.iam.gserviceaccount.com
+Cloud Run Service: etiquetas-prom-inbound-webhook-staging
+Cloud Run runtime service account: cr-runtime-staging@etiquetas-prom-staging-2026.iam.gserviceaccount.com
+Supabase: staging
+Resend: mesma conta, webhook staging separado
+```
 
 Fluxo correto:
 
@@ -17,41 +31,84 @@ branch staging
 
 Não confundir com `cloudbuild.staging.yaml`: esse ficheiro faz deploy de um Cloud Run Job/worker, não de um serviço HTTP para a Resend.
 
-## 1. Secrets obrigatórios no Secret Manager
+---
 
-Criar estes secrets no projeto Google Cloud usado para staging:
+## 1. Regras de segurança
 
-```bash
-gcloud secrets create supabase-url-staging --replication-policy=automatic
-gcloud secrets create supabase-publishable-key-staging --replication-policy=automatic
-gcloud secrets create supabase-service-role-key-staging --replication-policy=automatic
-gcloud secrets create resend-api-key-staging --replication-policy=automatic
-gcloud secrets create resend-webhook-secret-staging --replication-policy=automatic
-gcloud secrets create campaign-store-email-angra-staging --replication-policy=automatic
-gcloud secrets create campaign-store-email-praia-staging --replication-policy=automatic
-gcloud secrets create campaign-store-email-valados-staging --replication-policy=automatic
+```text
+main -> produção
+staging -> Google Cloud staging
 ```
 
-Adicionar os valores:
+Nunca usar secrets, service accounts ou triggers de produção no projeto staging.
 
-```bash
-printf '%s' '<SUPABASE_URL_STAGING>' | gcloud secrets versions add supabase-url-staging --data-file=-
-printf '%s' '<SUPABASE_PUBLISHABLE_KEY_STAGING>' | gcloud secrets versions add supabase-publishable-key-staging --data-file=-
-printf '%s' '<SUPABASE_SERVICE_ROLE_KEY_STAGING>' | gcloud secrets versions add supabase-service-role-key-staging --data-file=-
-printf '%s' '<RESEND_API_KEY_STAGING>' | gcloud secrets versions add resend-api-key-staging --data-file=-
-printf '%s' '<RESEND_WEBHOOK_SECRET_STAGING>' | gcloud secrets versions add resend-webhook-secret-staging --data-file=-
-printf '%s' '<EMAIL_TESTE>' | gcloud secrets versions add campaign-store-email-angra-staging --data-file=-
-printf '%s' '<EMAIL_TESTE>' | gcloud secrets versions add campaign-store-email-praia-staging --data-file=-
-printf '%s' '<EMAIL_TESTE>' | gcloud secrets versions add campaign-store-email-valados-staging --data-file=-
+O projeto staging oficial é:
+
+```text
+etiquetas-prom-staging-2026
 ```
 
-## 2. Permissões da service account runtime
+O projeto `etiquetas-prom-staging`, se existir, não deve ter triggers ativos para este fluxo.
 
-A service account do Cloud Run staging precisa ler os secrets:
+---
+
+## 2. Secrets obrigatórios no Secret Manager
+
+Secrets esperados no projeto `etiquetas-prom-staging-2026`:
+
+```text
+supabase-url-staging
+supabase-publishable-key-staging
+supabase-service-role-key-staging
+resend-api-key-staging
+resend-webhook-secret-staging
+campaign-store-email-angra-staging
+campaign-store-email-praia-staging
+campaign-store-email-valados-staging
+```
+
+Criar, se necessário:
 
 ```bash
-PROJECT_ID=etiquetas-prom-prod
-SA="cloud-run-campaign-worker-staging@${PROJECT_ID}.iam.gserviceaccount.com"
+PROJECT_ID=etiquetas-prom-staging-2026
+
+for SECRET in \
+  supabase-url-staging \
+  supabase-publishable-key-staging \
+  supabase-service-role-key-staging \
+  resend-api-key-staging \
+  resend-webhook-secret-staging \
+  campaign-store-email-angra-staging \
+  campaign-store-email-praia-staging \
+  campaign-store-email-valados-staging; do
+  gcloud secrets create "$SECRET" \
+    --replication-policy=automatic \
+    --project="$PROJECT_ID" || true
+done
+```
+
+Adicionar ou rodar valores:
+
+```bash
+printf '%s' '<SUPABASE_URL_STAGING>' | gcloud secrets versions add supabase-url-staging --data-file=- --project=etiquetas-prom-staging-2026
+printf '%s' '<SUPABASE_PUBLISHABLE_KEY_STAGING>' | gcloud secrets versions add supabase-publishable-key-staging --data-file=- --project=etiquetas-prom-staging-2026
+printf '%s' '<SUPABASE_SERVICE_ROLE_KEY_STAGING>' | gcloud secrets versions add supabase-service-role-key-staging --data-file=- --project=etiquetas-prom-staging-2026
+printf '%s' '<RESEND_API_KEY_STAGING>' | gcloud secrets versions add resend-api-key-staging --data-file=- --project=etiquetas-prom-staging-2026
+printf '%s' '<RESEND_WEBHOOK_SECRET_STAGING>' | gcloud secrets versions add resend-webhook-secret-staging --data-file=- --project=etiquetas-prom-staging-2026
+printf '%s' '<EMAIL_TESTE>' | gcloud secrets versions add campaign-store-email-angra-staging --data-file=- --project=etiquetas-prom-staging-2026
+printf '%s' '<EMAIL_TESTE>' | gcloud secrets versions add campaign-store-email-praia-staging --data-file=- --project=etiquetas-prom-staging-2026
+printf '%s' '<EMAIL_TESTE>' | gcloud secrets versions add campaign-store-email-valados-staging --data-file=- --project=etiquetas-prom-staging-2026
+```
+
+---
+
+## 3. Permissões da service account runtime
+
+A service account runtime do Cloud Run staging precisa ler os secrets:
+
+```bash
+PROJECT_ID=etiquetas-prom-staging-2026
+RUNTIME_SA="cr-runtime-staging@${PROJECT_ID}.iam.gserviceaccount.com"
 
 for SECRET in \
   supabase-url-staging \
@@ -63,61 +120,98 @@ for SECRET in \
   campaign-store-email-praia-staging \
   campaign-store-email-valados-staging; do
   gcloud secrets add-iam-policy-binding "$SECRET" \
-    --member="serviceAccount:${SA}" \
-    --role='roles/secretmanager.secretAccessor'
+    --member="serviceAccount:${RUNTIME_SA}" \
+    --role="roles/secretmanager.secretAccessor" \
+    --project="$PROJECT_ID"
 done
 ```
 
-## 3. Artifact Registry
+---
 
-Se o repositório ainda não existir:
+## 4. Artifact Registry
+
+Repositório esperado:
+
+```text
+europe-southwest1-docker.pkg.dev/etiquetas-prom-staging-2026/etiquetas-prom
+```
+
+Criar, se necessário:
 
 ```bash
 gcloud artifacts repositories create etiquetas-prom \
   --repository-format=docker \
-  --location=europe-southwest1
+  --location=europe-southwest1 \
+  --description="Docker images for Etiquetas Prom staging" \
+  --project=etiquetas-prom-staging-2026 || true
 ```
 
-## 4. Deploy manual de validação
+---
 
-Usar o `organization_id` real do Supabase staging:
+## 5. Cloud Build Trigger staging
 
-```bash
-gcloud builds submit \
-  --config=cloudbuild.inbound.staging.yaml \
-  --substitutions=_DEFAULT_ORGANIZATION_ID='<ORG_ID_STAGING>'
-```
-
-Por segurança, o primeiro deploy deixa:
-
-```text
-CAMPAIGN_EMAIL_SEND_ENABLED=0
-```
-
-Assim o webhook processa e gera registos/PDFs, mas não envia emails reais.
-
-## 5. Criar Cloud Build Trigger staging
-
-Configuração recomendada:
+Configuração final:
 
 ```text
 Nome: etiquetas-prom-inbound-staging
+Região: europe-southwest1
 Branch: ^staging$
 Build config: cloudbuild.inbound.staging.yaml
-Substitution obrigatória: _DEFAULT_ORGANIZATION_ID=<ORG_ID_STAGING>
+Service account: cb-deploy-staging@etiquetas-prom-staging-2026.iam.gserviceaccount.com
+Substitution obrigatória:
+_DEFAULT_ORGANIZATION_ID=7b787773-e003-4efe-8e20-4a4439dd9e78
 ```
 
-Não usar `cloudbuild.inbound.yaml` no trigger de staging. Esse ficheiro continua reservado para produção.
-
-## 6. Validar Cloud Run staging
-
-Executar:
+Validar:
 
 ```bash
-PROJECT_ID=etiquetas-prom-prod \
-REGION=europe-southwest1 \
-SERVICE=etiquetas-prom-inbound-webhook-staging \
-./scripts/verify-cloudrun-inbound-staging.sh
+gcloud builds triggers list \
+  --project=etiquetas-prom-staging-2026 \
+  --region=europe-southwest1 \
+  --format="table(name,filename,serviceAccount)"
+```
+
+O projeto errado não deve ter trigger ativo:
+
+```bash
+gcloud builds triggers list \
+  --project=etiquetas-prom-staging \
+  --region=europe-southwest1 \
+  --format="table(id,name,disabled,filename)"
+```
+
+---
+
+## 6. Cloud Run Service staging
+
+Serviço esperado:
+
+```text
+etiquetas-prom-inbound-webhook-staging
+```
+
+Validar:
+
+```bash
+gcloud run services describe etiquetas-prom-inbound-webhook-staging \
+  --region=europe-southwest1 \
+  --project=etiquetas-prom-staging-2026 \
+  --format="value(spec.template.spec.serviceAccountName)"
+```
+
+Resultado esperado:
+
+```text
+cr-runtime-staging@etiquetas-prom-staging-2026.iam.gserviceaccount.com
+```
+
+Validar envs:
+
+```bash
+gcloud run services describe etiquetas-prom-inbound-webhook-staging \
+  --region=europe-southwest1 \
+  --project=etiquetas-prom-staging-2026 \
+  --format="yaml(spec.template.spec.containers[0].env)"
 ```
 
 Checklist esperada:
@@ -125,59 +219,109 @@ Checklist esperada:
 ```text
 NODE_ENV=staging
 CAMPAIGN_RESEND_INBOUND_ENABLED=1
-CAMPAIGN_EMAIL_SEND_ENABLED=0
+CAMPAIGN_EMAIL_SEND_ENABLED=0 em modo seguro
 AUTOMATIC_CAMPAIGN_BUCKET=automatic-campaign-pdfs-staging
+CAMPAIGN_DEFAULT_ORGANIZATION_ID=7b787773-e003-4efe-8e20-4a4439dd9e78
 Secrets com sufixo -staging
 Sem secrets de produção
 ```
 
-## 7. Configurar webhook na Resend staging
+---
 
-Usar o URL devolvido pelo script:
+## 7. Webhook Resend staging
+
+URL atual do serviço:
+
+```bash
+gcloud run services describe etiquetas-prom-inbound-webhook-staging \
+  --region=europe-southwest1 \
+  --project=etiquetas-prom-staging-2026 \
+  --format="value(status.url)"
+```
+
+Endpoint para a Resend:
 
 ```text
 https://<cloud-run-url>/api/webhooks/resend/inbound
 ```
 
-Copiar o signing secret desse webhook para:
+Evento:
+
+```text
+email.received
+```
+
+Depois de criar/alterar o webhook staging na Resend, copiar o signing secret desse webhook para:
 
 ```text
 resend-webhook-secret-staging
 ```
 
-## 8. Primeiro teste funcional
+Exemplo:
 
-Enviar um email de campanha de teste para o inbound da Resend staging.
+```bash
+printf '%s' '<RESEND_WEBHOOK_SECRET_STAGING>' | \
+gcloud secrets versions add resend-webhook-secret-staging \
+  --data-file=- \
+  --project=etiquetas-prom-staging-2026
+```
 
-Validar:
+Depois correr novamente o trigger de staging para redeploy.
+
+---
+
+## 8. Teste funcional seguro
+
+Com `CAMPAIGN_EMAIL_SEND_ENABLED=0`:
 
 ```text
-Cloud Run logs sem 500
-Webhook responde 202
+Resend staging -> Cloud Run staging -> Supabase staging -> PDF/storage
+```
+
+Validações:
+
+```text
+Cloud Run responde 202
+Sem erro 500 nos logs
 Registo criado no Supabase staging
-PDF criado no bucket automatic-campaign-pdfs-staging
-Nenhum email enviado porque CAMPAIGN_EMAIL_SEND_ENABLED=0
+Campanha automática associada ao organization_id correto
+PDF criado no bucket automatic-campaign-pdfs-staging, se o email tiver dados válidos
+Nenhum email enviado
 ```
 
-## 9. Segundo teste com envio controlado
+Logs:
 
-Quando o primeiro teste passar, alterar temporariamente para:
+```bash
+gcloud run services logs read etiquetas-prom-inbound-webhook-staging \
+  --region=europe-southwest1 \
+  --project=etiquetas-prom-staging-2026 \
+  --limit=300
+```
+
+---
+
+## 9. Teste com envio controlado
+
+Só usar `CAMPAIGN_EMAIL_SEND_ENABLED=1` quando:
 
 ```text
-CAMPAIGN_EMAIL_SEND_ENABLED=1
+campaign-store-email-angra-staging
+campaign-store-email-praia-staging
+campaign-store-email-valados-staging
 ```
 
-Apenas se os secrets `campaign-store-email-*-staging` apontarem para emails de teste.
+apontam para emails de teste.
 
-## 10. Critério de conclusão
-
-Staging só fica aprovado quando:
+Resultado esperado se os três apontam para o mesmo email de teste:
 
 ```text
-1. main continua intocado
-2. trigger staging só observa branch staging
-3. Cloud Run Service staging usa apenas Supabase/Resend/secrets staging
-4. webhook Resend staging gera PDF sem erro
-5. envio real só acontece para emails de teste
-6. produção não recebe alterações experimentais
+3 emails recebidos, um por loja
 ```
+
+Depois do teste, voltar a `CAMPAIGN_EMAIL_SEND_ENABLED=0` no YAML e fazer deploy pelo trigger para evitar drift.
+
+---
+
+## 10. Limpeza após validação
+
+Ver `docs/STAGING_CLEANUP_CHECKLIST.md`.
