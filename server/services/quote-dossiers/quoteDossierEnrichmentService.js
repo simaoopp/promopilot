@@ -1,3 +1,4 @@
+import { enrichItemFromVerifiedWeb } from "./quoteDossierWebEnrichmentService.js";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -261,13 +262,28 @@ function findCuratedProduct(item = {}) {
   return null;
 }
 
-export function enrichQuoteDossier(dossier = {}) {
+export async function enrichQuoteDossier(dossier = {}) {
   const items = Array.isArray(dossier.items) ? dossier.items : [];
 
-  const enrichedItems = items.map((item) => {
+  const enrichedItems = [];
+
+  for (const item of items) {
     const curated = findCuratedProduct(item);
-    return mergeItemWithCurated(item, curated);
-  });
+
+    if (curated) {
+      enrichedItems.push(mergeItemWithCurated(item, curated));
+      continue;
+    }
+
+    const webItem = await enrichItemFromVerifiedWeb(item);
+
+    if (webItem) {
+      enrichedItems.push(webItem);
+      continue;
+    }
+
+    enrichedItems.push(mergeItemWithCurated(item, null));
+  }
 
   const matchedCount = enrichedItems.filter((item) => item.enrichment?.status === "matched").length;
 
@@ -278,7 +294,7 @@ export function enrichQuoteDossier(dossier = {}) {
       total: enrichedItems.length,
       matched: matchedCount,
       generic: enrichedItems.length - matchedCount,
-      mode: "curated_catalog_v1",
+      mode: String(process.env.QUOTE_DOSSIER_WEB_ENRICHMENT || "").toLowerCase() === "1" ? "curated_catalog_plus_verified_web_v2" : "curated_catalog_v1",
     },
   };
 }
