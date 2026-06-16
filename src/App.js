@@ -12,6 +12,7 @@ const EtiquetasExcelPage = lazy(() => import("./pages/EtiquetasCampanhaExcel"));
 const Etiquetas = lazy(() => import("./pages/Etiquetas"));
 const Homepage = lazy(() => import("./pages/Homepage"));
 const Login = lazy(() => import("./pages/Login"));
+const OrcamentosDossiersPage = lazy(() => import("./pages/OrcamentosDossiers"));
 
 function PageFallback() {
   return <div className="splash-screen"><img src={logo} alt="Expert" className="splash-logo" /><div className="splash-loader"></div></div>;
@@ -34,6 +35,7 @@ export default function App() {
         <Route path="/EtiquetasCampanha" element={<ProtectedRoute><EtiquetasPage /></ProtectedRoute>} />
         <Route path="/Etiquetas" element={<ProtectedRoute><Etiquetas /></ProtectedRoute>} />
         <Route path="/EtiquetasCampanhaExcel" element={<ProtectedRoute><EtiquetasExcelPage /></ProtectedRoute>} />
+        <Route path="/OrcamentosDossiers" element={<ProtectedRoute><OrcamentosDossiersPage /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to={rotaInicial} replace />} />
       </Routes>
     </Suspense>

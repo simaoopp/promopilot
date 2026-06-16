@@ -250,6 +250,14 @@ export default function Sidebar({
             <span>Início</span>
           </Link>
 
+          <Link
+            to="/OrcamentosDossiers"
+            className={`sidebar-link ${isActive("/OrcamentosDossiers") ? "active" : ""}`}
+            onClick={fecharTudo}
+          >
+            <span>Orçamentos</span>
+          </Link>
+
           <button
             type="button"
             className="sidebar-link"

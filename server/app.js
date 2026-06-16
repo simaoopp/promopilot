@@ -12,6 +12,7 @@ import { registerHealthRoutes } from "./routes/health.js";
 import { registerArticleRoutes } from "./routes/articles.js";
 import { registerAiProdutoRoutes } from "./routes/aiProduto.js";
 import { registerAutomaticCampaignRoutes } from "./routes/automaticCampaigns.js";
+import { registerQuoteDossierRoutes } from "./routes/quoteDossiers.js";
 import { registerResendInboundWebhookRoute } from "./routes/resendInboundWebhook.js";
 import { registerSaasAdminRoutes } from "./routes/saasAdmin.js";
 import { isAiEnabled } from "./services/aiProdutoService.js";
@@ -31,7 +32,7 @@ export function createApp() {
   // para preservarmos o raw body usado na validação Svix.
   registerResendInboundWebhookRoute(app);
 
-  app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || "2mb" }));
+  app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || "20mb" }));
   app.use("/api", apiRateLimit);
 
   registerHealthRoutes(app, { aiEnabled: isAiEnabled() });
@@ -44,6 +45,7 @@ export function createApp() {
     aiEnabled: isAiEnabled(),
   });
   registerAutomaticCampaignRoutes(app, { requireAuth: authStack, requireAdmin });
+  registerQuoteDossierRoutes(app, { requireAuth: authStack });
   registerSaasAdminRoutes(app, { requireAuth: authStack, requireAdmin });
 
   app.use(notFoundHandler);
