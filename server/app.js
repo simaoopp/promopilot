@@ -32,7 +32,8 @@ export function createApp() {
   // para preservarmos o raw body usado na validação Svix.
   registerResendInboundWebhookRoute(app);
 
-  app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || "20mb" }));
+  app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || "80mb" }));
+  app.use(express.urlencoded({ extended: true, limit: process.env.URLENCODED_BODY_LIMIT || "80mb" }));
   app.use("/api", apiRateLimit);
 
   registerHealthRoutes(app, { aiEnabled: isAiEnabled() });

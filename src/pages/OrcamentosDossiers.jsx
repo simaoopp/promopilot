@@ -12,7 +12,14 @@ function arrayBufferToBase64(buffer) {
   return window.btoa(binary);
 }
 
-async function fileToBase64(file) {
+async const MAX_QUOTE_PDF_SIZE_BYTES = 45 * 1024 * 1024;
+
+function formatFileSize(bytes = 0) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 MB";
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function fileToBase64(file) {
   const buffer = await file.arrayBuffer();
   return arrayBufferToBase64(buffer);
 }

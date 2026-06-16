@@ -30,7 +30,7 @@ export function registerQuoteDossierRoutes(app, { requireAuth }) {
   app.post("/api/orcamentos-dossiers/extract", requireAuth, async (req, res) => {
     try {
       const filename = requireString(req.body?.filename || "orcamento.pdf", "filename", { min: 1, max: 220 });
-      const base64Pdf = requireString(req.body?.pdfBase64, "pdfBase64", { min: 20, max: 30_000_000 });
+      const base64Pdf = requireString(req.body?.pdfBase64, "pdfBase64", { min: 20, max: 90_000_000 });
 
       const extracted = await extractTextFromPdfBase64(base64Pdf);
       const dossier = parseQuoteDossierFromText(extracted.text, { filename });
