@@ -1,7 +1,7 @@
-import { enrichItemFromVerifiedWeb } from "./quoteDossierWebEnrichmentService.js";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { enrichItemFromVerifiedWeb } from "./quoteDossierWebEnrichmentService.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -264,7 +264,6 @@ function findCuratedProduct(item = {}) {
 
 export async function enrichQuoteDossier(dossier = {}) {
   const items = Array.isArray(dossier.items) ? dossier.items : [];
-
   const enrichedItems = [];
 
   for (const item of items) {
@@ -286,6 +285,7 @@ export async function enrichQuoteDossier(dossier = {}) {
   }
 
   const matchedCount = enrichedItems.filter((item) => item.enrichment?.status === "matched").length;
+  const webCount = enrichedItems.filter((item) => ["official_match", "verified_match"].includes(item.enrichment?.status)).length;
 
   return {
     ...dossier,
@@ -293,8 +293,11 @@ export async function enrichQuoteDossier(dossier = {}) {
     enrichmentSummary: {
       total: enrichedItems.length,
       matched: matchedCount,
-      generic: enrichedItems.length - matchedCount,
-      mode: String(process.env.QUOTE_DOSSIER_WEB_ENRICHMENT || "").toLowerCase() === "1" ? "curated_catalog_plus_verified_web_v2" : "curated_catalog_v1",
+      web: webCount,
+      generic: enrichedItems.length - matchedCount - webCount,
+      mode: String(process.env.QUOTE_DOSSIER_WEB_ENRICHMENT || "").toLowerCase() === "1"
+        ? "curated_catalog_plus_verified_web_v3"
+        : "curated_catalog_v3",
     },
   };
 }

@@ -37,7 +37,7 @@ function cleanFeature(value = "") {
 }
 
 function parseImageDataUrl(dataUrl = "") {
-  const match = String(dataUrl || "").match(/^data:image\/(png|jpeg|jpg|webp);base64,(.+)$/i);
+  const match = String(dataUrl || "").match(/^data:image\/(png|jpeg|jpg|webp|avif);base64,(.+)$/i);
 
   if (!match) return null;
 
@@ -104,9 +104,8 @@ function drawFooter(doc, pageNumber) {
   doc.fillColor(TEXT_COLOR);
 }
 
-function startPage(doc, dossier, pageTitle, pageNumber, { first = false } = {}) {
-  if (!first) doc.addPage();
-
+function startPage(doc, dossier, pageTitle, pageNumber) {
+  doc.addPage();
   drawHeader(doc, dossier, pageTitle);
   drawFooter(doc, pageNumber);
 
@@ -180,6 +179,20 @@ function drawParagraph(doc, value, x, y, width, options = {}) {
   return y + height + 8;
 }
 
+function uniqueFeatures(features = []) {
+  const seen = new Set();
+
+  return (Array.isArray(features) ? features : String(features || "").split("\n"))
+    .map((feature) => text(feature))
+    .filter(Boolean)
+    .filter((feature) => {
+      const key = feature.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
 function drawBullets(doc, features = [], x, y, width, { maxItems = 8 } = {}) {
   let currentY = y;
 
@@ -207,20 +220,6 @@ function drawBullets(doc, features = [], x, y, width, { maxItems = 8 } = {}) {
     });
 
   return currentY;
-}
-
-function uniqueFeatures(features = []) {
-  const seen = new Set();
-
-  return (Array.isArray(features) ? features : String(features || "").split("\n"))
-    .map((feature) => text(feature))
-    .filter(Boolean)
-    .filter((feature) => {
-      const key = feature.toLowerCase();
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
 }
 
 function drawImageBox(doc, item, x, y, width, height) {
@@ -256,7 +255,7 @@ function drawImageBox(doc, item, x, y, width, height) {
 }
 
 function drawSummaryPage(doc, dossier = {}, pageNumber) {
-  let y = startPage(doc, dossier, "Características dos equipamentos", pageNumber, { first: true });
+  let y = startPage(doc, dossier, "Características dos equipamentos", pageNumber);
   const x = PAGE_MARGIN;
   const width = doc.page.width - PAGE_MARGIN * 2;
 
@@ -433,7 +432,7 @@ export async function generateQuoteDossierPdf({ dossier = {}, items = [] } = {})
     const doc = new PDFDocument({
       size: "A4",
       margin: PAGE_MARGIN,
-      autoFirstPage: true,
+      autoFirstPage: false,
       bufferPages: false,
       info: {
         Title: `${finalDossier.budgetNumber || "Orçamento"} - Características dos equipamentos`,

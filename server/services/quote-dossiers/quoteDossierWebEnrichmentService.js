@@ -73,25 +73,8 @@ async function fetchLimitedText(url) {
     throw new Error(`HTTP ${response.status}`);
   }
 
-  const reader = response.body?.getReader?.();
-
-  if (!reader) {
-    const text = await response.text();
-    return text.slice(0, MAX_HTML_BYTES);
-  }
-
-  let received = 0;
-  const chunks = [];
-
-  while (received < MAX_HTML_BYTES) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    received += value.byteLength;
-    chunks.push(value);
-  }
-
-  return new TextDecoder("utf-8").decode(Buffer.concat(chunks));
+  const text = await response.text();
+  return text.slice(0, MAX_HTML_BYTES);
 }
 
 function extractMeta(html = "", property = "") {
