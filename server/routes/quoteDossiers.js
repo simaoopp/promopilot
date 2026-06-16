@@ -1,6 +1,7 @@
 import { extractTextFromPdfBase64 } from "../services/quote-dossiers/pdfTextService.js";
 import { parseQuoteDossierFromText } from "../services/quote-dossiers/quoteDossierParser.js";
 import { generateQuoteDossierPdf } from "../services/quote-dossiers/quoteDossierPdfService.js";
+import { enrichQuoteDossier } from "../services/quote-dossiers/quoteDossierEnrichmentService.js";
 
 function requireString(value, field, { min = 1, max = 500 } = {}) {
   const text = String(value || "").trim();
