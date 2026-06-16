@@ -13,18 +13,13 @@ function collapseSpaces(value = "") {
   return String(value || "").replace(/\s+/g, " ").trim();
 }
 
-function normalizeMoney(value = "") {
-  return collapseSpaces(value);
-}
-
 function parseNumberPt(value = "") {
-  const number = Number.parseFloat(
-    String(value || "")
-      .replace(/\s+/g, "")
-      .replace(/\./g, "")
-      .replace(",", "."),
-  );
+  const cleaned = String(value || "")
+    .replace(/\s+/g, "")
+    .replace(/\./g, "")
+    .replace(",", ".");
 
+  const number = Number.parseFloat(cleaned);
   return Number.isFinite(number) ? number : 0;
 }
 
@@ -37,57 +32,26 @@ function formatMoneyPt(value = 0) {
   }).format(value);
 }
 
+function findMoneyValues(text = "") {
+  return [...String(text || "").matchAll(/\d{1,3}(?:[\s.]\d{3})*,\d{2,4}|\d+,\d{2,4}/g)]
+    .map((match) => collapseSpaces(match[0]))
+    .filter(Boolean);
+}
+
 function extractBudgetNumber(text = "") {
   const match = text.match(/\bORC\.[A-Z0-9./-]+/i);
   return match ? match[0].toUpperCase() : "";
 }
 
 function extractDate(text = "") {
+  const afterPagamento = text.match(/PRONTO\s+PAGAMENTO\s+.*?\b(20\d{2}-\d{2}-\d{2})\b/i);
+  if (afterPagamento) return afterPagamento[1];
+
   const isoDates = [...text.matchAll(/\b20\d{2}-\d{2}-\d{2}\b/g)].map((match) => match[0]);
   if (isoDates.length) return isoDates[0];
 
   const pt = text.match(/\b\d{2}[-/]\d{2}[-/]\d{2,4}\b/);
   return pt ? pt[0] : "";
-}
-
-function findMoneyValues(text = "") {
-  return [...String(text || "").matchAll(/(\d{1,3}(?:[\s.]\d{3})*|\d+),\d{2}/g)]
-    .map((match) => normalizeMoney(match[0]))
-    .filter(Boolean);
-}
-
-function extractTotal(text = "", items = []) {
-  const normalized = normalizeText(text);
-
-  const totalBlocks = [...normalized.matchAll(/Total\s*\(\s*EUR\s*\)([\s\S]{0,180})/gi)];
-
-  for (const block of totalBlocks) {
-    const values = findMoneyValues(block[1])
-      .map((value) => ({ value, number: parseNumberPt(value) }))
-      .filter((entry) => entry.number > 0);
-
-    if (values.length) {
-      const highest = values.reduce((best, entry) => (entry.number > best.number ? entry : best), values[0]);
-      return highest.value;
-    }
-  }
-
-  const direct = normalized.match(/Total\s*\(\s*EUR\s*\)\s*([0-9\s.]+,\d{2})/i);
-  if (direct) return normalizeMoney(direct[1]);
-
-  const itemSum = Array.isArray(items)
-    ? items.reduce((sum, item) => sum + (Number(item.totalNumber) || parseNumberPt(item.total)), 0)
-    : 0;
-
-  if (itemSum > 0) return formatMoneyPt(itemSum);
-
-  const allValues = findMoneyValues(normalized)
-    .map((value) => ({ value, number: parseNumberPt(value) }))
-    .filter((entry) => entry.number > 0);
-
-  if (!allValues.length) return "";
-
-  return allValues.reduce((best, entry) => (entry.number > best.number ? entry : best), allValues[0]).value;
 }
 
 function isLikelyCustomerName(line = "") {
@@ -96,7 +60,7 @@ function isLikelyCustomerName(line = "") {
   if (clean.length < 4) return false;
   if (/\d/.test(clean)) return false;
 
-  return !/^(Rua|RUA|Avenida|AVENIDA|Canada|CANADA|Fonte|FONTE|Porto|PORTO|Praia|PRAIA|Santa|SANTA|Portugal|NIB|Telef|Tel\.|Fax|Contribuinte|Capital|C\.R\.C\.|Alvar[aá]|Empresa|Produtor|P[aá]g\.|Expert|Jos[eé]\s+Tom[aá]s|Descarga|Carga|N\/ Morada|V\/ Morada)/i.test(clean);
+  return !/^(Rua|RUA|Avenida|AVENIDA|Canada|CANADA|Fonte|FONTE|Porto|PORTO|Praia|PRAIA|Santa|SANTA|Portugal|NIB|Telef|Tel\.|Fax|Contribuinte|Capital|C\.R\.C\.|Alvar[aá]|Empresa|Produtor|P[aá]g\.|Expert|Jos[eé]\s+Tom[aá]s|Descarga|Carga|N\/ Morada|V\/ Morada|Exmo|Original|Or[çc]amentos|Data|Artigo|Este documento|Total|Quadro)/i.test(clean);
 }
 
 function extractCustomer(text = "") {
@@ -108,7 +72,7 @@ function extractCustomer(text = "") {
   const exmoIndex = lines.findIndex((line) => /Exmo\.\(s\)\s*Sr/i.test(line) || /^Exmo/i.test(line));
 
   if (exmoIndex > 0) {
-    for (let index = exmoIndex - 1; index >= Math.max(0, exmoIndex - 8); index -= 1) {
+    for (let index = exmoIndex - 1; index >= Math.max(0, exmoIndex - 10); index -= 1) {
       const line = lines[index];
 
       if (isLikelyCustomerName(line)) {
@@ -120,12 +84,50 @@ function extractCustomer(text = "") {
   const budgetIndex = lines.findIndex((line) => /Or[çc]amentos\s+OR\s+ORC\./i.test(line));
 
   if (budgetIndex > 0) {
-    for (let index = Math.max(0, budgetIndex - 20); index < budgetIndex; index += 1) {
+    for (let index = Math.max(0, budgetIndex - 25); index < budgetIndex; index += 1) {
       const line = lines[index];
 
       if (isLikelyCustomerName(line) && /^[A-ZÀ-Ý\s.'-]+$/.test(line)) {
         return line;
       }
+    }
+  }
+
+  return "";
+}
+
+function extractTotal(text = "", items = []) {
+  const normalized = normalizeText(text);
+
+  const sameLine = normalized.match(/Total\s*\(\s*EUR\s*\)\s*([0-9\s.]+,\d{2})/i);
+  if (sameLine) return collapseSpaces(sameLine[1]);
+
+  const totalLine = normalized
+    .split("\n")
+    .map((line) => collapseSpaces(line))
+    .find((line) => /Total\s*\(\s*EUR\s*\)/i.test(line));
+
+  if (totalLine) {
+    const values = findMoneyValues(totalLine).filter((value) => parseNumberPt(value) > 0);
+    if (values.length) return values[values.length - 1];
+  }
+
+  const itemSum = Array.isArray(items)
+    ? items.reduce((sum, item) => sum + (Number(item.totalNumber) || parseNumberPt(item.total)), 0)
+    : 0;
+
+  if (itemSum > 0) return formatMoneyPt(itemSum);
+
+  const totalBlocks = [...normalized.matchAll(/Total\s*\(\s*EUR\s*\)([\s\S]{0,160})/gi)];
+
+  for (const block of totalBlocks) {
+    const values = findMoneyValues(block[1])
+      .map((value) => ({ value, number: parseNumberPt(value) }))
+      .filter((entry) => entry.number > 0);
+
+    if (values.length) {
+      const highest = values.reduce((best, entry) => (entry.number > best.number ? entry : best), values[0]);
+      return highest.value;
     }
   }
 
@@ -166,7 +168,7 @@ function inferCategory(description = "") {
   const text = String(description || "").toLowerCase();
 
   if (/micro|microondas|micro-ondas/.test(text)) return "Micro-ondas de encastre";
-  if (/chamin[eé]|exaustor|camp[âa]nula|hotte/.test(text)) return "Chaminé/exaustor de parede";
+  if (/chamin[eé]|exaustor|camp[âa]nula|iq700\s+lc/.test(text)) return "Chaminé/exaustor de parede";
   if (/forno/.test(text)) return "Forno multifunções";
   if (/placa|ind[.\s]?/.test(text)) return "Placa de indução";
   if (/m[áa]q.*lavar.*loi[çc]a|lava.*loi[çc]a.*encastre|dishwasher/.test(text)) return "Máquina de lavar loiça de encastre";
@@ -177,7 +179,6 @@ function inferCategory(description = "") {
   if (/secar roupa|secador/.test(text)) return "Máquina de secar roupa";
   if (/lavar roupa/.test(text)) return "Máquina de lavar roupa";
   if (/tv|televis/.test(text)) return "Televisor";
-  if (/esquentador|termoacumulador/.test(text)) return "Aquecimento de água";
 
   return "Equipamento";
 }
@@ -232,29 +233,66 @@ function buildGenericFeatures({ category, ean, reference }) {
 }
 
 function parseItemSegment(segment = "") {
-  const clean = collapseSpaces(segment.replace(/\n+/g, " "));
-  const codeMatch = clean.match(/^(\d{2}\.\d{3}\.\d{3}\.\d{5})\s+(.+)$/);
+  const articleCode = segment.match(/\b\d{2}\.\d{3}\.\d{3}\.\d{5}\b/)?.[0] || "";
+  if (!articleCode) return null;
 
-  if (!codeMatch) return null;
+  const ean = segment.match(/\bEAN\s*:?\s*(\d{8,14})\b/i)?.[1] || "";
 
-  const articleCode = codeMatch[1];
-  const body = codeMatch[2];
-  const eanMatch = body.match(/\bEAN\s*:?\s*(\d{8,14})\b/i);
-  const ean = eanMatch ? eanMatch[1] : "";
+  let clean = normalizeText(segment)
+    .replace(articleCode, " ")
+    .replace(/\bEAN\s*:?\s*\d{8,14}\b/gi, " ")
+    .replace(/\b(?:0,00\s+){2,}0,00\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 
-  const withoutEan = body.replace(/\bEAN\s*:?\s*\d{8,14}\b/gi, " ").trim();
+  const quantityMatch = clean.match(/\b(\d+(?:,\d+)?)\s+UN\b/i);
+  const quantity = quantityMatch ? quantityMatch[1] : "1,00";
 
-  const match = withoutEan.match(/(.+?)\s+(\d+(?:,\d+)?)\s+UN\s+([0-9\s.]+,\d{4})([\s\S]*)$/i);
+  let rawDescription = "";
 
-  if (!match) return null;
+  if (quantityMatch?.index != null) {
+    rawDescription = clean.slice(0, quantityMatch.index).trim();
+  }
 
-  const rawDescription = collapseSpaces(match[1]);
-  const quantity = normalizeMoney(match[2]);
-  const unitPrice = normalizeMoney(match[3]);
-  const trailing = match[4] || "";
-  const moneyValues = findMoneyValues(trailing);
+  if (!rawDescription) {
+    rawDescription = clean
+      .split(/\s+\d+(?:,\d+)?\s+UN\s+/i)[0]
+      .replace(/\s+\d{1,3}(?:[\s.]\d{3})*,\d{2,4}.*$/, "")
+      .trim();
+  }
 
-  const total = moneyValues.length ? moneyValues[moneyValues.length - 1] : "";
+  rawDescription = rawDescription
+    .replace(/\bArtigo\b|\bDescri[çc][ãa]o\b|\bQtd\.?\b|\bUn\.?\b|\bPr\.\s*Unit[aá]rio\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!rawDescription || rawDescription.length < 3) return null;
+
+  const afterQuantity = quantityMatch?.index != null
+    ? clean.slice(quantityMatch.index + quantityMatch[0].length)
+    : clean;
+
+  const moneyAfterQuantity = findMoneyValues(afterQuantity);
+  const unitPrice = moneyAfterQuantity[0] || "";
+
+  const unitNumber = parseNumberPt(unitPrice);
+  const quantityNumber = parseNumberPt(quantity) || 1;
+
+  let total = "";
+
+  if (unitNumber > 0 && quantityNumber > 0) {
+    total = formatMoneyPt(unitNumber * quantityNumber);
+  } else {
+    const candidateTotals = findMoneyValues(clean)
+      .map((value) => ({ value, number: parseNumberPt(value) }))
+      .filter((entry) => entry.number > 0 && entry.number !== 16 && entry.number !== quantityNumber);
+
+    if (candidateTotals.length) {
+      const highest = candidateTotals.reduce((best, entry) => (entry.number > best.number ? entry : best), candidateTotals[0]);
+      total = formatMoneyPt(highest.number);
+    }
+  }
+
   const brand = inferBrand(rawDescription);
   const reference = inferReference(rawDescription, brand);
   const category = inferCategory(rawDescription);
@@ -286,20 +324,23 @@ function parseItemSegment(segment = "") {
 
 function parseItemsFromText(text = "") {
   const normalized = normalizeText(text);
-  const startRegex = /\b\d{2}\.\d{3}\.\d{3}\.\d{5}\b/g;
-  const starts = [...normalized.matchAll(startRegex)].map((match) => match.index);
+  const articleRegex = /\b\d{2}\.\d{3}\.\d{3}\.\d{5}\b/g;
+  const starts = [...normalized.matchAll(articleRegex)].map((match) => match.index);
+
+  if (!starts.length) return [];
+
+  const hardEndMatch = normalized.match(/\n(?:Instala[çc][ãa]o|ENTREGA|Este documento n[ãa]o serve|Quadro Resumo|Total\s*\(\s*EUR\s*\))/i);
+  const hardEndIndex = hardEndMatch?.index ?? normalized.length;
   const items = [];
 
   for (let index = 0; index < starts.length; index += 1) {
     const start = starts[index];
-    const end = starts[index + 1] ?? normalized.search(/\n(?:Instala[çc][ãa]o|ENTREGA|Este documento n[ãa]o serve|Quadro Resumo)/i);
-    const safeEnd = end > start ? end : normalized.length;
-    const segment = normalized.slice(start, safeEnd);
-    const item = parseItemSegment(segment);
+    const nextStart = starts[index + 1] ?? hardEndIndex;
+    const end = nextStart > start ? nextStart : normalized.length;
+    const segment = normalized.slice(start, end);
+    const parsed = parseItemSegment(segment);
 
-    if (item && item.rawDescription && item.quantity && item.unitPrice) {
-      items.push(item);
-    }
+    if (parsed) items.push(parsed);
   }
 
   return items;
