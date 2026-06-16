@@ -232,72 +232,23 @@ function buildGenericFeatures({ category, ean, reference }) {
   return common;
 }
 
-function parseItemSegment(segment = "") {
-  const articleCode = segment.match(/\b\d{2}\.\d{3}\.\d{3}\.\d{5}\b/)?.[0] || "";
-  if (!articleCode) return null;
-
-  const ean = segment.match(/\bEAN\s*:?\s*(\d{8,14})\b/i)?.[1] || "";
-
-  let clean = normalizeText(segment)
-    .replace(articleCode, " ")
-    .replace(/\bEAN\s*:?\s*\d{8,14}\b/gi, " ")
-    .replace(/\b(?:0,00\s+){2,}0,00\b/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  const quantityMatch = clean.match(/\b(\d+(?:,\d+)?)\s+UN\b/i);
-  const quantity = quantityMatch ? quantityMatch[1] : "1,00";
-
-  let rawDescription = "";
-
-  if (quantityMatch?.index != null) {
-    rawDescription = clean.slice(0, quantityMatch.index).trim();
-  }
-
-  if (!rawDescription) {
-    rawDescription = clean
-      .split(/\s+\d+(?:,\d+)?\s+UN\s+/i)[0]
-      .replace(/\s+\d{1,3}(?:[\s.]\d{3})*,\d{2,4}.*$/, "")
-      .trim();
-  }
-
-  rawDescription = rawDescription
+function buildItem({ articleCode = "", rawDescription = "", ean = "", quantity = "1,00", unitPrice = "", total = "" } = {}) {
+  const description = collapseSpaces(rawDescription)
     .replace(/\bArtigo\b|\bDescri[çc][ãa]o\b|\bQtd\.?\b|\bUn\.?\b|\bPr\.\s*Unit[aá]rio\b/gi, "")
     .replace(/\s+/g, " ")
     .trim();
 
-  if (!rawDescription || rawDescription.length < 3) return null;
-
-  const afterQuantity = quantityMatch?.index != null
-    ? clean.slice(quantityMatch.index + quantityMatch[0].length)
-    : clean;
-
-  const moneyAfterQuantity = findMoneyValues(afterQuantity);
-  const unitPrice = moneyAfterQuantity[0] || "";
+  if (!description || description.length < 3) return null;
 
   const unitNumber = parseNumberPt(unitPrice);
   const quantityNumber = parseNumberPt(quantity) || 1;
+  const computedTotal = total || (unitNumber > 0 ? formatMoneyPt(unitNumber * quantityNumber) : "");
 
-  let total = "";
-
-  if (unitNumber > 0 && quantityNumber > 0) {
-    total = formatMoneyPt(unitNumber * quantityNumber);
-  } else {
-    const candidateTotals = findMoneyValues(clean)
-      .map((value) => ({ value, number: parseNumberPt(value) }))
-      .filter((entry) => entry.number > 0 && entry.number !== 16 && entry.number !== quantityNumber);
-
-    if (candidateTotals.length) {
-      const highest = candidateTotals.reduce((best, entry) => (entry.number > best.number ? entry : best), candidateTotals[0]);
-      total = formatMoneyPt(highest.number);
-    }
-  }
-
-  const brand = inferBrand(rawDescription);
-  const reference = inferReference(rawDescription, brand);
-  const category = inferCategory(rawDescription);
+  const brand = inferBrand(description);
+  const reference = inferReference(description, brand);
+  const category = inferCategory(description);
   const technicalDescription = buildGenericDescription({
-    description: rawDescription,
+    description,
     category,
     brand,
     reference,
@@ -306,23 +257,49 @@ function parseItemSegment(segment = "") {
 
   return {
     articleCode,
-    rawDescription,
-    description: rawDescription,
+    rawDescription: description,
+    description,
     brand,
     category,
     reference,
     ean,
     quantity,
     unitPrice,
-    total,
-    totalNumber: parseNumberPt(total),
+    total: computedTotal,
+    totalNumber: parseNumberPt(computedTotal),
     technicalDescription,
     features,
     imageDataUrl: "",
   };
 }
 
-function parseItemsFromText(text = "") {
+function parseItemSegment(segment = "") {
+  const articleCode = segment.match(/\b\d{2}\.\d{3}\.\d{3}\.\d{5}\b/)?.[0] || "";
+  if (!articleCode) return null;
+
+  const ean = segment.match(/\bEAN\s*:?\s*(\d{8,14})\b/i)?.[1] || "";
+
+  const clean = normalizeText(segment)
+    .replace(articleCode, " ")
+    .replace(/\bEAN\s*:?\s*\d{8,14}\b/gi, " ")
+    .replace(/\b(?:0,00\s+){2,}0,00\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const quantityMatch = clean.match(/\b(\d+(?:,\d+)?)\s+UN\b/i);
+  if (!quantityMatch?.index && quantityMatch?.index !== 0) return null;
+
+  const quantity = quantityMatch[1] || "1,00";
+  const rawDescription = clean.slice(0, quantityMatch.index).trim();
+  const afterQuantity = clean.slice(quantityMatch.index + quantityMatch[0].length);
+  const moneyAfterQuantity = findMoneyValues(afterQuantity);
+  const unitPrice = moneyAfterQuantity[0] || "";
+  const total = unitPrice ? formatMoneyPt(parseNumberPt(unitPrice) * (parseNumberPt(quantity) || 1)) : "";
+
+  return buildItem({ articleCode, rawDescription, ean, quantity, unitPrice, total });
+}
+
+function parseItemsByArticleCode(text = "") {
   const normalized = normalizeText(text);
   const articleRegex = /\b\d{2}\.\d{3}\.\d{3}\.\d{5}\b/g;
   const starts = [...normalized.matchAll(articleRegex)].map((match) => match.index);
@@ -344,6 +321,119 @@ function parseItemsFromText(text = "") {
   }
 
   return items;
+}
+
+function normalizePotentialItemLine(line = "") {
+  return collapseSpaces(line)
+    .replace(/E\s*A\s*N\s*:/gi, "EAN:")
+    .replace(/U\s*N\b/gi, "UN")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function parseItemLineByEanContext(line = "", ean = "") {
+  const clean = normalizePotentialItemLine(line);
+  const articleCode = clean.match(/\b\d{2}\.\d{3}\.\d{3}\.\d{5}\b/)?.[0] || "";
+
+  const quantityMatch = clean.match(/\b(\d+(?:,\d+)?)\s+UN\b/i);
+  if (!quantityMatch?.index && quantityMatch?.index !== 0) return null;
+
+  let rawDescription = clean.slice(0, quantityMatch.index).trim();
+
+  if (articleCode) {
+    rawDescription = rawDescription.replace(articleCode, " ").trim();
+  }
+
+  const quantity = quantityMatch[1] || "1,00";
+  const afterQuantity = clean.slice(quantityMatch.index + quantityMatch[0].length);
+  const moneyValues = findMoneyValues(afterQuantity);
+
+  const unitPrice = moneyValues.find((value) => /\d,\d{4}$/.test(value)) || moneyValues[0] || "";
+  const total = unitPrice ? formatMoneyPt(parseNumberPt(unitPrice) * (parseNumberPt(quantity) || 1)) : "";
+
+  return buildItem({ articleCode, rawDescription, ean, quantity, unitPrice, total });
+}
+
+function parseItemsByEanFallback(text = "") {
+  const lines = normalizeText(text)
+    .split("\n")
+    .map((line) => normalizePotentialItemLine(line))
+    .filter(Boolean);
+
+  const items = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const ean = lines[index].match(/\bEAN\s*:?\s*(\d{8,14})\b/i)?.[1] || "";
+
+    if (!ean) continue;
+
+    const candidates = [
+      lines[index - 1] || "",
+      `${lines[index - 2] || ""} ${lines[index - 1] || ""}`,
+      `${lines[index - 3] || ""} ${lines[index - 2] || ""} ${lines[index - 1] || ""}`,
+    ]
+      .map((line) => normalizePotentialItemLine(line))
+      .filter(Boolean);
+
+    let parsed = null;
+
+    for (const candidate of candidates) {
+      parsed = parseItemLineByEanContext(candidate, ean);
+      if (parsed) break;
+    }
+
+    if (parsed) items.push(parsed);
+  }
+
+  return items;
+}
+
+function parseItemsTableRegexFallback(text = "") {
+  const flattened = normalizeText(text).replace(/\n+/g, " ");
+  const articlePattern = /(\d{2}\.\d{3}\.\d{3}\.\d{5})\s+(.+?)\s+(\d+(?:,\d+)?)\s+UN\s+([0-9\s.]+,\d{4})[\s\S]{0,120}?EAN\s*:?\s*(\d{8,14})/gi;
+  const items = [];
+
+  for (const match of flattened.matchAll(articlePattern)) {
+    const [, articleCode, rawDescription, quantity, unitPrice, ean] = match;
+    const item = buildItem({
+      articleCode,
+      rawDescription,
+      ean,
+      quantity,
+      unitPrice,
+      total: formatMoneyPt(parseNumberPt(unitPrice) * (parseNumberPt(quantity) || 1)),
+    });
+
+    if (item) items.push(item);
+  }
+
+  return items;
+}
+
+function uniqueItems(items = []) {
+  const seen = new Set();
+  const unique = [];
+
+  for (const item of items) {
+    const key = item.ean || `${item.articleCode}|${item.description}`;
+
+    if (!key || seen.has(key)) continue;
+
+    seen.add(key);
+    unique.push(item);
+  }
+
+  return unique;
+}
+
+function parseItemsFromText(text = "") {
+  const byArticle = parseItemsByArticleCode(text);
+  if (byArticle.length) return uniqueItems(byArticle);
+
+  const byEan = parseItemsByEanFallback(text);
+  if (byEan.length) return uniqueItems(byEan);
+
+  return uniqueItems(parseItemsTableRegexFallback(text));
 }
 
 export function parseQuoteDossierFromText(text = "", { filename = "" } = {}) {
