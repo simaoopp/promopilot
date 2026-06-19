@@ -26,12 +26,14 @@ const INVALID_CUSTOMER_PATTERNS = [
   /^RUA\b/i,
   /^Avenida\b/i,
   /^AVENIDA\b/i,
+  /\bN[ºo]\s*\d/i,
   /^Canada\b/i,
   /^CANADA\b/i,
   /^Fonte\b/i,
   /^FONTE\b/i,
   /^Posto\s+Santo$/i,
   /^POSTO\s+SANTO$/i,
+  /^SANTA\s+CRUZ$/i,
   /^Porto\b/i,
   /^PORTO\b/i,
   /^Praia\b/i,
@@ -52,6 +54,8 @@ const INVALID_CUSTOMER_PATTERNS = [
   /^P[aá]g\.?/i,
   /^Expert\b/i,
   /Jos[eé]\s+Tom[aá]s\s+da\s+Cunha/i,
+  /Filhos,\s*Lda/i,
+  /\bLda\b/i,
   /^Descarga\b/i,
   /^Carga\b/i,
   /^N\/ Morada/i,
@@ -67,10 +71,23 @@ const INVALID_CUSTOMER_PATTERNS = [
   /^Aquando\b/i,
   /^ATCUD\b/i,
   /^Respons[aá]vel/i,
+  /^Mercadoria/i,
+  /^IVA\b/i,
 ];
 
+function isMostlyUppercaseName(value = "") {
+  const letters = value.replace(/[^A-Za-zÀ-ÿ]/g, "");
+  if (!letters) return false;
+
+  const upper = letters.replace(/[^A-ZÀ-Ý]/g, "");
+  return upper.length / letters.length >= 0.75;
+}
+
 export function normalizeCustomerName(value = "") {
-  const candidate = collapseSpaces(value);
+  const candidate = collapseSpaces(value)
+    .replace(/^Cliente\s*[:.-]?\s*/i, "")
+    .replace(/^Nome\s*[:.-]?\s*/i, "")
+    .trim();
 
   if (!candidate || candidate === "—" || candidate === "-") return "";
 
@@ -82,19 +99,31 @@ export function normalizeCustomerName(value = "") {
   const words = candidate.match(/[A-Za-zÀ-ÿ]{2,}/g) || [];
   if (words.length < 2) return "";
 
+  // Evita apanhar cabeçalhos com muitas palavras de formulário.
+  if (words.length > 7 && !isMostlyUppercaseName(candidate)) return "";
+
   return candidate;
 }
 
-function firstValidCustomer(lines = [], indexes = []) {
-  for (const index of indexes) {
-    if (index < 0 || index >= lines.length) continue;
+function candidateScore({ line, index, exmoIndex, budgetIndex }) {
+  const words = line.match(/[A-Za-zÀ-ÿ]{2,}/g) || [];
+  let score = 0;
 
-    const valid = normalizeCustomerName(lines[index]);
+  if (isMostlyUppercaseName(line)) score += 10;
+  if (words.length === 3) score += 8;
+  if (words.length === 2 || words.length === 4) score += 4;
+  if (exmoIndex >= 0) score += Math.max(0, 20 - Math.abs(index - exmoIndex));
+  if (budgetIndex >= 0 && index < budgetIndex) score += 4;
+  if (/&|,|\./.test(line)) score -= 6;
+  if (words.length > 5) score -= 6;
 
-    if (valid) return valid;
-  }
+  return score;
+}
 
-  return "";
+function extractFromSameExmoLine(line = "") {
+  const clean = collapseSpaces(line);
+  const after = clean.split(/Exmo\.\(s\)\s*Sr\.\(s\)|Exmo\.\(s\)\s*Sr|Exmo/i)[1] || "";
+  return normalizeCustomerName(after);
 }
 
 export function extractCustomerFromQuoteText(text = "") {
@@ -106,40 +135,60 @@ export function extractCustomerFromQuoteText(text = "") {
   if (!lines.length) return "";
 
   const exmoIndex = lines.findIndex((line) => /Exmo\.\(s\)\s*Sr/i.test(line) || /^Exmo/i.test(line));
-
-  if (exmoIndex >= 0) {
-    // Primeiro o caso visual mais comum nos PDFs Primavera extraídos como texto:
-    // nome imediatamente antes do marcador Exmo.(s) Sr.(s).
-    const before = [];
-    for (let index = exmoIndex - 1; index >= Math.max(0, exmoIndex - 12); index -= 1) {
-      before.push(index);
-    }
-
-    const beforeCustomer = firstValidCustomer(lines, before);
-    if (beforeCustomer) return beforeCustomer;
-
-    // Fallback: em alguns motores PDF a coluna do cliente aparece abaixo do Exmo.
-    const after = [];
-    for (let index = exmoIndex + 1; index <= Math.min(lines.length - 1, exmoIndex + 14); index += 1) {
-      after.push(index);
-    }
-
-    const afterCustomer = firstValidCustomer(lines, after);
-    if (afterCustomer) return afterCustomer;
-  }
-
-  // Fallback para blocos antes do título do orçamento.
   const budgetIndex = lines.findIndex((line) => /Or[çc]amentos\s+OR\s+ORC\./i.test(line));
 
-  if (budgetIndex > 0) {
-    const indexes = [];
+  if (exmoIndex >= 0) {
+    const sameLineCustomer = extractFromSameExmoLine(lines[exmoIndex]);
+    if (sameLineCustomer) return sameLineCustomer;
 
-    for (let index = Math.max(0, budgetIndex - 35); index < budgetIndex; index += 1) {
-      indexes.push(index);
+    // Preferência absoluta: linha imediatamente antes/depois de Exmo.
+    const preferredIndexes = [
+      exmoIndex - 1,
+      exmoIndex + 1,
+      exmoIndex - 2,
+      exmoIndex + 2,
+      exmoIndex - 3,
+      exmoIndex + 3,
+    ];
+
+    for (const index of preferredIndexes) {
+      const customer = normalizeCustomerName(lines[index] || "");
+      if (customer) return customer;
     }
 
-    const customer = firstValidCustomer(lines, indexes);
-    if (customer) return customer;
+    // Se a extração por coordenadas baralhar a ordem, pontua candidatos próximos.
+    const candidates = [];
+
+    for (let index = Math.max(0, exmoIndex - 16); index <= Math.min(lines.length - 1, exmoIndex + 16); index += 1) {
+      const customer = normalizeCustomerName(lines[index]);
+      if (!customer) continue;
+
+      candidates.push({
+        customer,
+        score: candidateScore({ line: customer, index, exmoIndex, budgetIndex }),
+      });
+    }
+
+    candidates.sort((a, b) => b.score - a.score);
+    if (candidates[0]?.customer) return candidates[0].customer;
+  }
+
+  // Fallback: procura nomes de pessoa antes do bloco do orçamento.
+  if (budgetIndex > 0) {
+    const candidates = [];
+
+    for (let index = Math.max(0, budgetIndex - 45); index < budgetIndex; index += 1) {
+      const customer = normalizeCustomerName(lines[index]);
+      if (!customer) continue;
+
+      candidates.push({
+        customer,
+        score: candidateScore({ line: customer, index, exmoIndex, budgetIndex }),
+      });
+    }
+
+    candidates.sort((a, b) => b.score - a.score);
+    if (candidates[0]?.customer) return candidates[0].customer;
   }
 
   return "";

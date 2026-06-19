@@ -168,7 +168,8 @@ export function registerQuoteDossierRoutes(app, { requireAuth }) {
       const parsedDossier = parseQuoteDossierFromText(extracted.text, { filename });
       const items = Array.isArray(parsedDossier.items) ? parsedDossier.items.map(toManualItem) : [];
       const extractedCustomer = extractCustomerFromQuoteText(extracted.text);
-      const customerName = normalizeCustomerName(parsedDossier.customerName) || extractedCustomer;
+      const parsedCustomer = normalizeCustomerName(parsedDossier.customerName);
+      const customerName = extractedCustomer || parsedCustomer;
       const notes = buildManualObservations(extracted.text, items);
 
       const dossier = {

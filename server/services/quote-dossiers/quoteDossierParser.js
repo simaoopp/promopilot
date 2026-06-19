@@ -1,3 +1,4 @@
+import { extractCustomerFromQuoteText } from "./quoteDossierCustomerService.js";
 function normalizeText(value = "") {
   return String(value || "")
     .replace(/\r/g, "\n")
@@ -468,7 +469,7 @@ export function parseQuoteDossierFromText(text = "", { filename = "" } = {}) {
   return {
     filename,
     budgetNumber: extractBudgetNumber(normalized),
-    customerName: extractCustomer(normalized),
+    customerName: extractCustomerFromQuoteText(normalized) || extractCustomer(normalized),
     date: extractDate(normalized),
     total: extractTotal(normalized, items),
     notes: "Documento gerado automaticamente a partir do orçamento carregado. Rever fotografias, características e medidas antes de entregar ao cliente.",
