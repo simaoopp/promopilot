@@ -99,9 +99,6 @@ function buildManualObservations(text = "", items = []) {
   const observations = [];
   const normalized = normalizeText(text);
 
-  if (/pronto\s+pagamento/i.test(normalized)) {
-    observations.push("Condição de pagamento: pronto pagamento.");
-  }
 
   if (includesInstallation(normalized)) {
     observations.push(looksLikeLaundry(normalized, items) ? "Instalação de lavandaria incluída." : "Instalação incluída.");
@@ -114,10 +111,12 @@ function buildManualObservations(text = "", items = []) {
   }
 
   if (!observations.length) {
-    observations.push("Rever fotografias, descrição, características e medidas antes de entregar ao cliente.");
+    return "";
   }
 
-  return observations.join("\n");
+  return observations
+    .filter((line) => !/pronto\s+pagamento|condi[çc][aã]o\s+de\s+pagamento/i.test(line))
+    .join("\n");
 }
 
 function toManualItem(item = {}) {

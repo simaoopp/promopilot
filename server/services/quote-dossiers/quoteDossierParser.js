@@ -69,25 +69,42 @@ function extractCustomer(text = "") {
     .map((line) => collapseSpaces(line))
     .filter(Boolean);
 
+  function invalidCustomerLine(line = "") {
+    return /^(Rua|RUA|Avenida|AVENIDA|Canada|CANADA|Fonte|FONTE|Porto|PORTO|Praia|PRAIA|Santa|SANTA|Portugal|NIB|Telef|Tel\.?|Fax|Contribuinte|Capital|C\.R\.C\.|Alvar[aá]|Empresa|Produtor|P[aá]g\.?|Expert|Jos[eé]\s+Tom[aá]s|Descarga|Carga|N\/ Morada|V\/ Morada|Exmo|Original|Or[çc]amentos|Data|Artigo|Este documento|Total|Quadro|Aquando|ATCUD|Respons[aá]vel)/i.test(line);
+  }
+
+  function validCustomerLine(line = "") {
+    const clean = collapseSpaces(line);
+
+    if (clean.length < 4 || clean.length > 90) return false;
+    if (/[@]|https?:|www\./i.test(clean)) return false;
+    if (/\d/.test(clean)) return false;
+    if (invalidCustomerLine(clean)) return false;
+
+    return true;
+  }
+
   const exmoIndex = lines.findIndex((line) => /Exmo\.\(s\)\s*Sr/i.test(line) || /^Exmo/i.test(line));
 
-  if (exmoIndex > 0) {
-    for (let index = exmoIndex - 1; index >= Math.max(0, exmoIndex - 10); index -= 1) {
+  if (exmoIndex >= 0) {
+    for (let index = exmoIndex - 1; index >= Math.max(0, exmoIndex - 12); index -= 1) {
       const line = lines[index];
+      if (validCustomerLine(line)) return line;
+    }
 
-      if (isLikelyCustomerName(line)) {
-        return line;
-      }
+    for (let index = exmoIndex + 1; index <= Math.min(lines.length - 1, exmoIndex + 14); index += 1) {
+      const line = lines[index];
+      if (validCustomerLine(line)) return line;
     }
   }
 
   const budgetIndex = lines.findIndex((line) => /Or[çc]amentos\s+OR\s+ORC\./i.test(line));
 
   if (budgetIndex > 0) {
-    for (let index = Math.max(0, budgetIndex - 25); index < budgetIndex; index += 1) {
+    for (let index = Math.max(0, budgetIndex - 35); index < budgetIndex; index += 1) {
       const line = lines[index];
 
-      if (isLikelyCustomerName(line) && /^[A-ZÀ-Ý\s.'-]+$/.test(line)) {
+      if (validCustomerLine(line) && /^[A-ZÀ-Ý&.,'\s-]+$/.test(line)) {
         return line;
       }
     }

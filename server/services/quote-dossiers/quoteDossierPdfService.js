@@ -52,7 +52,8 @@ function noteLines(notes = "") {
   return String(notes || "")
     .split(/\n+/)
     .map((line) => text(line).replace(/^[-•]\s*/, ""))
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter((line) => !/pronto\s+pagamento|condi[çc][aã]o\s+de\s+pagamento/i.test(line));
 }
 
 function drawHeader(doc, dossier = {}, pageTitle = "") {
@@ -115,10 +116,9 @@ function drawFooter(doc, pageNumber) {
   doc.fillColor(TEXT_COLOR);
 }
 
-function startPage(doc, dossier, pageTitle, pageNumber) {
+function startPage(doc, dossier, pageTitle) {
   doc.addPage();
   drawHeader(doc, dossier, pageTitle);
-  drawFooter(doc, pageNumber);
 
   return 86;
 }
@@ -266,7 +266,7 @@ function drawImageBox(doc, item, x, y, width, height) {
 }
 
 function drawSummaryPage(doc, dossier = {}, pageNumber) {
-  let y = startPage(doc, dossier, "Características dos equipamentos", pageNumber);
+  let y = startPage(doc, dossier, "Características dos equipamentos");
   const x = PAGE_MARGIN;
   const width = doc.page.width - PAGE_MARGIN * 2;
 
@@ -331,10 +331,12 @@ function drawSummaryPage(doc, dossier = {}, pageNumber) {
       .text(`${index + 1}. ${itemDisplayName(item)}`, x, y, { width });
     y += 19;
   });
+
+  drawFooter(doc, pageNumber);
 }
 
 function drawProductPage(doc, dossier = {}, item = {}, index = 0, pageNumber = 1) {
-  let y = startPage(doc, dossier, "Características dos equipamentos", pageNumber);
+  let y = startPage(doc, dossier, "Características dos equipamentos");
   const x = PAGE_MARGIN;
   const width = doc.page.width - PAGE_MARGIN * 2;
 
@@ -401,6 +403,8 @@ function drawProductPage(doc, dossier = {}, item = {}, index = 0, pageNumber = 1
 
   y += 22;
   drawBullets(doc, item.features?.length ? item.features : ["Características a inserir pelo utilizador."], x + 8, y, width - 8, { maxItems: 8 });
+
+  drawFooter(doc, pageNumber);
 }
 
 export async function generateQuoteDossierPdf({ dossier = {}, items = [] } = {}) {
