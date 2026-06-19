@@ -123,6 +123,24 @@ function looksLikePrimaveraQuoteText(text = "") {
   );
 }
 
+async function extractRawTextWithPdfParse(buffer) {
+  try {
+    const parsed = await pdfParse(buffer);
+
+    return {
+      rawText: String(parsed?.text || "").trim(),
+      rawPages: Number(parsed?.numpages || 0),
+    };
+  } catch (error) {
+    console.warn("[quote-dossiers] pdf-parse raw text failed:", error?.message || error);
+
+    return {
+      rawText: "",
+      rawPages: 0,
+    };
+  }
+}
+
 export async function extractTextFromPdfBase64(pdfBase64) {
   const normalizedBase64 = normalizeBase64Pdf(pdfBase64);
 
@@ -136,11 +154,19 @@ export async function extractTextFromPdfBase64(pdfBase64) {
     throw new Error("PDF vazio ou inválido.");
   }
 
+  const rawExtraction = await extractRawTextWithPdfParse(buffer);
+
   try {
     const rowExtraction = await extractTextWithBundledPdfJs(buffer);
 
     if (looksLikePrimaveraQuoteText(rowExtraction.text)) {
-      return rowExtraction;
+      return {
+        text: rowExtraction.text,
+        rawText: rawExtraction.rawText,
+        combinedText: [rowExtraction.text, rawExtraction.rawText].filter(Boolean).join("\n\n"),
+        pages: rowExtraction.pages || rawExtraction.rawPages,
+        engine: rawExtraction.rawText ? "pdfjs-row-text+pdf-parse-raw" : "pdfjs-row-text",
+      };
     }
 
     console.warn("[quote-dossiers] pdfjs-row-text did not detect quote table; falling back to pdf-parse.");
@@ -148,11 +174,11 @@ export async function extractTextFromPdfBase64(pdfBase64) {
     console.warn("[quote-dossiers] pdfjs-row-text fallback:", error?.message || error);
   }
 
-  const parsed = await pdfParse(buffer);
-
   return {
-    text: String(parsed?.text || "").trim(),
-    pages: Number(parsed?.numpages || 0),
+    text: rawExtraction.rawText,
+    rawText: rawExtraction.rawText,
+    combinedText: rawExtraction.rawText,
+    pages: rawExtraction.rawPages,
     engine: "pdf-parse",
   };
 }

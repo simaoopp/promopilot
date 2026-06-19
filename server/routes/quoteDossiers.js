@@ -6,7 +6,7 @@ import {
   normalizeCustomerName,
 } from "../services/quote-dossiers/quoteDossierCustomerService.js";
 
-export const QUOTE_DOSSIER_RUNTIME_VERSION = "quote-dossier-manual-runtime-v4";
+export const QUOTE_DOSSIER_RUNTIME_VERSION = "quote-dossier-manual-runtime-v6";
 
 function requireString(value, field, { min = 1, max = 500 } = {}) {
   const text = String(value || "").trim();
@@ -167,7 +167,8 @@ export function registerQuoteDossierRoutes(app, { requireAuth }) {
       const extracted = await extractTextFromPdfBase64(base64Pdf);
       const parsedDossier = parseQuoteDossierFromText(extracted.text, { filename });
       const items = Array.isArray(parsedDossier.items) ? parsedDossier.items.map(toManualItem) : [];
-      const extractedCustomer = extractCustomerFromQuoteText(extracted.text);
+      const customerSourceText = [extracted.text, extracted.rawText, extracted.combinedText].filter(Boolean).join("\n\n");
+      const extractedCustomer = extractCustomerFromQuoteText(customerSourceText);
       const parsedCustomer = normalizeCustomerName(parsedDossier.customerName);
       const customerName = extractedCustomer || parsedCustomer;
       const notes = buildManualObservations(extracted.text, items);
@@ -198,6 +199,8 @@ export function registerQuoteDossierRoutes(app, { requireAuth }) {
           parsed: parsedDossier.customerName || "",
           extracted: extractedCustomer || "",
           final: customerName || "",
+          hasRawText: Boolean(extracted.rawText),
+          engine: extracted.engine || "unknown",
         },
       });
     } catch (error) {
