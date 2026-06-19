@@ -70,13 +70,16 @@ function extractCustomer(text = "") {
     .filter(Boolean);
 
   function invalidCustomerLine(line = "") {
-    return /^(Rua|RUA|Avenida|AVENIDA|Canada|CANADA|Fonte|FONTE|Porto|PORTO|Praia|PRAIA|Santa|SANTA|Portugal|NIB|Telef|Tel\.?|Fax|Contribuinte|Capital|C\.R\.C\.|Alvar[aá]|Empresa|Produtor|P[aá]g\.?|Expert|Jos[eé]\s+Tom[aá]s|Descarga|Carga|N\/ Morada|V\/ Morada|Exmo|Original|Or[çc]amentos|Data|Artigo|Este documento|Total|Quadro|Aquando|ATCUD|Respons[aá]vel)/i.test(line);
+    return /^(Rua|RUA|Avenida|AVENIDA|Canada|CANADA|Fonte|FONTE|Porto|PORTO|Praia|PRAIA|Santa|SANTA|Portugal|NIB|Telef|Tel\.?|Fax|Contribuinte|Capital|C\.R\.C\.|Alvar[aá]|Empresa|Produtor|P[aá]g\.?|Expert|Jos[eé]\s+Tom[aá]s|Descarga|Carga|N\/ Morada|V\/ Morada|Exmo|Original|Or[çc]amentos|Data|Artigo|Este documento|Total|Quadro|Aquando|ATCUD|Respons[aá]vel)/i.test(line)
+      || /V\/N\.?º?\s*Contrib|Requisi[çc][aã]o|Desc\.\s*Cli|Desc\.\s*Fin|Condi[çc][aã]o\s+Pagamento|Vencimento|Enti?dade|PRONTO\s+PAGAMENTO/i.test(line);
   }
 
   function validCustomerLine(line = "") {
     const clean = collapseSpaces(line);
+    const words = clean.match(/[A-ZÀ-Ý]{2,}/g) || [];
 
     if (clean.length < 4 || clean.length > 90) return false;
+    if (words.length < 2) return false;
     if (/[@]|https?:|www\./i.test(clean)) return false;
     if (/\d/.test(clean)) return false;
     if (invalidCustomerLine(clean)) return false;

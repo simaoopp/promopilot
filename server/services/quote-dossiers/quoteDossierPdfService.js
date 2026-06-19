@@ -59,6 +59,8 @@ function noteLines(notes = "") {
 function drawHeader(doc, dossier = {}, pageTitle = "") {
   const top = 24;
 
+  doc.save();
+
   doc
     .rect(PAGE_MARGIN, top, 86, 28)
     .fill(ACCENT_COLOR);
@@ -67,7 +69,11 @@ function drawHeader(doc, dossier = {}, pageTitle = "") {
     .fillColor("#ffffff")
     .font("Helvetica-Bold")
     .fontSize(15)
-    .text("expert", PAGE_MARGIN, top + 7, { width: 86, align: "center" });
+    .text("expert", PAGE_MARGIN, top + 7, {
+      width: 86,
+      align: "center",
+      lineBreak: false,
+    });
 
   doc
     .fillColor(MUTED)
@@ -77,7 +83,11 @@ function drawHeader(doc, dossier = {}, pageTitle = "") {
       [dossier.budgetNumber, pageTitle].filter(Boolean).join(" - "),
       PAGE_MARGIN + 110,
       top + 9,
-      { width: doc.page.width - PAGE_MARGIN * 2 - 110, align: "right" },
+      {
+        width: doc.page.width - PAGE_MARGIN * 2 - 110,
+        align: "right",
+        lineBreak: false,
+      },
     );
 
   doc
@@ -87,15 +97,20 @@ function drawHeader(doc, dossier = {}, pageTitle = "") {
     .lineWidth(0.8)
     .stroke();
 
+  doc.restore();
   doc.fillColor(TEXT_COLOR);
 }
 
 function drawFooter(doc, pageNumber) {
-  const y = doc.page.height - 34;
+  // Fica dentro da área imprimível do PDFKit. Se for desenhado muito abaixo,
+  // o PDFKit cria páginas automáticas quase vazias.
+  const y = doc.page.height - PAGE_MARGIN - 13;
+
+  doc.save();
 
   doc
-    .moveTo(PAGE_MARGIN, y - 10)
-    .lineTo(doc.page.width - PAGE_MARGIN, y - 10)
+    .moveTo(PAGE_MARGIN, y - 9)
+    .lineTo(doc.page.width - PAGE_MARGIN, y - 9)
     .strokeColor("#e2e8f0")
     .lineWidth(0.8)
     .stroke();
@@ -103,16 +118,21 @@ function drawFooter(doc, pageNumber) {
   doc
     .fillColor("#7a8797")
     .font("Helvetica")
-    .fontSize(8)
-    .text("Documento de características dos equipamentos", PAGE_MARGIN, y, {
-      width: 280,
-      align: "left",
-    })
-    .text(`Página ${pageNumber}`, doc.page.width - PAGE_MARGIN - 90, y, {
-      width: 90,
-      align: "right",
-    });
+    .fontSize(8);
 
+  doc.text("Documento de características dos equipamentos", PAGE_MARGIN, y, {
+    width: 280,
+    align: "left",
+    lineBreak: false,
+  });
+
+  doc.text(`Página ${pageNumber}`, doc.page.width - PAGE_MARGIN - 90, y, {
+    width: 90,
+    align: "right",
+    lineBreak: false,
+  });
+
+  doc.restore();
   doc.fillColor(TEXT_COLOR);
 }
 
