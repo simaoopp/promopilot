@@ -1,8 +1,12 @@
 import { extractTextFromPdfBase64 } from "../services/quote-dossiers/pdfTextService.js";
 import { parseQuoteDossierFromText } from "../services/quote-dossiers/quoteDossierParser.js";
 import { generateQuoteDossierPdf } from "../services/quote-dossiers/quoteDossierPdfService.js";
+import {
+  extractCustomerFromQuoteText,
+  normalizeCustomerName,
+} from "../services/quote-dossiers/quoteDossierCustomerService.js";
 
-export const QUOTE_DOSSIER_RUNTIME_VERSION = "quote-dossier-manual-runtime-v1";
+export const QUOTE_DOSSIER_RUNTIME_VERSION = "quote-dossier-manual-runtime-v4";
 
 function requireString(value, field, { min = 1, max = 500 } = {}) {
   const text = String(value || "").trim();
@@ -99,7 +103,6 @@ function buildManualObservations(text = "", items = []) {
   const observations = [];
   const normalized = normalizeText(text);
 
-
   if (includesInstallation(normalized)) {
     observations.push(looksLikeLaundry(normalized, items) ? "Instalação de lavandaria incluída." : "Instalação incluída.");
   }
@@ -108,10 +111,6 @@ function buildManualObservations(text = "", items = []) {
 
   if (warrantyObservation) {
     observations.push(warrantyObservation);
-  }
-
-  if (!observations.length) {
-    return "";
   }
 
   return observations
@@ -123,9 +122,9 @@ function toManualItem(item = {}) {
   return {
     ...item,
     title: item.title || item.description || item.rawDescription || item.reference || "",
-    technicalDescription: "",
-    features: [],
-    imageDataUrl: "",
+    technicalDescription: item.technicalDescription || "",
+    features: Array.isArray(item.features) ? item.features : [],
+    imageDataUrl: item.imageDataUrl || "",
     enrichment: {
       status: "manual_required",
       source: "orcamento",
@@ -140,6 +139,10 @@ function serializeError(error) {
     message: error?.message || String(error || "Erro desconhecido."),
     name: error?.name || "Error",
   };
+}
+
+function corsSafeError(res, status, payload) {
+  return res.status(status).json(payload);
 }
 
 export function registerQuoteDossierRoutes(app, { requireAuth }) {
@@ -164,10 +167,13 @@ export function registerQuoteDossierRoutes(app, { requireAuth }) {
       const extracted = await extractTextFromPdfBase64(base64Pdf);
       const parsedDossier = parseQuoteDossierFromText(extracted.text, { filename });
       const items = Array.isArray(parsedDossier.items) ? parsedDossier.items.map(toManualItem) : [];
+      const extractedCustomer = extractCustomerFromQuoteText(extracted.text);
+      const customerName = normalizeCustomerName(parsedDossier.customerName) || extractedCustomer;
       const notes = buildManualObservations(extracted.text, items);
 
       const dossier = {
         ...parsedDossier,
+        customerName,
         notes,
         items,
         enrichmentSummary: {
@@ -187,11 +193,16 @@ export function registerQuoteDossierRoutes(app, { requireAuth }) {
         dossier,
         pages: extracted.pages,
         engine: extracted.engine || "unknown",
+        customerDebug: {
+          parsed: parsedDossier.customerName || "",
+          extracted: extractedCustomer || "",
+          final: customerName || "",
+        },
       });
     } catch (error) {
       console.error("[quote-dossiers] extract error:", error);
 
-      return res.status(400).json({
+      return corsSafeError(res, 400, {
         ok: false,
         version: QUOTE_DOSSIER_RUNTIME_VERSION,
         error: error?.message || "Erro ao extrair orçamento.",
@@ -204,21 +215,27 @@ export function registerQuoteDossierRoutes(app, { requireAuth }) {
     try {
       const dossier = req.body?.dossier || {};
       const items = Array.isArray(req.body?.items) ? req.body.items : [];
+      const safeDossier = {
+        ...dossier,
+        customerName: normalizeCustomerName(dossier.customerName) || dossier.customerName || "",
+        notes: String(dossier.notes || "")
+          .split(/\n+/)
+          .filter((line) => !/pronto\s+pagamento|condi[çc][aã]o\s+de\s+pagamento/i.test(line))
+          .join("\n"),
+        items,
+        enrichmentSummary: {
+          total: items.length,
+          manual: items.length,
+          mode: "manual",
+        },
+      };
 
       const pdfBuffer = await generateQuoteDossierPdf({
-        dossier: {
-          ...dossier,
-          items,
-          enrichmentSummary: {
-            total: items.length,
-            manual: items.length,
-            mode: "manual",
-          },
-        },
+        dossier: safeDossier,
         items,
       });
 
-      const filename = safeFilename(`${dossier.budgetNumber || "orcamento"}-dossier-tecnico.pdf`);
+      const filename = safeFilename(`${safeDossier.budgetNumber || "orcamento"}-dossier-tecnico.pdf`);
 
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
@@ -230,7 +247,7 @@ export function registerQuoteDossierRoutes(app, { requireAuth }) {
     } catch (error) {
       console.error("[quote-dossiers] generate error:", error);
 
-      return res.status(400).json({
+      return corsSafeError(res, 400, {
         ok: false,
         version: QUOTE_DOSSIER_RUNTIME_VERSION,
         error: error?.message || "Erro ao gerar dossier PDF.",
