@@ -44,6 +44,17 @@ function parseImageDataUrl(dataUrl = "") {
   return Buffer.from(match[2], "base64");
 }
 
+function itemDisplayName(item = {}) {
+  return safeTitle(item.title || item.description || item.rawDescription || [item.brand, item.reference].filter(Boolean).join(" ") || "Equipamento");
+}
+
+function noteLines(notes = "") {
+  return String(notes || "")
+    .split(/\n+/)
+    .map((line) => text(line).replace(/^[-•]\s*/, ""))
+    .filter(Boolean);
+}
+
 function drawHeader(doc, dossier = {}, pageTitle = "") {
   const top = 24;
 
@@ -193,7 +204,7 @@ function uniqueFeatures(features = []) {
     });
 }
 
-function drawBullets(doc, features = [], x, y, width, { maxItems = 8 } = {}) {
+function drawBullets(doc, features = [], x, y, width, { maxItems = 10 } = {}) {
   let currentY = y;
 
   uniqueFeatures(features)
@@ -202,7 +213,7 @@ function drawBullets(doc, features = [], x, y, width, { maxItems = 8 } = {}) {
       const bullet = cleanFeature(feature);
       if (!bullet) return;
 
-      const height = Math.min(doc.heightOfString(bullet, { width: width - 16, lineGap: 1 }), 26);
+      const height = Math.min(doc.heightOfString(bullet, { width: width - 16, lineGap: 1 }), 28);
 
       doc
         .font("Helvetica")
@@ -246,7 +257,7 @@ function drawImageBox(doc, item, x, y, width, height) {
     .fillColor("#8b95a5")
     .font("Helvetica")
     .fontSize(9)
-    .text("Fotografia não encontrada automaticamente", x, y + height / 2 - 5, {
+    .text("Fotografia a inserir pelo utilizador", x, y + height / 2 - 5, {
       width,
       align: "center",
     });
@@ -304,12 +315,11 @@ function drawSummaryPage(doc, dossier = {}, pageNumber) {
     { maxHeight: 70 },
   );
 
-  y = drawSectionTitle(doc, "Observações do orçamento", x, y + 6);
-  const notes = uniqueFeatures([
-    "Condição de pagamento: pronto pagamento.",
-    dossier.notes || "",
-  ]);
-  y = drawBullets(doc, notes, x, y, width, { maxItems: 3 }) + 8;
+  const notes = noteLines(dossier.notes);
+  if (notes.length) {
+    y = drawSectionTitle(doc, "Observações do orçamento", x, y + 6);
+    y = drawBullets(doc, notes, x, y, width, { maxItems: 8 }) + 8;
+  }
 
   y = drawSectionTitle(doc, "Equipamentos incluídos", x, y);
 
@@ -318,7 +328,7 @@ function drawSummaryPage(doc, dossier = {}, pageNumber) {
       .font("Helvetica")
       .fontSize(10)
       .fillColor(TEXT_COLOR)
-      .text(`${index + 1}. ${safeTitle(item.title || item.description || item.reference)}`, x, y, { width });
+      .text(`${index + 1}. ${itemDisplayName(item)}`, x, y, { width });
     y += 19;
   });
 }
@@ -330,7 +340,7 @@ function drawProductPage(doc, dossier = {}, item = {}, index = 0, pageNumber = 1
 
   y += 34;
 
-  const title = `${index + 1}. ${safeTitle(item.title || item.description || item.reference || "Equipamento")}`;
+  const title = `${index + 1}. ${itemDisplayName(item)}`;
 
   doc
     .fillColor(BRAND_COLOR)
@@ -376,7 +386,7 @@ function drawProductPage(doc, dossier = {}, item = {}, index = 0, pageNumber = 1
 
   y = drawParagraph(
     doc,
-    item.technicalDescription || item.description || item.rawDescription,
+    item.technicalDescription || "Descrição a inserir pelo utilizador.",
     x,
     y,
     width,
@@ -390,36 +400,7 @@ function drawProductPage(doc, dossier = {}, item = {}, index = 0, pageNumber = 1
     .text("Principais características", x, y + 4);
 
   y += 22;
-  drawBullets(doc, item.features, x + 8, y, width - 8, { maxItems: 8 });
-}
-
-function drawFinalPage(doc, dossier = {}, pageNumber = 1) {
-  let y = startPage(doc, dossier, "Nota final", pageNumber);
-  const x = PAGE_MARGIN;
-  const width = doc.page.width - PAGE_MARGIN * 2;
-
-  y += 34;
-  y = drawSectionTitle(doc, "Nota final", x, y);
-
-  y = drawParagraph(
-    doc,
-    "As características apresentadas foram organizadas automaticamente com base no orçamento, no catálogo técnico disponível e em informação validada internamente. Antes da encomenda definitiva e da instalação, recomenda-se a confirmação das medidas, requisitos de encastre, ventilação, ligações elétricas/hidráulicas, acessórios necessários e compatibilidade com o mobiliário existente.",
-    x,
-    y,
-    width,
-    { maxHeight: 120 },
-  );
-
-  y = drawSectionTitle(doc, "Fontes e validação", x, y + 16);
-
-  const sourceLines = uniqueFeatures([
-    "Orçamento Primavera/ORC carregado pelo utilizador.",
-    "Catálogo técnico interno/curado quando disponível.",
-    "Itens sem correspondência de catálogo devem ser revistos antes da entrega ao cliente.",
-    ...(dossier.items || []).map((item) => item.enrichment?.sourceLabel).filter(Boolean),
-  ]);
-
-  drawBullets(doc, sourceLines, x, y, width, { maxItems: 12 });
+  drawBullets(doc, item.features?.length ? item.features : ["Características a inserir pelo utilizador."], x + 8, y, width - 8, { maxItems: 8 });
 }
 
 export async function generateQuoteDossierPdf({ dossier = {}, items = [] } = {}) {
@@ -437,7 +418,7 @@ export async function generateQuoteDossierPdf({ dossier = {}, items = [] } = {})
       info: {
         Title: `${finalDossier.budgetNumber || "Orçamento"} - Características dos equipamentos`,
         Author: "PromoPilot",
-        Subject: "Dossier técnico automático",
+        Subject: "Dossier técnico manual",
       },
     });
 
@@ -454,9 +435,6 @@ export async function generateQuoteDossierPdf({ dossier = {}, items = [] } = {})
       pageNumber += 1;
       drawProductPage(doc, finalDossier, item, index, pageNumber);
     });
-
-    pageNumber += 1;
-    drawFinalPage(doc, finalDossier, pageNumber);
 
     doc.end();
   });

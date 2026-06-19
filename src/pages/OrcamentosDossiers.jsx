@@ -184,7 +184,7 @@ export default function OrcamentosDossiers() {
         total: extractedDossier.total || "",
         notes:
           extractedDossier.notes ||
-          "Documento gerado automaticamente a partir do orçamento carregado. Rever fotografias, características e medidas antes de entregar ao cliente.",
+          "Rever fotografias, descrição, características e medidas antes de entregar ao cliente.",
       });
 
       setItems(extractedItems);
@@ -235,10 +235,9 @@ export default function OrcamentosDossiers() {
       <section className="quote-hero">
         <div>
           <p className="eyebrow">Orçamentos</p>
-          <h1>Dossiers técnicos automáticos</h1>
+          <h1>Dossiers técnicos manuais</h1>
           <p>
-            Carrega o PDF do orçamento, revê os equipamentos, adiciona fotografias e gera um dossier organizado para
-            entregar ao cliente.
+            Carrega o PDF do orçamento, confirma os dados extraídos, adiciona manualmente fotografias, descrição e características, e gera o dossier final para entregar ao cliente.
           </p>
         </div>
 
@@ -321,7 +320,7 @@ export default function OrcamentosDossiers() {
               </div>
 
               <button type="button" className="btn btn-primary" onClick={handleGenerate} disabled={loadingGenerate || !items.length}>
-                {loadingGenerate ? "A gerar PDF..." : "Gerar PDF organizado"}
+                {loadingGenerate ? "A gerar PDF..." : "Gerar dossier PDF"}
               </button>
             </div>
 
@@ -373,7 +372,7 @@ export default function OrcamentosDossiers() {
                         </Field>
                       </div>
 
-                      <Field label="Descrição geral">
+                      <Field label="Descrição geral manual">
                         <textarea
                           rows={3}
                           value={item.technicalDescription || ""}
@@ -381,7 +380,7 @@ export default function OrcamentosDossiers() {
                         />
                       </Field>
 
-                      <Field label="Principais características (uma por linha)">
+                      <Field label="Características manuais (uma por linha)">
                         <textarea
                           rows={6}
                           value={joinFeatures(item.features)}
@@ -396,7 +395,7 @@ export default function OrcamentosDossiers() {
 
             <div className="quote-actions-bottom">
               <button type="button" className="btn btn-primary" onClick={handleGenerate} disabled={loadingGenerate || !items.length}>
-                {loadingGenerate ? "A gerar PDF..." : "Gerar PDF organizado"}
+                {loadingGenerate ? "A gerar PDF..." : "Gerar dossier PDF"}
               </button>
 
               {generatedPdf && (
