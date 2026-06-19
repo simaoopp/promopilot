@@ -73,14 +73,19 @@ const INVALID_CUSTOMER_PATTERNS = [
   /^Respons[aá]vel/i,
   /^Mercadoria/i,
   /^IVA\b/i,
+  /^IEC\b/i,
+  /^Acerto\b/i,
+  /^Portes\b/i,
+  /^Desconto/i,
+  /^Adiantamentos/i,
 ];
 
 function isMostlyUppercaseName(value = "") {
-  const letters = value.replace(/[^A-Za-zÀ-ÿ]/g, "");
+  const letters = String(value || "").replace(/[^A-Za-zÀ-ÿ]/g, "");
   if (!letters) return false;
 
   const upper = letters.replace(/[^A-ZÀ-Ý]/g, "");
-  return upper.length / letters.length >= 0.75;
+  return upper.length / letters.length >= 0.72;
 }
 
 export function normalizeCustomerName(value = "") {
@@ -90,7 +95,6 @@ export function normalizeCustomerName(value = "") {
     .trim();
 
   if (!candidate || candidate === "—" || candidate === "-") return "";
-
   if (candidate.length < 4 || candidate.length > 90) return "";
   if (/[@]|https?:|www\./i.test(candidate)) return "";
   if (/\d/.test(candidate)) return "";
@@ -98,21 +102,60 @@ export function normalizeCustomerName(value = "") {
 
   const words = candidate.match(/[A-Za-zÀ-ÿ]{2,}/g) || [];
   if (words.length < 2) return "";
-
-  // Evita apanhar cabeçalhos com muitas palavras de formulário.
   if (words.length > 7 && !isMostlyUppercaseName(candidate)) return "";
 
   return candidate;
 }
 
-function candidateScore({ line, index, exmoIndex, budgetIndex }) {
+function extractByExmoNeighborhood(lines = []) {
+  const exmoIndexes = [];
+
+  lines.forEach((line, index) => {
+    if (/Exmo\.\(s\)\s*Sr/i.test(line) || /^Exmo/i.test(line)) {
+      exmoIndexes.push(index);
+    }
+  });
+
+  for (const exmoIndex of exmoIndexes) {
+    const sameLineAfterExmo = collapseSpaces(lines[exmoIndex] || "")
+      .split(/Exmo\.\(s\)\s*Sr\.\(s\)|Exmo\.\(s\)\s*Sr|Exmo/i)
+      .slice(1)
+      .join(" ");
+
+    const sameLineCustomer = normalizeCustomerName(sameLineAfterExmo);
+    if (sameLineCustomer) return sameLineCustomer;
+
+    // Prioridade determinística: linhas mais próximas do bloco Exmo.
+    // Isto cobre os dois motores: pdf-parse costuma colocar o cliente antes;
+    // extração por coordenadas pode colocar depois.
+    const preferredIndexes = [
+      exmoIndex - 1,
+      exmoIndex + 1,
+      exmoIndex - 2,
+      exmoIndex + 2,
+      exmoIndex - 3,
+      exmoIndex + 3,
+      exmoIndex - 4,
+      exmoIndex + 4,
+    ];
+
+    for (const index of preferredIndexes) {
+      const customer = normalizeCustomerName(lines[index] || "");
+      if (customer) return customer;
+    }
+  }
+
+  return "";
+}
+
+function customerScore({ line, index, exmoIndex, budgetIndex }) {
   const words = line.match(/[A-Za-zÀ-ÿ]{2,}/g) || [];
   let score = 0;
 
   if (isMostlyUppercaseName(line)) score += 10;
   if (words.length === 3) score += 8;
   if (words.length === 2 || words.length === 4) score += 4;
-  if (exmoIndex >= 0) score += Math.max(0, 20 - Math.abs(index - exmoIndex));
+  if (exmoIndex >= 0) score += Math.max(0, 24 - Math.abs(index - exmoIndex));
   if (budgetIndex >= 0 && index < budgetIndex) score += 4;
   if (/&|,|\./.test(line)) score -= 6;
   if (words.length > 5) score -= 6;
@@ -120,10 +163,32 @@ function candidateScore({ line, index, exmoIndex, budgetIndex }) {
   return score;
 }
 
-function extractFromSameExmoLine(line = "") {
-  const clean = collapseSpaces(line);
-  const after = clean.split(/Exmo\.\(s\)\s*Sr\.\(s\)|Exmo\.\(s\)\s*Sr|Exmo/i)[1] || "";
-  return normalizeCustomerName(after);
+function extractScored(lines = []) {
+  const exmoIndex = lines.findIndex((line) => /Exmo\.\(s\)\s*Sr/i.test(line) || /^Exmo/i.test(line));
+  const budgetIndex = lines.findIndex((line) => /Or[çc]amentos\s+OR\s+ORC\./i.test(line));
+
+  const from = exmoIndex >= 0 ? Math.max(0, exmoIndex - 22) : 0;
+  const to = exmoIndex >= 0
+    ? Math.min(lines.length - 1, exmoIndex + 22)
+    : budgetIndex > 0
+      ? budgetIndex
+      : Math.min(lines.length - 1, 80);
+
+  const candidates = [];
+
+  for (let index = from; index <= to; index += 1) {
+    const customer = normalizeCustomerName(lines[index]);
+    if (!customer) continue;
+
+    candidates.push({
+      customer,
+      score: customerScore({ line: customer, index, exmoIndex, budgetIndex }),
+    });
+  }
+
+  candidates.sort((a, b) => b.score - a.score);
+
+  return candidates[0]?.customer || "";
 }
 
 export function extractCustomerFromQuoteText(text = "") {
@@ -134,62 +199,11 @@ export function extractCustomerFromQuoteText(text = "") {
 
   if (!lines.length) return "";
 
-  const exmoIndex = lines.findIndex((line) => /Exmo\.\(s\)\s*Sr/i.test(line) || /^Exmo/i.test(line));
-  const budgetIndex = lines.findIndex((line) => /Or[çc]amentos\s+OR\s+ORC\./i.test(line));
+  const byExmo = extractByExmoNeighborhood(lines);
+  if (byExmo) return byExmo;
 
-  if (exmoIndex >= 0) {
-    const sameLineCustomer = extractFromSameExmoLine(lines[exmoIndex]);
-    if (sameLineCustomer) return sameLineCustomer;
-
-    // Preferência absoluta: linha imediatamente antes/depois de Exmo.
-    const preferredIndexes = [
-      exmoIndex - 1,
-      exmoIndex + 1,
-      exmoIndex - 2,
-      exmoIndex + 2,
-      exmoIndex - 3,
-      exmoIndex + 3,
-    ];
-
-    for (const index of preferredIndexes) {
-      const customer = normalizeCustomerName(lines[index] || "");
-      if (customer) return customer;
-    }
-
-    // Se a extração por coordenadas baralhar a ordem, pontua candidatos próximos.
-    const candidates = [];
-
-    for (let index = Math.max(0, exmoIndex - 16); index <= Math.min(lines.length - 1, exmoIndex + 16); index += 1) {
-      const customer = normalizeCustomerName(lines[index]);
-      if (!customer) continue;
-
-      candidates.push({
-        customer,
-        score: candidateScore({ line: customer, index, exmoIndex, budgetIndex }),
-      });
-    }
-
-    candidates.sort((a, b) => b.score - a.score);
-    if (candidates[0]?.customer) return candidates[0].customer;
-  }
-
-  // Fallback: procura nomes de pessoa antes do bloco do orçamento.
-  if (budgetIndex > 0) {
-    const candidates = [];
-
-    for (let index = Math.max(0, budgetIndex - 45); index < budgetIndex; index += 1) {
-      const customer = normalizeCustomerName(lines[index]);
-      if (!customer) continue;
-
-      candidates.push({
-        customer,
-        score: candidateScore({ line: customer, index, exmoIndex, budgetIndex }),
-      });
-    }
-
-    candidates.sort((a, b) => b.score - a.score);
-    if (candidates[0]?.customer) return candidates[0].customer;
-  }
+  const byScore = extractScored(lines);
+  if (byScore) return byScore;
 
   return "";
 }

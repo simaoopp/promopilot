@@ -6,7 +6,7 @@ import {
   normalizeCustomerName,
 } from "../services/quote-dossiers/quoteDossierCustomerService.js";
 
-export const QUOTE_DOSSIER_RUNTIME_VERSION = "quote-dossier-manual-runtime-v6";
+export const QUOTE_DOSSIER_RUNTIME_VERSION = "quote-dossier-manual-runtime-v7";
 
 function requireString(value, field, { min = 1, max = 500 } = {}) {
   const text = String(value || "").trim();
@@ -119,12 +119,14 @@ function buildManualObservations(text = "", items = []) {
 }
 
 function toManualItem(item = {}) {
+  // Manual sénior: o orçamento só alimenta identificação/preço.
+  // Foto, descrição e características ficam para o utilizador preencher.
   return {
     ...item,
     title: item.title || item.description || item.rawDescription || item.reference || "",
-    technicalDescription: item.technicalDescription || "",
-    features: Array.isArray(item.features) ? item.features : [],
-    imageDataUrl: item.imageDataUrl || "",
+    technicalDescription: "",
+    features: [],
+    imageDataUrl: "",
     enrichment: {
       status: "manual_required",
       source: "orcamento",
@@ -141,8 +143,20 @@ function serializeError(error) {
   };
 }
 
-function corsSafeError(res, status, payload) {
-  return res.status(status).json(payload);
+function resolveCustomerName({ extracted, parsedDossier }) {
+  const combinedCustomerText = [
+    extracted.customerCandidate,
+    extracted.rawText,
+    extracted.combinedText,
+    extracted.text,
+  ].filter(Boolean).join("\n\n");
+
+  return (
+    normalizeCustomerName(extracted.customerCandidate) ||
+    extractCustomerFromQuoteText(combinedCustomerText) ||
+    normalizeCustomerName(parsedDossier.customerName) ||
+    ""
+  );
 }
 
 export function registerQuoteDossierRoutes(app, { requireAuth }) {
@@ -165,13 +179,10 @@ export function registerQuoteDossierRoutes(app, { requireAuth }) {
       const base64Pdf = requireString(req.body?.pdfBase64, "pdfBase64", { min: 20, max: 90_000_000 });
 
       const extracted = await extractTextFromPdfBase64(base64Pdf);
-      const parsedDossier = parseQuoteDossierFromText(extracted.text, { filename });
+      const parsedDossier = parseQuoteDossierFromText(extracted.text || extracted.rawText || "", { filename });
       const items = Array.isArray(parsedDossier.items) ? parsedDossier.items.map(toManualItem) : [];
-      const customerSourceText = [extracted.text, extracted.rawText, extracted.combinedText].filter(Boolean).join("\n\n");
-      const extractedCustomer = extractCustomerFromQuoteText(customerSourceText);
-      const parsedCustomer = normalizeCustomerName(parsedDossier.customerName);
-      const customerName = extractedCustomer || parsedCustomer;
-      const notes = buildManualObservations(extracted.text, items);
+      const customerName = resolveCustomerName({ extracted, parsedDossier });
+      const notes = buildManualObservations(extracted.combinedText || extracted.rawText || extracted.text || "", items);
 
       const dossier = {
         ...parsedDossier,
@@ -197,7 +208,7 @@ export function registerQuoteDossierRoutes(app, { requireAuth }) {
         engine: extracted.engine || "unknown",
         customerDebug: {
           parsed: parsedDossier.customerName || "",
-          extracted: extractedCustomer || "",
+          candidate: extracted.customerCandidate || "",
           final: customerName || "",
           hasRawText: Boolean(extracted.rawText),
           engine: extracted.engine || "unknown",
@@ -206,7 +217,7 @@ export function registerQuoteDossierRoutes(app, { requireAuth }) {
     } catch (error) {
       console.error("[quote-dossiers] extract error:", error);
 
-      return corsSafeError(res, 400, {
+      return res.status(400).json({
         ok: false,
         version: QUOTE_DOSSIER_RUNTIME_VERSION,
         error: error?.message || "Erro ao extrair orçamento.",
@@ -251,7 +262,7 @@ export function registerQuoteDossierRoutes(app, { requireAuth }) {
     } catch (error) {
       console.error("[quote-dossiers] generate error:", error);
 
-      return corsSafeError(res, 400, {
+      return res.status(400).json({
         ok: false,
         version: QUOTE_DOSSIER_RUNTIME_VERSION,
         error: error?.message || "Erro ao gerar dossier PDF.",
