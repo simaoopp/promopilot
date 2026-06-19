@@ -6,7 +6,7 @@ import {
   normalizeCustomerName,
 } from "../services/quote-dossiers/quoteDossierCustomerService.js";
 
-export const QUOTE_DOSSIER_RUNTIME_VERSION = "quote-dossier-manual-runtime-v7";
+export const QUOTE_DOSSIER_RUNTIME_VERSION = "quote-dossier-manual-runtime-v8";
 
 function requireString(value, field, { min = 1, max = 500 } = {}) {
   const text = String(value || "").trim();
@@ -232,7 +232,7 @@ export function registerQuoteDossierRoutes(app, { requireAuth }) {
       const items = Array.isArray(req.body?.items) ? req.body.items : [];
       const safeDossier = {
         ...dossier,
-        customerName: normalizeCustomerName(dossier.customerName) || dossier.customerName || "",
+        customerName: normalizeCustomerName(dossier.customerName) || "",
         notes: String(dossier.notes || "")
           .split(/\n+/)
           .filter((line) => !/pronto\s+pagamento|condi[çc][aã]o\s+de\s+pagamento/i.test(line))

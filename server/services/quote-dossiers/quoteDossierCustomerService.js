@@ -14,6 +14,7 @@ function collapseSpaces(value = "") {
 }
 
 const INVALID_CUSTOMER_PATTERNS = [
+  // Cabeçalhos / condições comerciais
   /V\/N\.?º?\s*Contrib/i,
   /Requisi[çc][aã]o/i,
   /Desc\.\s*Cli/i,
@@ -22,6 +23,18 @@ const INVALID_CUSTOMER_PATTERNS = [
   /Vencimento/i,
   /Enti?dade/i,
   /PRONTO\s+PAGAMENTO/i,
+
+  // Linhas de serviço / observações: nunca são cliente.
+  /instala[çc][aã]o/i,
+  /inclu[ií]d[ao]/i,
+  /mapfre/i,
+  /garantia/i,
+  /entrega/i,
+  /montagem/i,
+  /transporte/i,
+  /servi[çc]o/i,
+
+  // Moradas/contactos
   /^Rua\b/i,
   /^RUA\b/i,
   /^Avenida\b/i,
@@ -45,6 +58,8 @@ const INVALID_CUSTOMER_PATTERNS = [
   /^Telef\b/i,
   /^Tel\.?/i,
   /^Fax\b/i,
+
+  // Empresa emissora / metadados
   /^Contribuinte\b/i,
   /^Capital\b/i,
   /^C\.R\.C\./i,
@@ -56,6 +71,8 @@ const INVALID_CUSTOMER_PATTERNS = [
   /Jos[eé]\s+Tom[aá]s\s+da\s+Cunha/i,
   /Filhos,\s*Lda/i,
   /\bLda\b/i,
+
+  // Blocos técnicos do Primavera
   /^Descarga\b/i,
   /^Carga\b/i,
   /^N\/ Morada/i,
@@ -88,6 +105,19 @@ function isMostlyUppercaseName(value = "") {
   return upper.length / letters.length >= 0.72;
 }
 
+function hasPersonNameShape(value = "") {
+  const words = String(value || "").match(/[A-Za-zÀ-ÿ]{2,}/g) || [];
+
+  if (words.length < 2 || words.length > 7) return false;
+
+  // Linhas de cliente em Primavera costumam ser pessoa/empresa curta.
+  // Para evitar serviços como "Instalação incluída", exigimos forma de nome:
+  // tudo maiúsculo OU palavras com inicial maiúscula.
+  if (isMostlyUppercaseName(value)) return true;
+
+  return words.every((word) => /^[A-ZÀ-Ý][a-zà-ÿ]+$/.test(word));
+}
+
 export function normalizeCustomerName(value = "") {
   const candidate = collapseSpaces(value)
     .replace(/^Cliente\s*[:.-]?\s*/i, "")
@@ -99,10 +129,7 @@ export function normalizeCustomerName(value = "") {
   if (/[@]|https?:|www\./i.test(candidate)) return "";
   if (/\d/.test(candidate)) return "";
   if (INVALID_CUSTOMER_PATTERNS.some((pattern) => pattern.test(candidate))) return "";
-
-  const words = candidate.match(/[A-Za-zÀ-ÿ]{2,}/g) || [];
-  if (words.length < 2) return "";
-  if (words.length > 7 && !isMostlyUppercaseName(candidate)) return "";
+  if (!hasPersonNameShape(candidate)) return "";
 
   return candidate;
 }
@@ -125,9 +152,8 @@ function extractByExmoNeighborhood(lines = []) {
     const sameLineCustomer = normalizeCustomerName(sameLineAfterExmo);
     if (sameLineCustomer) return sameLineCustomer;
 
-    // Prioridade determinística: linhas mais próximas do bloco Exmo.
-    // Isto cobre os dois motores: pdf-parse costuma colocar o cliente antes;
-    // extração por coordenadas pode colocar depois.
+    // Prioridade determinística. No ORC Primavera, o nome vem imediatamente antes
+    // ou imediatamente depois do marcador Exmo.(s) Sr.(s), dependendo do motor PDF.
     const preferredIndexes = [
       exmoIndex - 1,
       exmoIndex + 1,
