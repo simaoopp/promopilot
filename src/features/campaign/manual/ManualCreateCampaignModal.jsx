@@ -38,7 +38,7 @@ export default function ManualCreateCampaignModal({
             <div className="popup-eyebrow">Campanha manual</div>
             <h2>Criar campanha</h2>
             <p className="popup-subtitle">
-              Pesquisa um artigo do catálogo, define os preços e adiciona-o diretamente à campanha.
+              Pesquisa um artigo do catálogo. O preço antes passa a ser o PVP3 e o preço atual mantém o PVP2.
             </p>
           </div>
 
@@ -116,7 +116,7 @@ export default function ManualCreateCampaignModal({
 
                   <div className="campanha-precos-grid">
                     <label className="input-group">
-                      <span>PVP2 antes</span>
+                      <span>PVP3 antes</span>
                       <input
                         type="text"
                         value={campanhaAntes}

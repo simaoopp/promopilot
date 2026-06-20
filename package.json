@@ -34,7 +34,8 @@
     "repair:artigos-json": "node scripts/repair-artigos-json.mjs",
     "migrate:article-prices": "node scripts/migrate-artigos-prices-to-supabase.mjs",
     "qa:saas": "python3 scripts/saas_readiness_check.py",
-    "qa:all": "npm run qa:static && npm run qa:saas && npm --prefix server run smoke"
+    "qa:all": "npm run qa:static && npm run qa:saas && npm --prefix server run smoke",
+    "migrate:articles-db-update": "node scripts/migrate-artigos-db-update-to-supabase.mjs"
   },
   "browserslist": [
     ">0.2%",
