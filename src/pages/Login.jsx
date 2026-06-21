@@ -84,7 +84,6 @@ export default function Login() {
 
           <div className="pp-login-trust-row">
             <span>Simples para usar</span>
-            <span>Rápido para vender</span>
             <span>Pronto para imprimir</span>
           </div>
         </section>
