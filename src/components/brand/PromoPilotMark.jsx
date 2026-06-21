@@ -1,5 +1,5 @@
 import React from "react";
-import { PROMOPILOT_BRAND } from "../../brand/promopilot";
+import logo from "../../logo.png";
 
 export default function PromoPilotMark({
   compact = false,
@@ -7,18 +7,15 @@ export default function PromoPilotMark({
   className = "",
 }) {
   return (
-    <div className={`pp-brand-lockup pp-brand-lockup-${tone} ${compact ? "pp-brand-compact" : ""} ${className}`.trim()}>
-      <div className="pp-brand-mark" aria-hidden="true">
-        <span className="pp-brand-mark-dot" />
-        <strong>PP</strong>
-      </div>
-
-      {!compact && (
-        <div className="pp-brand-copy">
-          <span className="pp-brand-name">{PROMOPILOT_BRAND.appName}</span>
-          <span className="pp-brand-descriptor">{PROMOPILOT_BRAND.descriptor}</span>
-        </div>
-      )}
+    <div
+      className={`pp-brand-lockup pp-brand-lockup-${tone} ${compact ? "pp-brand-compact" : ""} pp-brand-real-logo ${className}`.trim()}
+    >
+      <img
+        src={logo}
+        alt="PromoPilot"
+        className={`pp-brand-logo-img ${compact ? "pp-brand-logo-img-compact" : ""}`.trim()}
+        draggable="false"
+      />
     </div>
   );
 }

@@ -1,22 +1,10 @@
 import React from "react";
-import { BRAND } from "../../brand/promopilot";
+import PromoPilotMark from "./PromoPilotMark";
 
-export function PromoPilotMark({ className = "", size = "md" }) {
-  return (
-    <span className={`promopilot-mark promopilot-mark-${size} ${className}`.trim()} aria-hidden="true">
-      P
-    </span>
-  );
+export { PromoPilotMark };
+
+export function PromoPilotWordmark({ compact = false, className = "" }) {
+  return <PromoPilotMark compact={compact} className={className} />;
 }
 
-export function PromoPilotWordmark({ compact = false, subtitle = BRAND.supportLine, className = "" }) {
-  return (
-    <div className={`promopilot-wordmark ${compact ? "promopilot-wordmark-compact" : ""} ${className}`.trim()}>
-      <PromoPilotMark size={compact ? "sm" : "md"} />
-      <div className="promopilot-wordmark-copy">
-        <strong>{BRAND.productName}</strong>
-        {!compact && subtitle && <span>{subtitle}</span>}
-      </div>
-    </div>
-  );
-}
+export default PromoPilotMark;
