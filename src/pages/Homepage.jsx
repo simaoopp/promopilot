@@ -299,6 +299,7 @@ export default function HomePage() {
         onOpenCampaign={() => navigate("/EtiquetasCampanha")}
         onOpenArticles={() => navigate("/Etiquetas")}
         onOpenScan={() => navigate("/Etiquetas?mode=scan")}
+        onOpenDossiers={() => navigate("/OrcamentosDossiers")}
         onOpenExcel={() => navigate("/EtiquetasCampanhaExcel")}
       />
 

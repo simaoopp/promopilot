@@ -1,6 +1,6 @@
-# Etiquetas Prom
+# PromoPilot
 
-SaaS para gestão de campanhas e etiquetas promocionais com geração de PDFs, separação por loja, automação por email e fundação multi-tenant.
+SaaS operacional para campanhas, etiquetas, catálogo de artigos, dossiers comerciais e processos de loja, com Supabase, histórico e fundação multi-tenant.
 
 ## Arquitetura atual
 

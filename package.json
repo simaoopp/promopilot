@@ -1,7 +1,7 @@
 {
   "name": "etiquetas-prom-web",
   "version": "1.0.0",
-  "description": "Expert Administração - gestão de artigos, campanhas e etiquetas com Supabase.",
+  "description": "PromoPilot - cockpit SaaS para campanhas, etiquetas, artigos e dossiers comerciais.",
   "keywords": [],
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
