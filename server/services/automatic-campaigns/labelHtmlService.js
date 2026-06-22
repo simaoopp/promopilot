@@ -22,7 +22,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, "../../..");
 const srcRoot = path.join(projectRoot, "src");
-const logoPath = path.join(srcRoot, "logo.png");
+const labelLogoCandidates = [
+  path.join(srcRoot, "assets", "expert-label-logo.png"),
+  path.join(srcRoot, "logo.png"),
+];
 const tokensCssPath = path.join(srcRoot, "styles", "tokens.css");
 const baseCssPath = path.join(srcRoot, "styles", "base.css");
 const printCssPath = path.join(srcRoot, "styles", "print.css");
@@ -46,8 +49,14 @@ function readCssFile(filePath) {
   }
 }
 
+function getExistingLogoPath() {
+  return labelLogoCandidates.find((candidatePath) => fs.existsSync(candidatePath)) || null;
+}
+
 function getLogoDataUri() {
   try {
+    const logoPath = getExistingLogoPath();
+    if (!logoPath) return "";
     const buffer = fs.readFileSync(logoPath);
     return `data:image/png;base64,${buffer.toString("base64")}`;
   } catch (_error) {

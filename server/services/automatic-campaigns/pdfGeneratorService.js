@@ -12,7 +12,11 @@ import { getAutomaticCampaignConfig } from "./config.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, "../../..");
-const logoPath = path.join(projectRoot, "src", "logo.png");
+const labelLogoCandidates = [
+  path.join(projectRoot, "src", "assets", "expert-label-logo.png"),
+  path.join(projectRoot, "src", "logo.png"),
+];
+const EXPERT_LABEL_ORANGE = "#ec6707";
 
 const A4 = { width: 595.28, height: 841.89 };
 
@@ -23,6 +27,10 @@ function bufferFromPdf(doc) {
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
   });
+}
+
+function getExistingLogoPath() {
+  return labelLogoCandidates.find((candidatePath) => fs.existsSync(candidatePath)) || null;
 }
 
 function getLayout(format) {
@@ -72,12 +80,14 @@ function textCentered(doc, text, x, y, width, options = {}) {
 }
 
 function drawLogo(doc, x, y, width, height) {
-  if (fs.existsSync(logoPath)) {
+  const logoPath = getExistingLogoPath();
+
+  if (logoPath) {
     doc.image(logoPath, x, y, { fit: [width, height], align: "center", valign: "center" });
     return;
   }
 
-  doc.font("Helvetica-Bold").fontSize(22).text("EXPERT", x, y + 8, { width, align: "center" });
+  doc.fillColor(EXPERT_LABEL_ORANGE).font("Helvetica-Bold").fontSize(22).text("EXPERT", x, y + 8, { width, align: "center" });
 }
 
 function getValidityText(item = {}, anoValidade) {
