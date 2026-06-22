@@ -820,3 +820,73 @@
   }
 }
 /* EXPERT LABEL BRANDING V2 END */
+
+/* EXPERT LABEL BORDER COLOR V3 START */
+/*
+  Garante que TODAS as molduras/linhas de corte das etiquetas ficam na cor Expert.
+  Esta regra fica no fim do ficheiro para ganhar prioridade sobre a UI PromoPilot.
+*/
+:root {
+  --expert-label-orange: #ec6707;
+  --color-primary: #ec6707;
+  --color-primary-dark: #ec6707;
+  --color-primary-darker: #ec6707;
+}
+
+.label,
+.label.label-a5,
+.label.label-a6 {
+  border-color: #ec6707 !important;
+}
+
+.label::before,
+.label.label-a5::before,
+.label.label-a6::before {
+  border-color: #ec6707 !important;
+}
+
+.sheet.sheet-a5::after,
+.sheet-a5::after {
+  border-top-color: #ec6707 !important;
+}
+
+.label .topbar,
+.label.label-a5 .topbar,
+.label.label-a6 .topbar {
+  background: #ec6707 !important;
+}
+
+@media print {
+  :root {
+    --expert-label-orange: #ec6707 !important;
+    --color-primary: #ec6707 !important;
+    --color-primary-dark: #ec6707 !important;
+    --color-primary-darker: #ec6707 !important;
+  }
+
+  .label,
+  .label.label-a5,
+  .label.label-a6 {
+    border-color: #ec6707 !important;
+  }
+
+  .label::before,
+  .label.label-a5::before,
+  .label.label-a6::before {
+    border-color: #ec6707 !important;
+  }
+
+  .sheet.sheet-a5::after,
+  .sheet-a5::after {
+    border-top-color: #ec6707 !important;
+  }
+
+  .label .topbar,
+  .label.label-a5 .topbar,
+  .label.label-a6 .topbar {
+    background: #ec6707 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
+/* EXPERT LABEL BORDER COLOR V3 END */

@@ -147,7 +147,7 @@ function drawCampaignLabel(doc, item, slot, options = {}) {
   const borderRadius = isA5 ? 18 : 14;
 
   doc.save();
-  doc.lineWidth(2.6).roundedRect(x, y, width, height, borderRadius).stroke("#111");
+  doc.lineWidth(2.6).roundedRect(x, y, width, height, borderRadius).stroke(EXPERT_LABEL_ORANGE);
 
   const innerX = x + 12;
   const innerW = width - 24;

@@ -233,6 +233,25 @@ function renderSharedCss() {
       border-top-color: ${EXPERT_ORANGE} !important;
     }
 
+    /* EXPERT LABEL BORDER COLOR V3 SERVER */
+    .label,
+    .label.label-a5,
+    .label.label-a6 {
+      border-color: ${EXPERT_ORANGE} !important;
+    }
+
+    .label::before,
+    .label.label-a5::before,
+    .label.label-a6::before {
+      border-color: ${EXPERT_ORANGE} !important;
+    }
+
+    .label .topbar,
+    .label.label-a5 .topbar,
+    .label.label-a6 .topbar {
+      background: ${EXPERT_ORANGE} !important;
+    }
+
     /* Tipografia senior: a etiqueta manual tem peso visual de bold/extra-bold.
        Como a geração por email corre no Chromium do backend e pode não ter a
        mesma fonte física do computador que imprime manualmente, aplicamos a
