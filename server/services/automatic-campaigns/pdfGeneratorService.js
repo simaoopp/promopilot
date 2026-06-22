@@ -83,11 +83,19 @@ function drawLogo(doc, x, y, width, height) {
   const logoPath = getExistingLogoPath();
 
   if (logoPath) {
-    doc.image(logoPath, x, y, { fit: [width, height], align: "center", valign: "center" });
+    doc.image(logoPath, x, y, {
+      fit: [width, height],
+      align: "center",
+      valign: "center",
+    });
     return;
   }
 
-  doc.fillColor(EXPERT_LABEL_ORANGE).font("Helvetica-Bold").fontSize(22).text("EXPERT", x, y + 8, { width, align: "center" });
+  doc
+    .fillColor("#ffffff")
+    .font("Helvetica-Bold")
+    .fontSize(22)
+    .text("EXPERT", x, y + 8, { width, align: "center" });
 }
 
 function getValidityText(item = {}, anoValidade) {
@@ -143,10 +151,17 @@ function drawCampaignLabel(doc, item, slot, options = {}) {
 
   const innerX = x + 12;
   const innerW = width - 24;
-  let cursorY = y + 12;
+  const headerH = isA5 ? 60 : 46;
+  const logoW = innerW * (isA5 ? 0.78 : 0.84);
+  const logoH = headerH * 0.74;
 
-  drawLogo(doc, innerX + innerW * 0.22, cursorY, innerW * 0.56, isA5 ? 48 : 36);
-  cursorY += isA5 ? 54 : 42;
+  doc.save();
+  doc.roundedRect(x, y, width, headerH, borderRadius).fill(EXPERT_LABEL_ORANGE);
+  doc.rect(x, y + headerH - borderRadius, width, borderRadius).fill(EXPERT_LABEL_ORANGE);
+  doc.restore();
+
+  drawLogo(doc, innerX + (innerW - logoW) / 2, y + (headerH - logoH) / 2, logoW, logoH);
+  let cursorY = y + headerH + (isA5 ? 14 : 10);
 
   textCentered(doc, item.codigo || item.artigo || "", innerX, cursorY, innerW, {
     font: "Helvetica-Bold",
@@ -271,7 +286,7 @@ async function generateWithPdfKit({ items, title, storeLabel, format = "automati
     autoFirstPage: false,
     info: {
       Title: `${title || "PROMOÇÃO"} - ${storeLabel || "Loja"}`,
-      Author: "Expert Administração",
+      Author: "Expert",
       Subject: "Etiquetas de campanha automáticas",
     },
   });

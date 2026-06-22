@@ -57,6 +57,7 @@ function getLogoDataUri() {
   try {
     const logoPath = getExistingLogoPath();
     if (!logoPath) return "";
+
     const buffer = fs.readFileSync(logoPath);
     return `data:image/png;base64,${buffer.toString("base64")}`;
   } catch (_error) {
