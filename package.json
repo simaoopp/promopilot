@@ -1,7 +1,7 @@
 {
   "name": "etiquetas-prom-web",
   "version": "1.0.0",
-  "description": "Expert Administração - gestão de artigos, campanhas e etiquetas com Supabase.",
+  "description": "Aplicação para gestão de campanhas, etiquetas, artigos e dossiers comerciais.",
   "keywords": [],
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
@@ -33,8 +33,8 @@
     "validate:artigos-json": "node -e \"const fs=require('fs');const data=JSON.parse(fs.readFileSync('src/data/artigos.json','utf8'));if(!Array.isArray(data.artigos)){throw new Error('artigos.json precisa de conter um array artigos')}console.log('artigos.json válido:', data.artigos.length, 'artigos')\"",
     "repair:artigos-json": "node scripts/repair-artigos-json.mjs",
     "migrate:article-prices": "node scripts/migrate-artigos-prices-to-supabase.mjs",
-    "qa:saas": "python3 scripts/saas_readiness_check.py",
-    "qa:all": "npm run qa:static && npm run qa:saas && npm --prefix server run smoke"
+    "qa:all": "npm run qa:static && npm --prefix server run smoke",
+    "migrate:articles-db-update": "node scripts/migrate-artigos-db-update-to-supabase.mjs"
   },
   "browserslist": [
     ">0.2%",

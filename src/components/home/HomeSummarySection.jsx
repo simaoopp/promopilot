@@ -1,4 +1,38 @@
 import React from "react";
-export default function HomeSummarySection({ totalArtigos, totalCampanhas }) {
-  return <div className="home-section"><div className="table-card-header"><h2>Resumo</h2></div><div className="resumo-cards"><div className="resumo-card"><span className="resumo-label">Artigos em catálogo</span><strong>{totalArtigos}</strong></div><div className="resumo-card"><span className="resumo-label">Campanhas recentes</span><strong>{totalCampanhas}</strong></div><div className="resumo-card"><span className="resumo-label">Entrada mais rápida</span><strong>Pesquisa e detalhes</strong></div></div></div>;
+
+export default function HomeSummarySection() {
+  const cards = [
+    {
+      label: "Criar uma campanha",
+      text: "Escolha os artigos, confirme os preços e imprima as etiquetas.",
+    },
+    {
+      label: "Confirmar um artigo",
+      text: "Pesquise por código, EAN, marca ou descrição antes de avançar.",
+    },
+    {
+      label: "Preparar uma proposta",
+      text: "Use os dossiers para apresentar melhor os orçamentos ao cliente.",
+    },
+  ];
+
+  return (
+    <section className="home-section pp-summary-section">
+      <div className="table-card-header pp-card-header">
+        <div>
+          <span className="pp-kicker">Atalhos úteis</span>
+          <h2>Comece por aqui</h2>
+        </div>
+      </div>
+
+      <div className="resumo-cards pp-summary-grid">
+        {cards.map((card) => (
+          <article key={card.label} className="resumo-card pp-summary-card">
+            <span className="resumo-label">{card.label}</span>
+            <p>{card.text}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
 }

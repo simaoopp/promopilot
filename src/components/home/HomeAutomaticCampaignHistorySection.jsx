@@ -17,10 +17,7 @@ function getPdfUrl(campanha) {
 function countFormats(items = []) {
   return (Array.isArray(items) ? items : []).reduce(
     (acc, item) => {
-      const format = String(
-        item?._formato || item?.formato_final || item?.formatoEtiqueta || "a6",
-      ).toLowerCase();
-
+      const format = String(item?._formato || item?.formato_final || item?.formatoEtiqueta || "a6").toLowerCase();
       if (format === "a5") acc.a5 += 1;
       else acc.a6 += 1;
       return acc;
@@ -35,18 +32,21 @@ export default function HomeAutomaticCampaignHistorySection({
   formatarDataHistorico,
 }) {
   return (
-    <div className="home-section">
-      <div className="table-card-header">
-        <h2>Histórico de campanhas automático</h2>
+    <section className="home-section pp-history-section">
+      <div className="table-card-header pp-card-header">
+        <div>
+          <span className="pp-kicker">Automação</span>
+          <h2>Campanhas automáticas</h2>
+        </div>
       </div>
 
       <div className="home-history-wrap">
         {historicoPreview.length === 0 ? (
-          <div className="home-history-empty">
+          <div className="home-history-empty pp-empty-state">
             Ainda não existem campanhas automáticas guardadas.
           </div>
         ) : (
-          <div className="home-history-grid">
+          <div className="home-history-grid pp-history-grid">
             {historicoPreview
               .filter((campanha) => campanha && campanha.id)
               .map((campanha) => {
@@ -57,7 +57,7 @@ export default function HomeAutomaticCampaignHistorySection({
                   <button
                     key={campanha.id}
                     type="button"
-                    className="home-history-card home-history-card-auto"
+                    className="home-history-card home-history-card-auto pp-history-card pp-history-card-auto"
                     onClick={() => onOpenCampaign(campanha)}
                   >
                     <div className="home-history-top">
@@ -80,9 +80,7 @@ export default function HomeAutomaticCampaignHistorySection({
                     </div>
 
                     <div className="home-history-preview">
-                      {campanha.emailSubject ? (
-                        <p>Email: {campanha.emailSubject}</p>
-                      ) : null}
+                      {campanha.emailSubject ? <p>Email: {campanha.emailSubject}</p> : null}
                       {campanha.emailFrom ? <p>De: {campanha.emailFrom}</p> : null}
                       {Array.isArray(campanha.dados) &&
                         campanha.dados.slice(0, 2).map((item) => (
@@ -97,6 +95,6 @@ export default function HomeAutomaticCampaignHistorySection({
           </div>
         )}
       </div>
-    </div>
+    </section>
   );
 }

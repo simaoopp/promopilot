@@ -12,7 +12,11 @@ import { getAutomaticCampaignConfig } from "./config.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, "../../..");
-const logoPath = path.join(projectRoot, "src", "logo.png");
+const labelLogoCandidates = [
+  path.join(projectRoot, "src", "assets", "expert-label-logo.png"),
+  path.join(projectRoot, "src", "logo.png"),
+];
+const EXPERT_LABEL_ORANGE = "#ec6707";
 
 const A4 = { width: 595.28, height: 841.89 };
 
@@ -23,6 +27,10 @@ function bufferFromPdf(doc) {
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
   });
+}
+
+function getExistingLogoPath() {
+  return labelLogoCandidates.find((candidatePath) => fs.existsSync(candidatePath)) || null;
 }
 
 function getLayout(format) {
@@ -72,12 +80,22 @@ function textCentered(doc, text, x, y, width, options = {}) {
 }
 
 function drawLogo(doc, x, y, width, height) {
-  if (fs.existsSync(logoPath)) {
-    doc.image(logoPath, x, y, { fit: [width, height], align: "center", valign: "center" });
+  const logoPath = getExistingLogoPath();
+
+  if (logoPath) {
+    doc.image(logoPath, x, y, {
+      fit: [width, height],
+      align: "center",
+      valign: "center",
+    });
     return;
   }
 
-  doc.font("Helvetica-Bold").fontSize(22).text("EXPERT", x, y + 8, { width, align: "center" });
+  doc
+    .fillColor("#ffffff")
+    .font("Helvetica-Bold")
+    .fontSize(22)
+    .text("EXPERT", x, y + 8, { width, align: "center" });
 }
 
 function getValidityText(item = {}, anoValidade) {
@@ -129,14 +147,21 @@ function drawCampaignLabel(doc, item, slot, options = {}) {
   const borderRadius = isA5 ? 18 : 14;
 
   doc.save();
-  doc.lineWidth(2.6).roundedRect(x, y, width, height, borderRadius).stroke("#111");
+  doc.lineWidth(2.6).roundedRect(x, y, width, height, borderRadius).stroke(EXPERT_LABEL_ORANGE);
 
   const innerX = x + 12;
   const innerW = width - 24;
-  let cursorY = y + 12;
+  const headerH = isA5 ? 60 : 46;
+  const logoW = innerW * (isA5 ? 0.78 : 0.84);
+  const logoH = headerH * 0.74;
 
-  drawLogo(doc, innerX + innerW * 0.22, cursorY, innerW * 0.56, isA5 ? 48 : 36);
-  cursorY += isA5 ? 54 : 42;
+  doc.save();
+  doc.roundedRect(x, y, width, headerH, borderRadius).fill(EXPERT_LABEL_ORANGE);
+  doc.rect(x, y + headerH - borderRadius, width, borderRadius).fill(EXPERT_LABEL_ORANGE);
+  doc.restore();
+
+  drawLogo(doc, innerX + (innerW - logoW) / 2, y + (headerH - logoH) / 2, logoW, logoH);
+  let cursorY = y + headerH + (isA5 ? 14 : 10);
 
   textCentered(doc, item.codigo || item.artigo || "", innerX, cursorY, innerW, {
     font: "Helvetica-Bold",
@@ -261,7 +286,7 @@ async function generateWithPdfKit({ items, title, storeLabel, format = "automati
     autoFirstPage: false,
     info: {
       Title: `${title || "PROMOÇÃO"} - ${storeLabel || "Loja"}`,
-      Author: "Expert Administração",
+      Author: "Expert",
       Subject: "Etiquetas de campanha automáticas",
     },
   });

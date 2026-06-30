@@ -740,3 +740,153 @@
       text-overflow: ellipsis;
     }
   }
+
+/* EXPERT LABEL BRANDING V2 START */
+/*
+  As etiquetas mantêm identidade Expert, separada da identidade global PromoPilot.
+  Cor oficial: #ec6707.
+*/
+:root {
+  --expert-label-orange: #ec6707;
+}
+
+.label .topbar,
+.label.label-a5 .topbar {
+  background: var(--expert-label-orange) !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.label.label-a6 .topbar {
+  height: 110px !important;
+}
+
+.label.label-a5 .topbar {
+  height: 140px !important;
+}
+
+.label .topbar img,
+.label .print-logo {
+  display: block !important;
+  width: min(82%, 430px) !important;
+  height: auto !important;
+  max-width: 92% !important;
+  max-height: 78% !important;
+  object-fit: contain !important;
+  object-position: center !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.label.label-a6 .print-logo {
+  width: min(84%, 430px) !important;
+  max-height: 82px !important;
+}
+
+.label.label-a5 .print-logo {
+  width: min(78%, 560px) !important;
+  max-height: 104px !important;
+}
+
+/* Em impressão real, mantém exatamente o laranja Expert e evita overrides da UI. */
+@media print {
+  .label .topbar,
+  .label.label-a5 .topbar {
+    background: #ec6707 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .label.label-a6 .topbar {
+    height: 110px !important;
+  }
+
+  .label.label-a5 .topbar {
+    height: 140px !important;
+  }
+
+  .label.label-a6 .print-logo {
+    width: min(84%, 430px) !important;
+    max-height: 82px !important;
+  }
+
+  .label.label-a5 .print-logo {
+    width: min(78%, 560px) !important;
+    max-height: 104px !important;
+  }
+}
+/* EXPERT LABEL BRANDING V2 END */
+
+/* EXPERT LABEL BORDER COLOR V3 START */
+/*
+  Garante que TODAS as molduras/linhas de corte das etiquetas ficam na cor Expert.
+  Esta regra fica no fim do ficheiro para ganhar prioridade sobre a UI PromoPilot.
+*/
+:root {
+  --expert-label-orange: #ec6707;
+  --color-primary: #ec6707;
+  --color-primary-dark: #ec6707;
+  --color-primary-darker: #ec6707;
+}
+
+.label,
+.label.label-a5,
+.label.label-a6 {
+  border-color: #ec6707 !important;
+}
+
+.label::before,
+.label.label-a5::before,
+.label.label-a6::before {
+  border-color: #ec6707 !important;
+}
+
+.sheet.sheet-a5::after,
+.sheet-a5::after {
+  border-top-color: #ec6707 !important;
+}
+
+.label .topbar,
+.label.label-a5 .topbar,
+.label.label-a6 .topbar {
+  background: #ec6707 !important;
+}
+
+@media print {
+  :root {
+    --expert-label-orange: #ec6707 !important;
+    --color-primary: #ec6707 !important;
+    --color-primary-dark: #ec6707 !important;
+    --color-primary-darker: #ec6707 !important;
+  }
+
+  .label,
+  .label.label-a5,
+  .label.label-a6 {
+    border-color: #ec6707 !important;
+  }
+
+  .label::before,
+  .label.label-a5::before,
+  .label.label-a6::before {
+    border-color: #ec6707 !important;
+  }
+
+  .sheet.sheet-a5::after,
+  .sheet-a5::after {
+    border-top-color: #ec6707 !important;
+  }
+
+  .label .topbar,
+  .label.label-a5 .topbar,
+  .label.label-a6 .topbar {
+    background: #ec6707 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
+/* EXPERT LABEL BORDER COLOR V3 END */

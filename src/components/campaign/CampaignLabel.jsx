@@ -1,6 +1,6 @@
 import React from "react";
 import Barcode from "../Barcode";
-import logo from "../../logo.png";
+import expertLabelLogo from "../../assets/expert-label-logo.png";
 import { formatarEuro, parseNumero } from "../../utils/formatters";
 import { formatarEuroPromocional, ajustarPrecoPromocionalParaImpressao } from "../../utils/promotionPricing";
 import { useAutoFontSize } from "../../utils/useAutoFontSize";
@@ -88,7 +88,7 @@ function CampaignLabelContent({
   return (
     <div className="label-inner">
       <div className="topbar">
-        <img src={logo} alt="Expert" className="print-logo" />
+        <img src={expertLabelLogo} alt="Expert" className="print-logo" />
       </div>
 
       <div className="content">

@@ -1,21 +1,20 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
+import PromoPilotMark from "./brand/PromoPilotMark";
 import { useAuth } from "../context/AuthContext";
-import logo from "../logo.png";
-
+import { PROMOPILOT_BRAND } from "../brand/promopilot";
 import { getPasswordValidationMessage, isValidPassword } from "../utils/validators";
 
 export default function Sidebar({
   menuAberto,
   setMenuAberto,
-  titulo = "Expert Administração",
+  titulo = PROMOPILOT_BRAND.appName,
 }) {
   const location = useLocation();
   const { user, profile, signOut, updatePassword } = useAuth();
 
   const [submenuEtiquetasAberto, setSubmenuEtiquetasAberto] = useState(false);
   const [loadingLogout, setLoadingLogout] = useState(false);
-
   const [menuContaAberto, setMenuContaAberto] = useState(false);
   const [modalPasswordAberto, setModalPasswordAberto] = useState(false);
   const [novaPassword, setNovaPassword] = useState("");
@@ -43,10 +42,19 @@ export default function Sidebar({
     return nome || String(user?.email || "").trim() || "Conta";
   }, [profile?.first_name, profile?.last_name, user?.email]);
 
+  const iniciaisUtilizador = useMemo(() => {
+    const chunks = String(nomeUtilizador || "")
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2);
+
+    return chunks.map((chunk) => chunk[0]).join("").toUpperCase() || "PP";
+  }, [nomeUtilizador]);
+
+  const lojaAtual = String(profile?.store || profile?.store_id || "Operação").trim();
+
   useEffect(() => {
-    if (rotaEtiquetasAtiva) {
-      setSubmenuEtiquetasAberto(true);
-    }
+    if (rotaEtiquetasAtiva) setSubmenuEtiquetasAberto(true);
   }, [rotaEtiquetasAtiva]);
 
   useEffect(() => {
@@ -59,27 +67,18 @@ export default function Sidebar({
     }
 
     window.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [setMenuAberto]);
 
   useEffect(() => {
     function handleClickOutside(event) {
-      if (
-        contaMenuRef.current &&
-        !contaMenuRef.current.contains(event.target)
-      ) {
+      if (contaMenuRef.current && !contaMenuRef.current.contains(event.target)) {
         setMenuContaAberto(false);
       }
     }
 
     document.addEventListener("mousedown", handleClickOutside);
-
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   function fecharTudo() {
@@ -172,11 +171,18 @@ export default function Sidebar({
           aria-expanded={menuAberto}
           aria-controls="sidebar-navigation"
         >
-          ☰
+          <span />
+          <span />
+          <span />
         </button>
 
-        <img src={logo} alt="Expert" className="logo-topbar" />
+        <PromoPilotMark className="pp-topbar-brand" />
         <div className="topbar-title">{titulo}</div>
+
+        <div className="topbar-context">
+          <span className="topbar-context-label">Ambiente</span>
+          <strong>{PROMOPILOT_BRAND.versionLabel}</strong>
+        </div>
 
         <div className="topbar-spacer" />
 
@@ -186,16 +192,23 @@ export default function Sidebar({
             className="topbar-account-button"
             onClick={() => setMenuContaAberto((prev) => !prev)}
           >
-            <span className="topbar-account-name">{nomeUtilizador}</span>
-            <span
-              className={`topbar-account-arrow ${menuContaAberto ? "open" : ""}`}
-            >
+            <span className="topbar-avatar">{iniciaisUtilizador}</span>
+            <span className="topbar-account-copy">
+              <span className="topbar-account-name">{nomeUtilizador}</span>
+              <small>{lojaAtual}</small>
+            </span>
+            <span className={`topbar-account-arrow ${menuContaAberto ? "open" : ""}`}>
               ▾
             </span>
           </button>
 
           {menuContaAberto && (
             <div className="topbar-account-menu">
+              <div className="topbar-account-menu-header">
+                <strong>{nomeUtilizador}</strong>
+                <span>{user?.email || lojaAtual}</span>
+              </div>
+
               <button
                 type="button"
                 className="topbar-account-menu-item"
@@ -210,7 +223,7 @@ export default function Sidebar({
                 onClick={handleLogout}
                 disabled={loadingLogout}
               >
-                {loadingLogout ? "A sair..." : "Sair"}
+                {loadingLogout ? "A sair..." : "Sair da conta"}
               </button>
             </div>
           )}
@@ -229,7 +242,7 @@ export default function Sidebar({
         aria-hidden={!menuAberto}
       >
         <div className="sidebar-header">
-          <img src={logo} alt="Expert" className="logo-sidebar" />
+          <PromoPilotMark tone="light" />
 
           <button
             type="button"
@@ -241,13 +254,24 @@ export default function Sidebar({
           </button>
         </div>
 
-        <div className="sidebar-body">
+        <div className="sidebar-user-card">
+          <span className="topbar-avatar sidebar-avatar">{iniciaisUtilizador}</span>
+          <div>
+            <strong>{nomeUtilizador}</strong>
+            <span>{lojaAtual}</span>
+          </div>
+        </div>
+
+        <nav className="sidebar-body" aria-label="Navegação principal">
+          <div className="sidebar-section-label">Cockpit</div>
+
           <Link
             to="/Homepage"
             className={`sidebar-link ${isActive("/Homepage") ? "active" : ""}`}
             onClick={fecharTudo}
           >
-            <span>Início</span>
+            <span className="sidebar-link-left"><span className="sidebar-icon">⌘</span> Início</span>
+            <small>Visão geral</small>
           </Link>
 
           <Link
@@ -255,56 +279,51 @@ export default function Sidebar({
             className={`sidebar-link ${isActive("/OrcamentosDossiers") ? "active" : ""}`}
             onClick={fecharTudo}
           >
-            <span>Orçamentos</span>
+            <span className="sidebar-link-left"><span className="sidebar-icon">↗</span> Dossiers</span>
+            <small>Orçamentos</small>
           </Link>
+
+          <div className="sidebar-section-label">Produção de loja</div>
 
           <button
             type="button"
-            className="sidebar-link"
+            className={`sidebar-link ${rotaEtiquetasAtiva ? "active" : ""}`}
             onClick={toggleSubmenu}
             aria-expanded={submenuEtiquetasAberto}
             aria-controls="submenu-etiquetas"
           >
-            <span>Etiquetas</span>
-            <span className={`arrow ${submenuEtiquetasAberto ? "open" : ""}`}>
-              ▸
-            </span>
+            <span className="sidebar-link-left"><span className="sidebar-icon">🏷</span> Etiquetas</span>
+            <span className={`arrow ${submenuEtiquetasAberto ? "open" : ""}`}>▸</span>
           </button>
 
           {submenuEtiquetasAberto && (
             <div id="submenu-etiquetas" className="sidebar-submenu">
               <Link
-                to="/Etiquetas"
-                className={`sidebar-sublink ${
-                  isActive("/Etiquetas") ? "active" : ""
-                }`}
+                to="/EtiquetasCampanha"
+                className={`sidebar-sublink ${isActive("/EtiquetasCampanha") ? "active" : ""}`}
                 onClick={fecharTudo}
               >
-                Etiquetas
+                Campanha manual
               </Link>
 
               <Link
-                to="/EtiquetasCampanha"
-                className={`sidebar-sublink ${
-                  isActive("/EtiquetasCampanha") ? "active" : ""
-                }`}
+                to="/Etiquetas"
+                className={`sidebar-sublink ${isActive("/Etiquetas") ? "active" : ""}`}
                 onClick={fecharTudo}
               >
-                Etiquetas de Campanha
+                Catálogo e scan
               </Link>
 
               <Link
                 to="/EtiquetasCampanhaExcel"
-                className={`sidebar-sublink ${
-                  isActive("/EtiquetasCampanhaExcel") ? "active" : ""
-                }`}
+                className={`sidebar-sublink ${isActive("/EtiquetasCampanhaExcel") ? "active" : ""}`}
                 onClick={fecharTudo}
               >
-                Etiquetas de Campanha (Excel)
+                Importação Excel
               </Link>
             </div>
           )}
-        </div>
+        </nav>
       </aside>
 
       {modalPasswordAberto && (
@@ -319,10 +338,7 @@ export default function Sidebar({
 
             <p>Defina uma nova palavra-passe para a sua conta.</p>
 
-            <form
-              onSubmit={handleChangePassword}
-              className="force-password-form"
-            >
+            <form onSubmit={handleChangePassword} className="force-password-form">
               <label htmlFor="nova-password-topbar">Nova palavra-passe</label>
               <input
                 id="nova-password-topbar"
@@ -350,24 +366,14 @@ export default function Sidebar({
               />
 
               <div className="force-password-rules">
-                Mínimo 8 caracteres, com letras, números e pelo menos 1 carácter
-                especial.
+                Mínimo 8 caracteres, com letras, números e pelo menos 1 carácter especial.
               </div>
 
-              {erroPassword && (
-                <p className="force-password-error">{erroPassword}</p>
-              )}
-
-              {sucessoPassword && (
-                <p className="force-password-success">{sucessoPassword}</p>
-              )}
+              {erroPassword && <p className="force-password-error">{erroPassword}</p>}
+              {sucessoPassword && <p className="force-password-success">{sucessoPassword}</p>}
 
               <div className="popup-actions popup-actions-pro">
-                <button
-                  type="submit"
-                  className="btn btn-primary"
-                  disabled={loadingPassword}
-                >
+                <button type="submit" className="btn btn-primary" disabled={loadingPassword}>
                   {loadingPassword ? "A guardar..." : "Guardar"}
                 </button>
 

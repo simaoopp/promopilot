@@ -1,103 +1,202 @@
-# Etiquetas Prom
+# PromoPilot
 
-SaaS para gestão de campanhas e etiquetas promocionais com geração de PDFs, separação por loja, automação por email e fundação multi-tenant.
+Aplicação para gestão de campanhas, etiquetas, artigos e dossiers comerciais.
 
-## Arquitetura atual
+O projeto tem um frontend em React e uma API em Node.js/Express. A aplicação permite consultar artigos, preparar campanhas, gerar etiquetas, criar dossiers comerciais e processar campanhas recebidas por email.
 
-- **Frontend/Render**: aplicação e API leve.
-- **Cloud Run Job**: processamento pesado de emails automáticos, PDFs e Playwright.
-- **Supabase**: autenticação, base de dados, RLS e storage privado.
-- **Resend**: envio de emails.
-- **Secret Manager**: credenciais sensíveis do worker.
+## O que o sistema faz
 
-## Estado SaaS
+- Pesquisa e valida artigos do catálogo.
+- Cria campanhas promocionais.
+- Gera etiquetas prontas a imprimir.
+- Trabalha com etiquetas manuais e campanhas importadas por ficheiro.
+- Cria dossiers comerciais a partir de orçamentos.
+- Processa emails de campanha no backend.
+- Gera PDFs e envia campanhas para as lojas.
+- Usa Supabase para autenticação, dados e storage.
 
-O projeto inclui fundação SaaS enterprise:
+## Tecnologias usadas
 
-- organizações;
-- membros por organização;
-- lojas por organização;
-- roles por organização;
-- planos/subscrições/limites;
-- usage events;
-- audit logs;
-- jobs;
-- webhooks/API keys;
-- storage privado por `organization_id`;
-- staging e testes de permissões.
+- React
+- React Router
+- Supabase
+- Node.js
+- Express
+- Playwright
+- Resend
+- PDFKit
+- XLSX
 
-A ativação multi-tenant completa deve ser feita primeiro em staging, com backfill de `organization_id` e testes de isolamento entre tenants.
+## Estrutura principal
 
-## Segurança essencial
-
-No Render deve existir apenas:
-
-```env
-SUPABASE_URL=
-SUPABASE_PUBLISHABLE_KEY=
-AUTOMATIC_CAMPAIGN_BUCKET=automatic-campaign-pdfs
-CAMPAIGN_EMAIL_SEND_ENABLED=0
-CAMPAIGN_EMAIL_WORKER_ENABLED=0
-CAMPAIGN_EMAIL_WORKER_RUN_ON_START=0
-WARM_ARTICLES_CACHE=0
-NODE_OPTIONS=--max-old-space-size=384
+```txt
+src/                 frontend React
+server/              API e worker de campanhas
+scripts/             scripts de importação, migração e validação
+supabase/migrations  estrutura da base de dados
+supabase/tests       testes SQL de permissões
+public/              ficheiros públicos da aplicação
 ```
 
-Não colocar no Render:
+## Instalação
 
-```env
-SUPABASE_SERVICE_ROLE_KEY=
-RESEND_API_KEY=
-CAMPAIGN_IMAP_PASS=
+Instalar dependências do frontend:
+
+```bash
+npm install
 ```
 
-`SUPABASE_SERVICE_ROLE_KEY` fica apenas no Google Cloud Secret Manager para o Cloud Run Job ou serviços backend seguros.
+Instalar dependências do backend:
 
-## Cloud Run Worker
-
-O worker é one-shot. Ele executa, processa emails elegíveis, gera PDFs e termina.
-
-Playwright está alinhado em `1.60.0` com a imagem Docker:
-
-```dockerfile
-FROM mcr.microsoft.com/playwright:v1.60.0-jammy AS runner
+```bash
+cd server
+npm install
+cd ..
 ```
 
-## Migrations principais
+O projeto usa npm. Não misturar npm, yarn e pnpm no mesmo ambiente.
 
-- `20260521_controlled_articles_rpc.sql`
-- `20260521_security_hardening_rls.sql`
-- `20260522_saas_enterprise_core.sql`
+## Variáveis de ambiente
 
-Aplicar primeiro em staging.
+Copiar o ficheiro de exemplo:
 
-## QA
+```bash
+cp .env.example .env.local
+```
+
+Preencher as variáveis necessárias no `.env.local`.
+
+## Comandos principais
+
+Iniciar o frontend:
+
+```bash
+npm start
+```
+
+Gerar build do frontend:
+
+```bash
+npm run build
+```
+
+Executar validação estática:
+
+```bash
+npm run qa:static
+```
+
+Iniciar o backend:
+
+```bash
+npm --prefix server start
+```
+
+Validar sintaxe do backend:
+
+```bash
+npm --prefix server run smoke
+```
+
+Executar validações principais:
 
 ```bash
 npm run qa:all
 ```
 
-Executa:
+## Base de dados
 
-- QA estático;
-- SaaS readiness check;
-- smoke check do backend.
+As migrations estão em:
 
-## Documentação importante
+```txt
+supabase/migrations
+```
 
-- `docs/SAAS_FULL_CHECKLIST_STATUS.md`
-- `docs/OUTSIDE_PROJECT_ACTIONS.md`
-- `docs/STAGING_AND_PERMISSION_TESTS.md`
-- `docs/SECURITY.md`
-- `docs/RUNBOOK.md`
-- `docs/BILLING_PLAN.md`
+Para preparar uma base nova:
 
-## Caminho correto para SaaS real
+1. Criar o projeto no Supabase.
+2. Configurar as variáveis de ambiente.
+3. Executar as migrations por ordem no SQL Editor.
+4. Confirmar as policies de RLS.
+5. Confirmar os buckets necessários no Supabase Storage.
+6. Criar os utilizadores autorizados.
 
-1. Criar staging real.
-2. Aplicar migrations em staging.
-3. Criar Organização A/B e users A/B.
-4. Executar testes RLS multi-tenant.
-5. Fazer backup de produção.
-6. Fazer backfill de `organization_id`.
-7. Só depois ativar RLS multi-tenant em produção.
+## Frontend
+
+O frontend usa Supabase Auth e comunica com a API através de `REACT_APP_API_BASE_URL`.
+
+Em desenvolvimento, normalmente fica:
+
+```env
+REACT_APP_API_BASE_URL=http://localhost:3001
+```
+
+Em produção, deve apontar para o domínio da API.
+
+## Backend
+
+O backend fica na pasta `server`.
+
+Responsabilidades principais:
+
+- autenticação das rotas;
+- pesquisa e gestão de artigos;
+- processamento de campanhas automáticas;
+- geração de PDFs;
+- envio de emails;
+- webhooks de entrada;
+- suporte aos dossiers comerciais.
+
+## Campanhas por email
+
+O processamento automático de campanhas deve estar desligado por defeito em ambientes novos.
+
+Ativar apenas depois de configurar:
+
+- caixa IMAP;
+- provider de email;
+- emails das lojas;
+- bucket de PDFs;
+- credenciais do Supabase;
+- testes em ambiente controlado.
+
+## Segurança
+
+- `.env.local` não deve ir para o GitHub.
+- `SUPABASE_SERVICE_ROLE_KEY` só deve existir em ambiente backend seguro.
+- O frontend deve usar apenas chaves públicas do Supabase.
+- As rotas sensíveis da API exigem autenticação.
+- As migrations devem manter RLS ativa nas tabelas protegidas.
+- Produção e staging devem usar credenciais separadas.
+
+## Resolução rápida de problemas
+
+Se o frontend não arrancar, confirmar que `npm install` foi executado na raiz do projeto.
+
+Se o backend não arrancar, confirmar que `npm install` foi executado dentro de `server`.
+
+Se houver erros de dependências, confirmar que o registry está correto:
+
+```bash
+npm config get registry
+```
+
+O valor esperado é:
+
+```txt
+https://registry.npmjs.org/
+```
+
+Se necessário, corrigir com:
+
+```bash
+npm config set registry https://registry.npmjs.org/
+```
+
+Se o login falhar, confirmar as variáveis do Supabase e as permissões do utilizador.
+
+Se a pesquisa de artigos não devolver resultados, confirmar a tabela configurada em `ARTICLES_TABLE` e as migrations aplicadas.
+
+Se os PDFs não forem gerados, confirmar as dependências do backend e a configuração do worker.
+
+Se os emails não forem enviados, confirmar `RESEND_API_KEY`, remetente autorizado e emails das lojas.

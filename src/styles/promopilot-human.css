@@ -1,0 +1,400 @@
+/* =========================================================
+   PROMOPILOT HUMAN UI V3
+   Softer palette + less robotic product language.
+   Loaded after promopilot.css.
+   ========================================================= */
+:root {
+  --pp-bg: #f5f7f3;
+  --pp-bg-soft: #edf4ef;
+  --pp-surface: rgba(255, 255, 255, 0.94);
+  --pp-surface-strong: #ffffff;
+  --pp-surface-muted: #f7faf7;
+  --pp-ink: #17212b;
+  --pp-ink-muted: #66736d;
+  --pp-ink-soft: #8b9892;
+  --pp-line: rgba(41, 63, 54, 0.12);
+  --pp-line-strong: rgba(23, 33, 43, 0.1);
+  --pp-orange: #d98a45;
+  --pp-orange-dark: #b96e31;
+  --pp-orange-soft: #fff5eb;
+  --pp-blue: #3f6f87;
+  --pp-blue-soft: #eef6f7;
+  --pp-green: #4f8f76;
+  --pp-violet: #7467a9;
+  --pp-radius: 22px;
+  --pp-radius-lg: 30px;
+  --pp-shadow: 0 22px 64px rgba(31, 44, 38, 0.12);
+  --pp-shadow-soft: 0 10px 30px rgba(31, 44, 38, 0.08);
+
+  --color-primary: var(--pp-green);
+  --color-primary-dark: #3f765f;
+  --color-primary-action: var(--pp-blue);
+  --color-primary-action-dark: #31566a;
+  --color-bg: #f5f7f3;
+  --color-surface: #ffffff;
+  --color-border: #e3ebe4;
+}
+
+body {
+  background:
+    radial-gradient(circle at 8% 0%, rgba(217, 138, 69, 0.12), transparent 30vw),
+    radial-gradient(circle at 88% 8%, rgba(79, 143, 118, 0.13), transparent 34vw),
+    #f5f7f3;
+  color: var(--pp-ink);
+}
+
+.pp-brand-mark {
+  background:
+    linear-gradient(135deg, #4f8f76, #3f6f87),
+    var(--pp-green);
+  box-shadow: 0 14px 30px rgba(79, 143, 118, 0.22);
+}
+
+.pp-brand-mark-dot {
+  background: #ffe5c7;
+  box-shadow: 0 0 0 4px rgba(255, 229, 199, 0.22);
+}
+
+.pp-brand-name {
+  color: var(--pp-ink);
+}
+
+.pp-brand-descriptor {
+  color: var(--pp-ink-muted);
+  letter-spacing: 0.06em;
+  text-transform: none;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.pp-brand-lockup-light .pp-brand-name {
+  color: #ffffff;
+}
+
+.pp-brand-lockup-light .pp-brand-descriptor {
+  color: rgba(255,255,255,0.7);
+}
+
+/* Hide robotic environment wording from the previous UI layer */
+.topbar-context {
+  display: none !important;
+}
+
+/* Topbar: light, calm and less aggressive */
+.topbar-site {
+  height: 74px;
+  background: rgba(255, 255, 255, 0.92);
+  border-bottom: 1px solid rgba(23, 33, 43, 0.08);
+  box-shadow: 0 12px 34px rgba(31, 44, 38, 0.08);
+  backdrop-filter: blur(18px);
+}
+
+.menu-button {
+  background: #f1f6f2;
+  border: 1px solid #dce8df;
+}
+
+.menu-button span {
+  background: var(--pp-ink);
+}
+
+.topbar-account-button {
+  background: #f1f6f2;
+  border: 1px solid #dce8df;
+  color: var(--pp-ink);
+}
+
+.topbar-account-copy small {
+  color: var(--pp-ink-muted);
+}
+
+.topbar-account-arrow {
+  color: var(--pp-ink-muted);
+}
+
+.topbar-avatar {
+  background: linear-gradient(135deg, #4f8f76, #3f6f87);
+}
+
+/* Sidebar softer */
+.sidebar {
+  background: #ffffff;
+  color: var(--pp-ink);
+  border-right: 1px solid #e3ebe4;
+  box-shadow: 18px 0 60px rgba(31, 44, 38, 0.16);
+}
+
+.sidebar-header {
+  background:
+    radial-gradient(circle at 14% 0%, rgba(217, 138, 69, 0.18), transparent 45%),
+    #f8fbf8;
+  border-bottom: 1px solid #e3ebe4;
+}
+
+.sidebar .pp-brand-lockup-light .pp-brand-name {
+  color: var(--pp-ink);
+}
+
+.sidebar .pp-brand-lockup-light .pp-brand-descriptor {
+  color: var(--pp-ink-muted);
+}
+
+.close-sidebar {
+  background: #f1f6f2;
+  color: var(--pp-ink);
+}
+
+.sidebar-user-card {
+  background: #f7faf7;
+  border-color: #e3ebe4;
+}
+
+.sidebar-user-card strong {
+  color: var(--pp-ink);
+}
+
+.sidebar-user-card span:last-child {
+  color: var(--pp-ink-muted);
+}
+
+.sidebar-section-label {
+  color: #8a9890;
+  text-transform: none;
+  letter-spacing: 0.04em;
+  font-size: 12px;
+}
+
+.sidebar-link {
+  background: #f8fbf8;
+  border-color: #e3ebe4;
+  color: var(--pp-ink);
+}
+
+.sidebar-link:hover,
+.sidebar-link.active {
+  background: #eef6f1;
+  border-color: rgba(79, 143, 118, 0.26);
+  color: var(--pp-ink);
+}
+
+.sidebar-icon {
+  background: #edf5f0;
+}
+
+.sidebar-link small {
+  color: var(--pp-ink-muted);
+}
+
+.sidebar-submenu {
+  border-left-color: #dce8df;
+}
+
+.sidebar-sublink {
+  color: var(--pp-ink-muted);
+  background: #fbfdfb;
+  border-color: #e8eee9;
+}
+
+.sidebar-sublink:hover,
+.sidebar-sublink.active {
+  background: #eef6f1;
+  border-color: rgba(79, 143, 118, 0.26);
+  color: var(--pp-ink);
+}
+
+/* Login: softer and cleaner */
+.pp-login-page {
+  background:
+    radial-gradient(circle at 14% 10%, rgba(217, 138, 69, 0.22), transparent 30%),
+    radial-gradient(circle at 86% 6%, rgba(79, 143, 118, 0.22), transparent 32%),
+    linear-gradient(135deg, #f6f3ec 0%, #eef6f1 48%, #eaf1f4 100%);
+  color: var(--pp-ink);
+}
+
+.pp-login-bg-grid {
+  opacity: 0.18;
+  background-image:
+    linear-gradient(rgba(23, 33, 43, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(23, 33, 43, 0.06) 1px, transparent 1px);
+}
+
+.pp-login-orb-one {
+  background: rgba(217, 138, 69, 0.16);
+}
+
+.pp-login-orb-two {
+  background: rgba(79, 143, 118, 0.16);
+}
+
+.pp-login-hero-copy h1 {
+  color: var(--pp-ink);
+  letter-spacing: -0.055em;
+}
+
+.pp-login-hero-copy p {
+  color: var(--pp-ink-muted);
+}
+
+.pp-login-module-card {
+  background: rgba(255, 255, 255, 0.64);
+  border-color: rgba(23, 33, 43, 0.08);
+  box-shadow: 0 10px 26px rgba(31, 44, 38, 0.06);
+}
+
+.pp-login-module-card strong {
+  color: var(--pp-ink);
+}
+
+.pp-login-module-card span {
+  color: var(--pp-ink-muted);
+}
+
+.pp-login-trust-row span {
+  background: rgba(255, 255, 255, 0.64);
+  color: var(--pp-ink-muted);
+  border: 1px solid rgba(23, 33, 43, 0.08);
+}
+
+.pp-login-card {
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 26px 76px rgba(31, 44, 38, 0.18);
+}
+
+.pp-card-chip {
+  background: #eef6f1;
+  color: #3f765f;
+}
+
+.pp-login-submit {
+  background: linear-gradient(135deg, #4f8f76, #3f6f87);
+  box-shadow: 0 16px 34px rgba(79, 143, 118, 0.22);
+}
+
+.pp-login-submit:hover {
+  box-shadow: 0 20px 40px rgba(79, 143, 118, 0.26);
+}
+
+.login-password-toggle {
+  color: var(--pp-blue);
+}
+
+.pp-login-footer-note {
+  background: #f7faf7;
+  border-color: #e3ebe4;
+}
+
+/* Home */
+.pp-home-hero {
+  background:
+    radial-gradient(circle at 10% 0%, rgba(217, 138, 69, 0.12), transparent 36%),
+    radial-gradient(circle at 100% 0%, rgba(79, 143, 118, 0.13), transparent 38%),
+    linear-gradient(135deg, #ffffff 0%, #f7faf7 100%);
+  border-color: #e3ebe4;
+}
+
+.pp-home-hero .page-title {
+  color: var(--pp-ink);
+}
+
+.pp-hero-metrics span {
+  background: #ffffff;
+  border-color: #e3ebe4;
+}
+
+.pp-home-command-card {
+  background: linear-gradient(135deg, #31483f, #3f6f87);
+  box-shadow: 0 24px 56px rgba(49, 72, 63, 0.22);
+}
+
+.pp-command-input {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.pp-command-input:focus {
+  border-color: rgba(255, 229, 199, 0.75);
+  box-shadow: 0 0 0 4px rgba(255, 229, 199, 0.16);
+}
+
+.pp-action-primary,
+.pp-action-blue,
+.pp-action-green,
+.pp-action-violet,
+.pp-action-slate {
+  color: #3f6f87;
+}
+
+.pp-action-card {
+  background: #ffffff;
+  border-color: #e3ebe4;
+}
+
+.pp-action-card:hover {
+  border-color: rgba(79, 143, 118, 0.28);
+  box-shadow: 0 18px 45px rgba(31, 44, 38, 0.1);
+}
+
+.pp-action-icon {
+  background: #eef6f1;
+}
+
+.pp-summary-card {
+  background:
+    radial-gradient(circle at 100% 0%, rgba(79, 143, 118, 0.10), transparent 38%),
+    #ffffff;
+  border-color: #e3ebe4;
+}
+
+.pp-summary-card p {
+  margin: 0;
+  color: var(--pp-ink-muted);
+  font-weight: 650;
+  line-height: 1.55;
+}
+
+.pp-summary-card strong {
+  display: none;
+}
+
+.pp-card-header {
+  background: #ffffff;
+}
+
+/* Remove overly technical/robotic details visually */
+.resumo-label {
+  color: var(--pp-ink);
+}
+
+.pp-history-card,
+.control-card,
+.table-card,
+.toolbar,
+.table-panel,
+.home-section {
+  border-color: #e3ebe4;
+  box-shadow: var(--pp-shadow-soft);
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #4f8f76, #3f6f87);
+}
+
+.btn-success {
+  background: linear-gradient(135deg, #5a9b82, #447c67);
+}
+
+.btn-secondary {
+  background: #f7faf7;
+  color: var(--pp-ink);
+  border-color: #dce8df;
+}
+
+@media (max-width: 720px) {
+  .pp-login-trust-row {
+    display: none;
+  }
+
+  .pp-home-hero .page-title {
+    font-size: 36px;
+  }
+}

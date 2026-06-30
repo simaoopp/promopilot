@@ -126,7 +126,7 @@ export default function EtiquetasPage() {
     }
 
     if (atual > antes) {
-      setErroCampanha("Valor maior que PVP2 antes.");
+      setErroCampanha("Valor maior que PVP3 antes.");
       return;
     }
 
@@ -667,12 +667,12 @@ export default function EtiquetasPage() {
     const atual = converterPreco(campanhaAtual);
 
     if (antes <= 0 || atual <= 0) {
-      setErroCampanha("Preenche os valores de PVP2 antes e PVP2 atual.");
+      setErroCampanha("Preenche os valores de PVP3 antes e PVP2 atual.");
       return;
     }
 
     if (atual > antes) {
-      setErroCampanha("Valor maior que PVP2 antes.");
+      setErroCampanha("Valor maior que PVP3 antes.");
       return;
     }
 
@@ -714,7 +714,7 @@ export default function EtiquetasPage() {
       ean: artigoCampanhaSelecionado.codigoBarras || "",
       antes,
       atual,
-      pv3: artigoCampanhaSelecionado.pvp3 || "",
+      pv3: artigoCampanhaSelecionado.pvp3 || campanhaAntes || "",
       estado: "",
       ae: artigoCampanhaSelecionado.stock || "",
       aea: "",
@@ -735,9 +735,12 @@ export default function EtiquetasPage() {
   }
 
   function selecionarSugestaoCampanha(item) {
+    const pvp3Antes = item.pvp3 || item.pvp2 || "";
+    const pvp2Atual = item.pvp2 || "";
+
     setArtigoCampanhaSelecionado(item);
-    setCampanhaAntes(item.pvp2 || "");
-    setCampanhaAtual(item.pvp2 || "");
+    setCampanhaAntes(pvp3Antes);
+    setCampanhaAtual(pvp2Atual);
   }
 
   return (

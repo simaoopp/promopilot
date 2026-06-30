@@ -1,5 +1,6 @@
 import { createRequire } from "node:module";
 import pdfParse from "pdf-parse";
+import { extractCustomerFromQuoteText, normalizeCustomerName } from "./quoteDossierCustomerService.js";
 
 const require = createRequire(import.meta.url);
 
@@ -50,7 +51,7 @@ function getTextItemX(item) {
   return Number(item?.transform?.[4] || 0);
 }
 
-function makeRowTextFromItems(items = []) {
+function rowsFromItems(items = []) {
   const rows = [];
 
   for (const item of items) {
@@ -63,27 +64,64 @@ function makeRowTextFromItems(items = []) {
     let row = rows.find((candidate) => Math.abs(candidate.y - y) <= 2.5);
 
     if (!row) {
-      row = { y, items: [] };
+      row = { y, x: 0, items: [] };
       rows.push(row);
     }
 
     row.items.push({ x, text });
   }
 
+  rows.forEach((row) => {
+    row.items.sort((a, b) => a.x - b.x);
+    row.x = row.items[0]?.x || 0;
+    row.text = row.items.map((item) => item.text).join(" ").replace(/\s+/g, " ").trim();
+  });
+
   rows.sort((a, b) => b.y - a.y);
 
-  return rows
-    .map((row) => {
-      row.items.sort((a, b) => a.x - b.x);
+  return rows.filter((row) => row.text);
+}
 
-      return row.items
-        .map((item) => item.text)
-        .join(" ")
-        .replace(/\s+/g, " ")
-        .trim();
-    })
+function makeRowTextFromItems(items = []) {
+  return rowsFromItems(items)
+    .map((row) => row.text)
     .filter(Boolean)
     .join("\n");
+}
+
+function extractCustomerFromSpatialRows(items = []) {
+  const rows = rowsFromItems(items);
+
+  if (!rows.length) return "";
+
+  const exmoIndex = rows.findIndex((row) => /Exmo\.\(s\)\s*Sr/i.test(row.text) || /^Exmo/i.test(row.text));
+
+  if (exmoIndex < 0) {
+    return extractCustomerFromQuoteText(rows.map((row) => row.text).join("\n"));
+  }
+
+  const exmoX = rows[exmoIndex].x || 0;
+
+  // Candidatos no mesmo bloco visual do destinatário.
+  const neighborhood = [
+    rows[exmoIndex - 1],
+    rows[exmoIndex + 1],
+    rows[exmoIndex - 2],
+    rows[exmoIndex + 2],
+    rows[exmoIndex - 3],
+    rows[exmoIndex + 3],
+    rows[exmoIndex - 4],
+    rows[exmoIndex + 4],
+  ].filter(Boolean);
+
+  for (const row of neighborhood) {
+    if (Math.abs((row.x || 0) - exmoX) > 80) continue;
+
+    const customer = normalizeCustomerName(row.text);
+    if (customer) return customer;
+  }
+
+  return extractCustomerFromQuoteText(rows.map((row) => row.text).join("\n"));
 }
 
 async function extractTextWithBundledPdfJs(buffer) {
@@ -98,6 +136,7 @@ async function extractTextWithBundledPdfJs(buffer) {
   const pdf = loadingTask?.promise ? await loadingTask.promise : await loadingTask;
   const pages = Number(pdf?.numPages || 0);
   const pageTexts = [];
+  const customerCandidates = [];
 
   for (let pageNumber = 1; pageNumber <= pages; pageNumber += 1) {
     const page = await pdf.getPage(pageNumber);
@@ -106,13 +145,19 @@ async function extractTextWithBundledPdfJs(buffer) {
       disableCombineTextItems: false,
     });
 
-    pageTexts.push(makeRowTextFromItems(content?.items || []));
+    const items = content?.items || [];
+
+    pageTexts.push(makeRowTextFromItems(items));
+
+    const customerCandidate = extractCustomerFromSpatialRows(items);
+    if (customerCandidate) customerCandidates.push(customerCandidate);
   }
 
   return {
     text: pageTexts.join("\n\n").trim(),
     pages,
     engine: "pdfjs-row-text",
+    customerCandidate: customerCandidates[0] || "",
   };
 }
 
@@ -121,6 +166,26 @@ function looksLikePrimaveraQuoteText(text = "") {
     /\bEAN\s*:?\s*\d{8,14}/i.test(text) ||
     /\b\d{2}\.\d{3}\.\d{3}\.\d{5}\b/.test(text)
   );
+}
+
+async function extractRawTextWithPdfParse(buffer) {
+  try {
+    const parsed = await pdfParse(buffer);
+
+    return {
+      rawText: String(parsed?.text || "").trim(),
+      rawPages: Number(parsed?.numpages || 0),
+      rawCustomerCandidate: extractCustomerFromQuoteText(String(parsed?.text || "")),
+    };
+  } catch (error) {
+    console.warn("[quote-dossiers] pdf-parse raw text failed:", error?.message || error);
+
+    return {
+      rawText: "",
+      rawPages: 0,
+      rawCustomerCandidate: "",
+    };
+  }
 }
 
 export async function extractTextFromPdfBase64(pdfBase64) {
@@ -136,11 +201,25 @@ export async function extractTextFromPdfBase64(pdfBase64) {
     throw new Error("PDF vazio ou inválido.");
   }
 
+  const rawExtraction = await extractRawTextWithPdfParse(buffer);
+
   try {
     const rowExtraction = await extractTextWithBundledPdfJs(buffer);
+    const combinedText = [rowExtraction.text, rawExtraction.rawText].filter(Boolean).join("\n\n");
+    const customerCandidate =
+      rowExtraction.customerCandidate ||
+      rawExtraction.rawCustomerCandidate ||
+      extractCustomerFromQuoteText(combinedText);
 
     if (looksLikePrimaveraQuoteText(rowExtraction.text)) {
-      return rowExtraction;
+      return {
+        text: rowExtraction.text,
+        rawText: rawExtraction.rawText,
+        combinedText,
+        pages: rowExtraction.pages || rawExtraction.rawPages,
+        engine: rawExtraction.rawText ? "pdfjs-row-text+pdf-parse-raw" : "pdfjs-row-text",
+        customerCandidate,
+      };
     }
 
     console.warn("[quote-dossiers] pdfjs-row-text did not detect quote table; falling back to pdf-parse.");
@@ -148,11 +227,12 @@ export async function extractTextFromPdfBase64(pdfBase64) {
     console.warn("[quote-dossiers] pdfjs-row-text fallback:", error?.message || error);
   }
 
-  const parsed = await pdfParse(buffer);
-
   return {
-    text: String(parsed?.text || "").trim(),
-    pages: Number(parsed?.numpages || 0),
+    text: rawExtraction.rawText,
+    rawText: rawExtraction.rawText,
+    combinedText: rawExtraction.rawText,
+    pages: rawExtraction.rawPages,
     engine: "pdf-parse",
+    customerCandidate: rawExtraction.rawCustomerCandidate || "",
   };
 }

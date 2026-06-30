@@ -28,7 +28,7 @@ def check_required_files() -> None:
     assert_condition((ROOT / "scripts" / "import-artigos-to-supabase.mjs").exists(), "Script de importação dos artigos em falta.")
 def check_env_example() -> None:
     env_text = (ROOT / ".env.example").read_text(encoding="utf-8")
-    for key in ["REACT_APP_SUPABASE_URL=","REACT_APP_SUPABASE_PUBLISHABLE_KEY=","REACT_APP_API_BASE_URL=","SUPABASE_URL=","SUPABASE_SERVICE_ROLE_KEY=","ARTICLES_TABLE="]:
+    for key in ["REACT_APP_SUPABASE_URL=", "REACT_APP_SUPABASE_PUBLISHABLE_KEY=", "REACT_APP_API_BASE_URL=", "SUPABASE_URL=", "SUPABASE_SERVICE_ROLE_KEY=", "ARTICLES_TABLE="]:
         assert_condition(key in env_text, f".env.example sem a chave {key}")
 def check_server_syntax() -> None:
     for relative_path in ["server/index.js","server/lib/supabaseClients.js","server/services/articleRepository.js"]:
