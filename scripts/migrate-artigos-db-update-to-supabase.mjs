@@ -137,6 +137,10 @@ function normalizeArticle(item) {
   return row;
 }
 
+function articleHasValidFormat(row) {
+  return VALID_ARTICLE_RE.test(row.artigo);
+}
+
 async function loadArticles(filePath) {
   const raw = await fs.readFile(filePath, "utf8");
   const parsed = JSON.parse(raw);
@@ -349,8 +353,9 @@ async function main() {
     const existingRows = batch.filter((row) => existingMap.has(row.artigo));
     const changedExistingRows = existingRows.filter((row) => rowChanged(row, existingMap.get(row.artigo)));
     const unchangedExistingRows = existingRows.length - changedExistingRows.length;
-    const newRows = batch.filter((row) => !existingMap.has(row.artigo));
-    const skippedInvalidNewRows = 0;
+    const newRowsAll = batch.filter((row) => !existingMap.has(row.artigo));
+    const newRows = newRowsAll.filter(articleHasValidFormat);
+    const skippedInvalidNewRows = newRowsAll.length - newRows.length;
 
     for (const row of changedExistingRows) {
       const changes = getChangedFields(row, existingMap.get(row.artigo));
@@ -386,7 +391,7 @@ async function main() {
         `${changedExistingRows.length} existentes alterados, ` +
         `${unchangedExistingRows} já iguais, ` +
         `${newRows.length} novos inseridos, ` +
-        `${skippedInvalidNewRows} novos ignorados`,
+        `${skippedInvalidNewRows} novos ignorados por formato`,
     );
   }
 
@@ -397,7 +402,7 @@ async function main() {
   console.log(`Existentes alterados: ${totalExistingUpdated}`);
   console.log(`Existentes já iguais: ${totalExistingUnchanged}`);
   console.log(`Novos artigos inseridos: ${totalNewInserted}`);
-  console.log(`Novos ignorados: ${totalNewSkippedInvalidFormat}`);
+  console.log(`Novos ignorados por formato inválido: ${totalNewSkippedInvalidFormat}`);
   console.log(`Campos alterados: ${JSON.stringify(changedFieldCounts)}`);
   if (!dryRun) console.log(`Modo pvp2 usado: ${pvp2FallbackMode}`);
   console.log(`Duração: ${seconds}s`);
