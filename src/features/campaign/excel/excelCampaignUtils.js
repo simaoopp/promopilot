@@ -4,6 +4,7 @@ import { formatarEuro, parseNumero } from "../../../utils/formatters";
 export const EXCEL_FORMATS = {
   CAMPANHA: "campanha",
   SHOPPING: "shopping",
+  PRECOS_PROMOCIONAIS: "precos_promocionais",
 };
 
 export const CAMPANHA_TABLE_COLUMNS = [
@@ -57,6 +58,24 @@ export const SHOPPING_PRIMARY_COLUMNS = [
   { key: "comparacao", label: "COMPARAÇÃO", tipo: "text" },
   { key: "precoSemDescontoSelecionado", label: "PREÇO SEM DESCONTO" },
   { key: "precoComDescontoSelecionado", label: "PREÇO COM DESCONTO" },
+];
+
+export const PRECOS_PROMOCIONAIS_TABLE_COLUMNS = [
+  { key: "codigo", label: "NOSSO CÓDIGO", tipo: "text" },
+  { key: "descricao", label: "DESCRIÇÃO", tipo: "text" },
+  { key: "ean", label: "EAN" },
+  { key: "estado", label: "ESTADO", tipo: "text" },
+  { key: "antes", label: "PVP2", tipo: "number" },
+  { key: "atual", label: "PVP2P", tipo: "number" },
+  { key: "info", label: "INFORMAÇÃO", tipo: "text" },
+];
+
+export const PRECOS_PROMOCIONAIS_PRIMARY_COLUMNS = [
+  { key: "codigo", label: "ARTIGO", tipo: "text" },
+  { key: "descricao", label: "DESCRIÇÃO", tipo: "text" },
+  { key: "antes", label: "PVP2", tipo: "number" },
+  { key: "atual", label: "PVP2P", tipo: "number" },
+  { key: "estado", label: "ESTADO", tipo: "text" },
 ];
 
 export const SHOPPING_PRICE_SOURCE_OPTIONS = [
@@ -299,11 +318,25 @@ export function detetarFormatoExcel(rows = []) {
     normalizarCabecalho(key),
   );
 
+  const temTabelaPrecosPromocionais =
+    (cabecalhos.includes("NOSSO CODIGO") || cabecalhos.includes("NOSSO CÓDIGO")) &&
+    cabecalhos.includes("PVP2") &&
+    (cabecalhos.includes("PVP2P") ||
+      cabecalhos.includes("PVP2 P") ||
+      cabecalhos.includes("PVP2 PROMO") ||
+      cabecalhos.includes("PRECO PROMOCIONAL") ||
+      cabecalhos.includes("PREÇO PROMOCIONAL"));
+
+  if (temTabelaPrecosPromocionais) {
+    return EXCEL_FORMATS.PRECOS_PROMOCIONAIS;
+  }
+
   const temCabecalhoShopping =
-    cabecalhos.includes("NOSSO CODIGO") ||
     cabecalhos.includes("NOSSO PRECO") ||
+    cabecalhos.includes("NOSSO PREÇO") ||
     cabecalhos.includes("WORTEN") ||
-    cabecalhos.includes("RADIO POPULAR");
+    cabecalhos.includes("RADIO POPULAR") ||
+    cabecalhos.includes("RÁDIO POPULAR");
 
   return temCabecalhoShopping
     ? EXCEL_FORMATS.SHOPPING
@@ -432,10 +465,81 @@ export function mapearLinhaExcelShopping(row, index) {
   });
 }
 
+export function mapearLinhaExcelPrecosPromocionais(row, index) {
+  const normalizado = {};
+
+  Object.keys(row || {}).forEach((key) => {
+    normalizado[normalizarCabecalho(key)] = row[key];
+  });
+
+  return {
+    id: `excel-precos-promocionais-${index}`,
+    tipo_registo: EXCEL_FORMATS.PRECOS_PROMOCIONAIS,
+    codigo: normalizarCodigoTexto(
+      obterValor(
+        normalizado,
+        ["NOSSO CODIGO", "NOSSO CÓDIGO", "CODIGO", "CÓDIGO", "ARTIGO"],
+        "",
+      ),
+    ),
+    descricao: obterValor(
+      normalizado,
+      ["DESCRICAO", "DESCRIÇÃO", "DESIGNACAO", "DESIGNAÇÃO"],
+      "",
+    ),
+    pn: "",
+    ean: normalizarEan(
+      obterValor(normalizado, ["EAN", "CODIGO BARRAS", "CÓDIGO BARRAS"], ""),
+    ),
+    antes: parseNumero(
+      obterValor(
+        normalizado,
+        ["PVP2", "PRECO SEM PROMOCAO", "PREÇO SEM PROMOÇÃO", "ANTES"],
+        0,
+      ),
+    ),
+    atual: parseNumero(
+      obterValor(
+        normalizado,
+        [
+          "PVP2P",
+          "PVP2 P",
+          "PVP2 PROMO",
+          "PRECO PROMOCIONAL",
+          "PREÇO PROMOCIONAL",
+          "PRECO PROMO",
+          "PREÇO PROMO",
+          "ATUAL",
+        ],
+        0,
+      ),
+    ),
+    pv3: obterValor(normalizado, ["PV3", "PVP3"], ""),
+    estado: obterValor(normalizado, ["ESTADO"], ""),
+    ae: 0,
+    aea: 0,
+    aev: 0,
+    a10: 0,
+    a1e: 0,
+    data: "",
+    dataInicio: "",
+    dataFim: "",
+    alterado: "",
+    info: "PREÇOS PROMOCIONAIS",
+    selecionado: false,
+  };
+}
+
 export function mapearLinhaExcel(row, index, formato) {
-  return formato === EXCEL_FORMATS.SHOPPING
-    ? mapearLinhaExcelShopping(row, index)
-    : mapearLinhaExcelCampanha(row, index);
+  if (formato === EXCEL_FORMATS.SHOPPING) {
+    return mapearLinhaExcelShopping(row, index);
+  }
+
+  if (formato === EXCEL_FORMATS.PRECOS_PROMOCIONAIS) {
+    return mapearLinhaExcelPrecosPromocionais(row, index);
+  }
+
+  return mapearLinhaExcelCampanha(row, index);
 }
 
 export function obterFormatoAutomaticoEtiqueta(descricao = "") {

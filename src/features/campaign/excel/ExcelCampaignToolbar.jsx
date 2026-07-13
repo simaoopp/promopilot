@@ -35,9 +35,21 @@ export default function ExcelCampaignToolbar({
 }) {
   const [definicoesAbertas, setDefinicoesAbertas] = useState(false);
   const mostraDatasCampanha =
-    !campanhaSemDatas && modeloImportado === EXCEL_FORMATS.CAMPANHA && dadosTotal > 0;
+    !campanhaSemDatas &&
+    (modeloImportado === EXCEL_FORMATS.CAMPANHA ||
+      modeloImportado === EXCEL_FORMATS.PRECOS_PROMOCIONAIS) &&
+    dadosTotal > 0;
   const mostraDatasShopping =
     !campanhaSemDatas && modeloImportado === EXCEL_FORMATS.SHOPPING && dadosTotal > 0;
+
+  const formatoImportadoLabel = (() => {
+    if (modeloImportado === EXCEL_FORMATS.SHOPPING) return "Shopping";
+    if (modeloImportado === EXCEL_FORMATS.PRECOS_PROMOCIONAIS) {
+      return "Preços promocionais";
+    }
+
+    return "Campanha";
+  })();
 
   return (
     <div className="control-card">
@@ -89,7 +101,7 @@ export default function ExcelCampaignToolbar({
       </div>
 
       <div className="input-group">
-        <span>Importar ficheiro Excel</span>
+        <span>Importar ficheiro Excel / ODS</span>
         <input type="file" accept=".xlsx,.xls,.xlsb,.csv,.ods" onChange={carregarExcel} />
         {nomeFicheiro ? <small>Ficheiro: {nomeFicheiro}</small> : null}
         {loading ? <small>A carregar Excel...</small> : null}
@@ -180,7 +192,7 @@ export default function ExcelCampaignToolbar({
       <div className="resumo-cards">
         <ResumoCard
           label="Formato detetado"
-          value={modeloImportado === EXCEL_FORMATS.SHOPPING ? "Shopping" : "Campanha"}
+          value={formatoImportadoLabel}
         />
         <ResumoCard label="Total artigos" value={dadosTotal} />
         <ResumoCard label="Filtrados" value={filtradosTotal} />
