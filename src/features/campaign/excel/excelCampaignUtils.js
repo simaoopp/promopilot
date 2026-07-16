@@ -67,7 +67,8 @@ export const PRECOS_PROMOCIONAIS_TABLE_COLUMNS = [
   { key: "estado", label: "ESTADO", tipo: "text" },
   { key: "antes", label: "PVP2", tipo: "number" },
   { key: "atual", label: "PVP2P", tipo: "number" },
-  { key: "info", label: "INFORMAÇÃO", tipo: "text" },
+  { key: "dataInicio", label: "DATA INÍCIO" },
+  { key: "dataFim", label: "DATA FIM" },
 ];
 
 export const PRECOS_PROMOCIONAIS_PRIMARY_COLUMNS = [
@@ -75,7 +76,8 @@ export const PRECOS_PROMOCIONAIS_PRIMARY_COLUMNS = [
   { key: "descricao", label: "DESCRIÇÃO", tipo: "text" },
   { key: "antes", label: "PVP2", tipo: "number" },
   { key: "atual", label: "PVP2P", tipo: "number" },
-  { key: "estado", label: "ESTADO", tipo: "text" },
+  { key: "dataInicio", label: "DATA INÍCIO" },
+  { key: "dataFim", label: "DATA FIM" },
 ];
 
 export const SHOPPING_PRICE_SOURCE_OPTIONS = [
@@ -104,6 +106,20 @@ export function normalizarCabecalho(texto) {
     .replace(/\s+/g, " ")
     .replace(/_/g, " ")
     .trim();
+}
+
+export function isFormatoCampanhaComDatas(formato) {
+  return formato === EXCEL_FORMATS.CAMPANHA || formato === EXCEL_FORMATS.PRECOS_PROMOCIONAIS;
+}
+
+export function isItemCampanhaComDatas(item = {}) {
+  return isFormatoCampanhaComDatas(item.tipo_registo);
+}
+
+export function obterDescricaoFormatoExcel(formato) {
+  if (formato === EXCEL_FORMATS.SHOPPING) return "Shopping";
+  if (formato === EXCEL_FORMATS.PRECOS_PROMOCIONAIS) return "Preços promocionais";
+  return "Campanha";
 }
 
 export function normalizarTexto(texto) {
@@ -318,25 +334,24 @@ export function detetarFormatoExcel(rows = []) {
     normalizarCabecalho(key),
   );
 
-  const temTabelaPrecosPromocionais =
-    (cabecalhos.includes("NOSSO CODIGO") || cabecalhos.includes("NOSSO CÓDIGO")) &&
-    cabecalhos.includes("PVP2") &&
-    (cabecalhos.includes("PVP2P") ||
-      cabecalhos.includes("PVP2 P") ||
-      cabecalhos.includes("PVP2 PROMO") ||
-      cabecalhos.includes("PRECO PROMOCIONAL") ||
-      cabecalhos.includes("PREÇO PROMOCIONAL"));
-
-  if (temTabelaPrecosPromocionais) {
-    return EXCEL_FORMATS.PRECOS_PROMOCIONAIS;
-  }
+  const temNossoCodigo = cabecalhos.includes("NOSSO CODIGO");
+  const temPvp2 = cabecalhos.includes("PVP2");
+  const temPvp2Promocional =
+    cabecalhos.includes("PVP2P") ||
+    cabecalhos.includes("PVP2 P") ||
+    cabecalhos.includes("PVP2 PROMO") ||
+    cabecalhos.includes("PVP PROMOCIONAL");
 
   const temCabecalhoShopping =
     cabecalhos.includes("NOSSO PRECO") ||
-    cabecalhos.includes("NOSSO PREÇO") ||
     cabecalhos.includes("WORTEN") ||
     cabecalhos.includes("RADIO POPULAR") ||
-    cabecalhos.includes("RÁDIO POPULAR");
+    cabecalhos.includes("COMPARACAO") ||
+    cabecalhos.includes("OBSERVACOES");
+
+  if (temNossoCodigo && temPvp2 && temPvp2Promocional && !temCabecalhoShopping) {
+    return EXCEL_FORMATS.PRECOS_PROMOCIONAIS;
+  }
 
   return temCabecalhoShopping
     ? EXCEL_FORMATS.SHOPPING
@@ -476,11 +491,7 @@ export function mapearLinhaExcelPrecosPromocionais(row, index) {
     id: `excel-precos-promocionais-${index}`,
     tipo_registo: EXCEL_FORMATS.PRECOS_PROMOCIONAIS,
     codigo: normalizarCodigoTexto(
-      obterValor(
-        normalizado,
-        ["NOSSO CODIGO", "NOSSO CÓDIGO", "CODIGO", "CÓDIGO", "ARTIGO"],
-        "",
-      ),
+      obterValor(normalizado, ["NOSSO CODIGO", "NOSSO CÓDIGO", "CODIGO", "CÓDIGO", "ARTIGO"], ""),
     ),
     descricao: obterValor(
       normalizado,
@@ -488,29 +499,14 @@ export function mapearLinhaExcelPrecosPromocionais(row, index) {
       "",
     ),
     pn: "",
-    ean: normalizarEan(
-      obterValor(normalizado, ["EAN", "CODIGO BARRAS", "CÓDIGO BARRAS"], ""),
-    ),
+    ean: normalizarEan(obterValor(normalizado, ["EAN", "CODIGO BARRAS", "CÓDIGO BARRAS"], "")),
     antes: parseNumero(
-      obterValor(
-        normalizado,
-        ["PVP2", "PRECO SEM PROMOCAO", "PREÇO SEM PROMOÇÃO", "ANTES"],
-        0,
-      ),
+      obterValor(normalizado, ["PVP2", "PVP 2", "PRECO ANTES", "PREÇO ANTES"], 0),
     ),
     atual: parseNumero(
       obterValor(
         normalizado,
-        [
-          "PVP2P",
-          "PVP2 P",
-          "PVP2 PROMO",
-          "PRECO PROMOCIONAL",
-          "PREÇO PROMOCIONAL",
-          "PRECO PROMO",
-          "PREÇO PROMO",
-          "ATUAL",
-        ],
+        ["PVP2P", "PVP2 P", "PVP2 PROMO", "PVP PROMOCIONAL", "PRECO PROMOCIONAL", "PREÇO PROMOCIONAL", "ATUAL"],
         0,
       ),
     ),
@@ -522,8 +518,12 @@ export function mapearLinhaExcelPrecosPromocionais(row, index) {
     a10: 0,
     a1e: 0,
     data: "",
-    dataInicio: "",
-    dataFim: "",
+    dataInicio: obterValor(
+      normalizado,
+      ["DATA INICIO", "DATA INÍCIO", "DATA_INICIO"],
+      "",
+    ),
+    dataFim: obterValor(normalizado, ["DATA FIM", "DATA_FIM"], ""),
     alterado: "",
     info: "PREÇOS PROMOCIONAIS",
     selecionado: false,
