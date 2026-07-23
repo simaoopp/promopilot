@@ -1,51 +1,70 @@
 # PromoPilot
 
-PromoPilot is a SaaS platform that helps retail teams create promotional
-campaigns, generate product labels, manage product catalogues and automate
-commercial workflows.
+![React](https://img.shields.io/badge/React-19-blue)
+![Node.js](https://img.shields.io/badge/Node.js-Express-green)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Database-blue)
+![License](https://img.shields.io/badge/License-MIT-lightgrey)
 
-## Live Demo
+PromoPilot is a production-ready SaaS platform that helps retail teams create promotional campaigns, generate product labels, manage product catalogues and automate commercial workflows.
 
-https://promopilot.pt
+## 🌐 Live Demo
+
+**https://promopilot.pt**
 
 ## Screenshots
 
-[Dashboard](image.png)
-[Campaign creation] (image-1.png)
-[Labels](image-2.png)
-[Commercial dossier](plano_orc_11974.pdf)
+### Dashboard
+
+![Dashboard](docs/images/dashboard.png)
+
+### Campaign Creation
+
+![Campaign](docs/images/campaign.png)
+
+### Labels
+
+![Labels](docs/images/labels.png)
+
+### Commercial Dossier
+
+![Dossier](docs/images/dossier.png)
+
+## Highlights
+
+- Built entirely from scratch
+- Production-ready SaaS
+- Multi-tenant architecture
+- Cloud deployed
+- Secure authentication & authorization
+- Used by real users
 
 ## Key Features
 
 - Promotional campaign management
-- Automatic and manual label generation
-- Product catalogue and search
+- Automatic label generation
+- Product catalogue
+- Commercial dossier generation
+- Authentication & authorization
+- Multi-tenant architecture
+- Audit logging
+- Email automation
 - PDF generation
-- Email-based campaign automation
-- Authentication and role-based access
-- Multi-tenant SaaS foundation
-- Audit logs and usage tracking
+- REST API
+- Cloud deployment
 
 ## Tech Stack
 
-Frontend:
-React, JavaScript, CSS
-
-Backend:
-Node.js, Express
-
-Database and Authentication:
-Supabase, PostgreSQL, RLS
-
-Cloud:
-Google Cloud Run, Render, Secret Manager
-
-Integrations:
-Resend, Playwright
+Layer	Technologies
+Frontend	React, JavaScript, CSS, Tailwind CSS
+Backend	Node.js, Express
+Database	PostgreSQL, Supabase
+Cloud	Google Cloud Run, Render
+Authentication	Supabase Auth
+Integrations	Resend, Playwright
 
 ## Architecture
 
-[small diagram]
+![Campaign](tree.promopilot.png)
 
 ## Security
 
@@ -58,8 +77,24 @@ Resend, Playwright
 
 ## Running Locally
 
-...
+```bash
+git clone https://github.com/simaoopp/promopilot.git
 
-## Documentation
+cd promopilot
 
-...
+npm install
+
+cp .env.example .env
+
+npm run dev
+```
+
+## Why I Built It
+
+PromoPilot was created to simplify the process of managing promotional campaigns for retail businesses.
+
+The goal was to build a production-ready SaaS application capable of handling authentication, multi-tenancy, cloud deployment, PDF generation and email automation while maintaining a scalable architecture.
+
+## License
+
+MIT
