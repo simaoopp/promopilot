@@ -137,6 +137,13 @@ function normalizeArticle(item) {
   return row;
 }
 
+<<<<<<< HEAD
+=======
+function articleHasValidFormat(row) {
+  return VALID_ARTICLE_RE.test(row.artigo);
+}
+
+>>>>>>> 1d4a0b5ae270efa2d28ecc6ae2991ce1e530d7bc
 async function loadArticles(filePath) {
   const raw = await fs.readFile(filePath, "utf8");
   const parsed = JSON.parse(raw);
@@ -349,8 +356,14 @@ async function main() {
     const existingRows = batch.filter((row) => existingMap.has(row.artigo));
     const changedExistingRows = existingRows.filter((row) => rowChanged(row, existingMap.get(row.artigo)));
     const unchangedExistingRows = existingRows.length - changedExistingRows.length;
+<<<<<<< HEAD
     const newRows = batch.filter((row) => !existingMap.has(row.artigo));
     const skippedInvalidNewRows = 0;
+=======
+    const newRowsAll = batch.filter((row) => !existingMap.has(row.artigo));
+    const newRows = newRowsAll.filter(articleHasValidFormat);
+    const skippedInvalidNewRows = newRowsAll.length - newRows.length;
+>>>>>>> 1d4a0b5ae270efa2d28ecc6ae2991ce1e530d7bc
 
     for (const row of changedExistingRows) {
       const changes = getChangedFields(row, existingMap.get(row.artigo));
@@ -386,7 +399,11 @@ async function main() {
         `${changedExistingRows.length} existentes alterados, ` +
         `${unchangedExistingRows} já iguais, ` +
         `${newRows.length} novos inseridos, ` +
+<<<<<<< HEAD
         `${skippedInvalidNewRows} novos ignorados`,
+=======
+        `${skippedInvalidNewRows} novos ignorados por formato`,
+>>>>>>> 1d4a0b5ae270efa2d28ecc6ae2991ce1e530d7bc
     );
   }
 
@@ -397,7 +414,11 @@ async function main() {
   console.log(`Existentes alterados: ${totalExistingUpdated}`);
   console.log(`Existentes já iguais: ${totalExistingUnchanged}`);
   console.log(`Novos artigos inseridos: ${totalNewInserted}`);
+<<<<<<< HEAD
   console.log(`Novos ignorados: ${totalNewSkippedInvalidFormat}`);
+=======
+  console.log(`Novos ignorados por formato inválido: ${totalNewSkippedInvalidFormat}`);
+>>>>>>> 1d4a0b5ae270efa2d28ecc6ae2991ce1e530d7bc
   console.log(`Campos alterados: ${JSON.stringify(changedFieldCounts)}`);
   if (!dryRun) console.log(`Modo pvp2 usado: ${pvp2FallbackMode}`);
   console.log(`Duração: ${seconds}s`);

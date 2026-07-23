@@ -26,12 +26,17 @@ import {
   CAMPANHA_PRIMARY_COLUMNS,
   CAMPANHA_TABLE_COLUMNS,
   EXCEL_FORMATS,
+  PRECOS_PROMOCIONAIS_PRIMARY_COLUMNS,
+  PRECOS_PROMOCIONAIS_TABLE_COLUMNS,
   SHOPPING_PRIMARY_COLUMNS,
   SHOPPING_TABLE_COLUMNS,
   detetarFormatoExcel,
   formatarDataInputDiaMes,
+  isFormatoCampanhaComDatas,
+  isItemCampanhaComDatas,
   mapearLinhaExcel,
   normalizarCabecalho,
+  obterDescricaoFormatoExcel,
   obterFormatoFinalEtiqueta,
   recalcularSelecaoPrecosShopping,
   renderExcelTableCell,
@@ -89,21 +94,29 @@ export default function EtiquetasExcelPage() {
   const [mostrarTabelaCompleta, setMostrarTabelaCompleta] = useState(false);
   const filterButtonRefs = useRef({});
 
-  const colunasTabelaAtivas = useMemo(
-    () =>
-      modeloImportado === EXCEL_FORMATS.SHOPPING
-        ? SHOPPING_TABLE_COLUMNS
-        : CAMPANHA_TABLE_COLUMNS,
-    [modeloImportado],
-  );
+  const colunasTabelaAtivas = useMemo(() => {
+    if (modeloImportado === EXCEL_FORMATS.SHOPPING) {
+      return SHOPPING_TABLE_COLUMNS;
+    }
 
-  const colunasResumoAtivas = useMemo(
-    () =>
-      modeloImportado === EXCEL_FORMATS.SHOPPING
-        ? SHOPPING_PRIMARY_COLUMNS
-        : CAMPANHA_PRIMARY_COLUMNS,
-    [modeloImportado],
-  );
+    if (modeloImportado === EXCEL_FORMATS.PRECOS_PROMOCIONAIS) {
+      return PRECOS_PROMOCIONAIS_TABLE_COLUMNS;
+    }
+
+    return CAMPANHA_TABLE_COLUMNS;
+  }, [modeloImportado]);
+
+  const colunasResumoAtivas = useMemo(() => {
+    if (modeloImportado === EXCEL_FORMATS.SHOPPING) {
+      return SHOPPING_PRIMARY_COLUMNS;
+    }
+
+    if (modeloImportado === EXCEL_FORMATS.PRECOS_PROMOCIONAIS) {
+      return PRECOS_PROMOCIONAIS_PRIMARY_COLUMNS;
+    }
+
+    return CAMPANHA_PRIMARY_COLUMNS;
+  }, [modeloImportado]);
 
   const campanhaSemDatas = useMemo(
     () => campanhaSemDataDefinida(titulo),
@@ -210,7 +223,7 @@ export default function EtiquetasExcelPage() {
   function extrairPrimeiraDataCampanha(linhas, campo) {
     const itemComData = linhas.find(
       (item) =>
-        item.tipo_registo === EXCEL_FORMATS.CAMPANHA &&
+        isItemCampanhaComDatas(item) &&
         String(item?.[campo] || "").trim(),
     );
 
@@ -222,7 +235,7 @@ export default function EtiquetasExcelPage() {
     const dataFimFormatada = formatarDataInputDiaMes(dataFimIso);
 
     return linhas.map((item) => {
-      if (item.tipo_registo !== EXCEL_FORMATS.CAMPANHA) return item;
+      if (!isItemCampanhaComDatas(item)) return item;
 
       return {
         ...item,
@@ -245,7 +258,7 @@ export default function EtiquetasExcelPage() {
 
     setDados((prev) =>
       prev.map((item) =>
-        item.tipo_registo === EXCEL_FORMATS.CAMPANHA
+        isItemCampanhaComDatas(item)
           ? { ...item, [campo]: valorFormatado }
           : item,
       ),
@@ -284,11 +297,11 @@ export default function EtiquetasExcelPage() {
         ? linhas.map(limparDatasCampanhaItem)
         : linhas;
       const dataInicioCapturada =
-        !campanhaSemDatas && formatoExcel === EXCEL_FORMATS.CAMPANHA
+        !campanhaSemDatas && isFormatoCampanhaComDatas(formatoExcel)
           ? extrairPrimeiraDataCampanha(linhasNormalizadas, "dataInicio")
           : "";
       const dataFimCapturada =
-        !campanhaSemDatas && formatoExcel === EXCEL_FORMATS.CAMPANHA
+        !campanhaSemDatas && isFormatoCampanhaComDatas(formatoExcel)
           ? extrairPrimeiraDataCampanha(linhasNormalizadas, "dataFim")
           : "";
       const dataInicioBase = dataInicioCapturada || dataInicioCampanhaGeral;
@@ -303,16 +316,12 @@ export default function EtiquetasExcelPage() {
       setOrdenacao({ coluna: "", direcao: "" });
       setFiltroAberto(null);
       setDados(
-        !campanhaSemDatas && formatoExcel === EXCEL_FORMATS.CAMPANHA
+        !campanhaSemDatas && isFormatoCampanhaComDatas(formatoExcel)
           ? aplicarDatasGeraisCampanha(linhasNormalizadas, dataInicioBase, dataFimBase)
           : linhasNormalizadas,
       );
 
-      toast.success(
-        formatoExcel === EXCEL_FORMATS.SHOPPING
-          ? "Excel Shopping importado com sucesso."
-          : "Excel de campanha importado com sucesso.",
-      );
+      toast.success(`${obterDescricaoFormatoExcel(formatoExcel)} importado com sucesso.`);
     } catch (error) {
       console.error("Erro ao ler Excel:", error);
       toast.error("Não foi possível ler o ficheiro Excel.");
@@ -475,7 +484,7 @@ export default function EtiquetasExcelPage() {
 
     setDados((prev) =>
       prev.map((item) => {
-        if (item.id !== id || item.tipo_registo === EXCEL_FORMATS.SHOPPING) {
+        if (item.id !== id || !isItemCampanhaComDatas(item)) {
           return item;
         }
 
@@ -658,7 +667,7 @@ export default function EtiquetasExcelPage() {
     }
 
     if (
-      item.tipo_registo === EXCEL_FORMATS.CAMPANHA &&
+      isItemCampanhaComDatas(item) &&
       (col.key === "dataInicio" || col.key === "dataFim")
     ) {
       if (campanhaSemDatas) return "";

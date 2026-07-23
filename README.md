@@ -1,6 +1,10 @@
 # PromoPilot
 
+<<<<<<< HEAD
 Aplicação para gestão de campanhas, etiquetas, artigos e dossiers comerciais.
+=======
+SaaS operacional para campanhas, etiquetas, catálogo de artigos, dossiers comerciais e processos de loja, com Supabase, histórico e fundação multi-tenant.
+>>>>>>> 1d4a0b5ae270efa2d28ecc6ae2991ce1e530d7bc
 
 O projeto tem um frontend em React e uma API em Node.js/Express. A aplicação permite consultar artigos, preparar campanhas, gerar etiquetas, criar dossiers comerciais e processar campanhas recebidas por email.
 

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import ResumoCard from "../common/ResumoCard";
 import { TITULO_CAMPANHA_SEM_DATA_DEFINIDA } from "../../../utils/campaignTitleRules";
-import { EXCEL_FORMATS } from "./excelCampaignUtils";
+import { EXCEL_FORMATS, isFormatoCampanhaComDatas, obterDescricaoFormatoExcel } from "./excelCampaignUtils";
 
 export default function ExcelCampaignToolbar({
   titulo,
@@ -35,7 +35,7 @@ export default function ExcelCampaignToolbar({
 }) {
   const [definicoesAbertas, setDefinicoesAbertas] = useState(false);
   const mostraDatasCampanha =
-    !campanhaSemDatas && modeloImportado === EXCEL_FORMATS.CAMPANHA && dadosTotal > 0;
+    !campanhaSemDatas && isFormatoCampanhaComDatas(modeloImportado) && dadosTotal > 0;
   const mostraDatasShopping =
     !campanhaSemDatas && modeloImportado === EXCEL_FORMATS.SHOPPING && dadosTotal > 0;
 
@@ -180,7 +180,7 @@ export default function ExcelCampaignToolbar({
       <div className="resumo-cards">
         <ResumoCard
           label="Formato detetado"
-          value={modeloImportado === EXCEL_FORMATS.SHOPPING ? "Shopping" : "Campanha"}
+          value={obterDescricaoFormatoExcel(modeloImportado)}
         />
         <ResumoCard label="Total artigos" value={dadosTotal} />
         <ResumoCard label="Filtrados" value={filtradosTotal} />
