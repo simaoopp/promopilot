@@ -21,10 +21,6 @@ PromoPilot is a production-ready SaaS platform that helps retail teams create pr
 
 ![Campaign](campaign.png)
 
-### Labels
-
-![Labels](label.png)
-
 ### Commercial Dossier
 
 ![Dossier](dossier.pdf)
