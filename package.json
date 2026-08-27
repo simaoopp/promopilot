@@ -1,55 +1,30 @@
 {
-  "name": "etiquetas-prom-web",
+  "name": "etiquetas-prom-api",
   "version": "1.0.0",
-<<<<<<< HEAD
-  "description": "Aplicação para gestão de campanhas, etiquetas, artigos e dossiers comerciais.",
-=======
-  "description": "PromoPilot - cockpit SaaS para campanhas, etiquetas, artigos e dossiers comerciais.",
->>>>>>> 1d4a0b5ae270efa2d28ecc6ae2991ce1e530d7bc
-  "keywords": [],
-  "dependencies": {
-    "@supabase/supabase-js": "^2.45.0",
-    "@zxing/browser": "^0.1.5",
-    "@zxing/library": "^0.21.3",
-    "dotenv": "^16.6.1",
-    "jsbarcode": "3.12.3",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "react-router-dom": "^6.22.3",
-    "react-scripts": "^5.0.0",
-    "tesseract.js": "^7.0.0",
-    "xlsx": "0.18.5"
-  },
-  "devDependencies": {
-    "@types/react": "19.0.0",
-    "@types/react-dom": "19.0.0",
-    "loader-utils": "3.2.1",
-    "typescript": "^4.9.5"
-  },
+  "type": "module",
+  "main": "index.js",
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test --env=jsdom",
-    "eject": "react-scripts eject",
-    "test:ci": "react-scripts test --watch=false --runInBand",
-    "qa:static": "python3 scripts/qa_check.py",
-    "seed:articles": "node scripts/import-artigos-to-supabase.mjs",
-    "validate:artigos-json": "node -e \"const fs=require('fs');const data=JSON.parse(fs.readFileSync('src/data/artigos.json','utf8'));if(!Array.isArray(data.artigos)){throw new Error('artigos.json precisa de conter um array artigos')}console.log('artigos.json válido:', data.artigos.length, 'artigos')\"",
-    "repair:artigos-json": "node scripts/repair-artigos-json.mjs",
-    "migrate:article-prices": "node scripts/migrate-artigos-prices-to-supabase.mjs",
-<<<<<<< HEAD
-    "qa:all": "npm run qa:static && npm --prefix server run smoke",
-=======
-    "qa:saas": "python3 scripts/saas_readiness_check.py",
-    "qa:all": "npm run qa:static && npm run qa:saas && npm --prefix server run smoke",
->>>>>>> 1d4a0b5ae270efa2d28ecc6ae2991ce1e530d7bc
-    "migrate:articles-db-update": "node scripts/migrate-artigos-db-update-to-supabase.mjs"
+    "start": "node index.js",
+    "smoke": "node --check index.js && node --check app.js && node --check bootstrap/runtimeInfo.js && node --check lib/supabaseClients.js && node --check services/articleRepository.js && node --check services/aiProdutoService.js && node --check config/cors.js && node --check middleware/auth.js && node --check middleware/security.js && node --check middleware/aiRateLimit.js && node --check routes/health.js && node --check routes/articles.js && node --check routes/aiProduto.js && node --check routes/automaticCampaigns.js && node --check services/automatic-campaigns/config.js && node --check services/automatic-campaigns/formatRulesService.js && node --check services/automatic-campaigns/numberUtils.js && node --check services/automatic-campaigns/priceRulesService.js && node --check services/automatic-campaigns/storeSplitterService.js && node --check services/automatic-campaigns/campaignEmailParser.js && node --check services/automatic-campaigns/ean13Svg.js && node --check services/automatic-campaigns/labelHtmlService.js && node --check services/automatic-campaigns/pdfGeneratorService.js && node --check services/automatic-campaigns/storageService.js && node --check services/automatic-campaigns/cleanupService.js && node --check services/automatic-campaigns/automaticCampaignRepository.js && node --check services/automatic-campaigns/emailSenderService.js && node --check services/automatic-campaigns/inboxService.js && node --check services/automatic-campaigns/automaticCampaignProcessor.js && node --check workers/campaignEmailWorker.js && node --check scripts/runCampaignEmailWorker.js && node --check middleware/requestContext.js && node --check middleware/errorHandler.js && node --check middleware/tenant.js && node --check middleware/validation.js && node --check routes/saasAdmin.js && node --check routes/articleDatabaseSync.js && node --check services/saas/auditLogService.js && node --check services/saas/usageService.js && node --check services/articleDatabaseSyncService.js && node --check routes/resendInboundWebhook.js && node --check services/automatic-campaigns/resendInboundService.js",
+    "worker:campaigns": "node scripts/runCampaignEmailWorker.js",
+    "worker:campaigns:dry-run": "node scripts/runCampaignEmailWorker.js --dry-run --no-send",
+    "worker:campaigns:send": "node scripts/runCampaignEmailWorker.js --send",
+    "qa:saas": "node --check middleware/tenant.js && node --check routes/saasAdmin.js",
+    "qa:all": "npm run smoke && npm run qa:saas"
   },
-  "browserslist": [
-    ">0.2%",
-    "not dead",
-    "not ie <= 11",
-    "not op_mini all"
-  ],
-  "private": true
+  "dependencies": {
+    "@google/genai": "^0.14.1",
+    "@supabase/supabase-js": "^2.56.0",
+    "cheerio": "^1.2.0",
+    "compression": "^1.8.1",
+    "cors": "^2.8.6",
+    "dotenv": "^16.6.1",
+    "express": "^5.2.1",
+    "imapflow": "^1.0.194",
+    "mailparser": "^3.7.4",
+    "nodemailer": "^6.10.1",
+    "pdfkit": "^0.17.2",
+    "playwright": "1.60.0",
+    "pdf-parse": "^1.1.1"
+  }
 }
