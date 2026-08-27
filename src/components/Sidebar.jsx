@@ -4,6 +4,7 @@ import PromoPilotMark from "./brand/PromoPilotMark";
 import { useAuth } from "../context/AuthContext";
 import { PROMOPILOT_BRAND } from "../brand/promopilot";
 import { getPasswordValidationMessage, isValidPassword } from "../utils/validators";
+import ArticleDatabaseSyncPanel from "./admin/ArticleDatabaseSyncPanel";
 
 export default function Sidebar({
   menuAberto,
@@ -22,6 +23,7 @@ export default function Sidebar({
   const [loadingPassword, setLoadingPassword] = useState(false);
   const [erroPassword, setErroPassword] = useState("");
   const [sucessoPassword, setSucessoPassword] = useState("");
+  const [articleDbPanelOpen, setArticleDbPanelOpen] = useState(false);
 
   const contaMenuRef = useRef(null);
 
@@ -209,6 +211,16 @@ export default function Sidebar({
                 <span>{user?.email || lojaAtual}</span>
               </div>
 
+              {String(user?.email || "").trim().toLowerCase() === "simao.pereira@susiarte.com" && (
+                <button
+                  type="button"
+                  className="topbar-account-menu-item"
+                  onClick={() => { setMenuContaAberto(false); setArticleDbPanelOpen(true); }}
+                >
+                  Atualizar base de dados
+                </button>
+              )}
+
               <button
                 type="button"
                 className="topbar-account-menu-item"
@@ -325,6 +337,8 @@ export default function Sidebar({
           )}
         </nav>
       </aside>
+
+      <ArticleDatabaseSyncPanel user={user} open={articleDbPanelOpen} onClose={() => setArticleDbPanelOpen(false)} />
 
       {modalPasswordAberto && (
         <div className="force-password-overlay">
