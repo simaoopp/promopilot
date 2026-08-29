@@ -1,5 +1,5 @@
 import { AppError } from "../middleware/errorHandler.js";
-import { adminActionRateLimit } from "../middleware/security.js";
+import { adminActionRateLimit, articleDatabaseSyncRateLimit } from "../middleware/security.js";
 import {
   finishArticleDatabaseSync,
   listArticleDatabaseSyncHistory,
@@ -43,7 +43,7 @@ export function registerArticleDatabaseSyncRoutes(app, { requireAuth, attachTena
     }
   });
 
-  app.post("/api/admin/articles/database-sync/batch", ...guard, adminActionRateLimit, async (req, res, next) => {
+  app.post("/api/admin/articles/database-sync/batch", ...guard, articleDatabaseSyncRateLimit, async (req, res, next) => {
     try {
       const result = await processArticleDatabaseSyncBatch({
         req,
@@ -56,7 +56,7 @@ export function registerArticleDatabaseSyncRoutes(app, { requireAuth, attachTena
     }
   });
 
-  app.post("/api/admin/articles/database-sync/finish", ...guard, adminActionRateLimit, async (req, res, next) => {
+  app.post("/api/admin/articles/database-sync/finish", ...guard, async (req, res, next) => {
     try {
       const item = await finishArticleDatabaseSync({
         req,

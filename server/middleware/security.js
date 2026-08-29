@@ -105,15 +105,44 @@ export function createRateLimit({
   };
 }
 
+function isArticleDatabaseSyncPath(path = "") {
+  const normalized = normalizePath(path);
+  return normalized === "/admin/articles/database-sync" ||
+    normalized.startsWith("/admin/articles/database-sync/") ||
+    normalized === "/api/admin/articles/database-sync" ||
+    normalized.startsWith("/api/admin/articles/database-sync/");
+}
+
 export const apiRateLimit = createRateLimit({
   label: "api",
   windowMs: readNumber("API_RATE_LIMIT_WINDOW_MS", 15 * 60 * 1000),
   max: readNumber("API_RATE_LIMIT_MAX", 600),
-  skip: (req) => normalizePath(req.path) === "/health" || normalizePath(req.path) === "/api/health" || normalizePath(req.path) === "/ping" || normalizePath(req.path) === "/api/ping",
+  // A sincronização da base de dados é autenticada, owner-only e tem um limiter
+  // próprio. Não deve consumir o bucket genérico da API, porque uma importação
+  // normal pode precisar de centenas de batches.
+  skip: (req) => {
+    const path = normalizePath(req.path);
+    return (
+      path === "/health" ||
+      path === "/api/health" ||
+      path === "/ping" ||
+      path === "/api/ping" ||
+      isArticleDatabaseSyncPath(path)
+    );
+  },
 });
 
 export const adminActionRateLimit = createRateLimit({
   label: "admin-action",
   windowMs: readNumber("ADMIN_RATE_LIMIT_WINDOW_MS", 15 * 60 * 1000),
   max: readNumber("ADMIN_RATE_LIMIT_MAX", 60),
+});
+
+
+export const articleDatabaseSyncRateLimit = createRateLimit({
+  label: "article-db-sync",
+  windowMs: readNumber("ARTICLE_DB_SYNC_RATE_LIMIT_WINDOW_MS", 15 * 60 * 1000),
+  // 1200 pedidos/15min permite ~120 mil artigos com batches de 100,
+  // sem remover proteção contra abuso.
+  max: readNumber("ARTICLE_DB_SYNC_RATE_LIMIT_MAX", 1200),
 });
