@@ -1436,8 +1436,10 @@ no contexto, não inventes a comparação. Explica o que podes afirmar sobre est
 pede o código/modelo exato do outro artigo para uma comparação suportada.
 
 ESTILO
-- Linguagem natural, curta e útil no chão de loja.
-- Começa pela resposta direta.
+- Não uses saudações como "Olá".
+- Começa imediatamente pela resposta útil ao vendedor.
+- Responde de forma curta mas COMPLETA, normalmente entre 60 e 140 palavras.
+- Nunca termines a resposta a meio de uma frase.
 - Usa 2 a 5 pontos quando isso tornar a resposta mais fácil de explicar ao cliente.
 - Evita jargão técnico; quando necessário, explica-o.
 - Não mostres JSON.
@@ -1469,7 +1471,13 @@ Responde agora como um colega experiente que está ao lado do vendedor.
       candidateCount: 1,
       temperature: 0.25,
       topP: 0.9,
-      maxOutputTokens: 900,
+      // Gemini 2.5 Flash usa thinking dinâmico por defeito. Para este assistente
+      // de loja não precisamos de raciocínio longo: desligá-lo evita que os
+      // thinking tokens consumam o orçamento e deixem a resposta visível cortada.
+      thinkingConfig: {
+        thinkingBudget: 0,
+      },
+      maxOutputTokens: 2048,
     },
   });
 
