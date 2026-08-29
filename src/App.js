@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import Sidebar from "./components/Sidebar";
 import ProtectedRoute from "./components/ProtectedRoute";
 import PromoPilotMark from "./components/brand/PromoPilotMark";
+import GlobalSellerAssistant from "./components/GlobalSellerAssistant";
 import { useAuth } from "./context/AuthContext";
 import { PROMOPILOT_BRAND } from "./brand/promopilot";
 import { resolveInitialRoute } from "./utils/accessControl";
@@ -48,6 +49,8 @@ export default function App() {
           titulo={PROMOPILOT_BRAND.appName}
         />
       )}
+
+      {user && !onboardingRequired && <GlobalSellerAssistant />}
 
       <Suspense fallback={<PageFallback />}>
         <Routes>

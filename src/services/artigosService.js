@@ -476,6 +476,34 @@ export async function warmupApi() {
   }
 }
 
+export async function askSellerAssistant(payload) {
+  const token = await getAccessToken();
+
+  const response = await fetch(buildApiUrl("/api/ai-vendedor"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await readJsonResponse(response);
+
+  if (!response.ok || data?.ok === false) {
+    const message =
+      typeof data?.error === "string"
+        ? data.error
+        : data?.error?.message ||
+          data?.detalhe ||
+          "Erro no assistente do vendedor.";
+
+    throw new Error(message);
+  }
+
+  return data;
+}
+
 export async function enrichArtigoWithAi(payload) {
   const token = await getAccessToken();
   const response = await fetch(buildApiUrl("/api/ai-produto"), {

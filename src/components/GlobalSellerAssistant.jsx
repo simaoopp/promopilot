@@ -201,7 +201,7 @@ export default function GlobalSellerAssistant() {
         >
           <header className="global-seller-ai-header">
             <div>
-              <span className="global-seller-ai-eyebrow">PromoPilot</span>
+              <span className="global-seller-ai-eyebrow">PromoPilot · Assistente IA</span>
               <h2>✨ Assistente do vendedor</h2>
               <p>Respostas com base na ficha dos artigos.</p>
             </div>
