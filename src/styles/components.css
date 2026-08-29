@@ -1486,7 +1486,9 @@ tbody tr:hover {
   position: fixed;
   left: 18px;
   bottom: 18px;
-  z-index: 1600;
+  /* Fica preso ao viewport, mas por baixo da sidebar.
+     Sidebar overlay = 1290; sidebar = 1300. */
+  z-index: 1200;
   pointer-events: none;
 }
 
