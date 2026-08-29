@@ -9,12 +9,14 @@ const QUICK_QUESTIONS = [
   "Este produto é bom para gaming?",
 ];
 
-function getArticleLabel(article = {}) {
+function getArticleLabel(article) {
+  const safeArticle = article || {};
+
   return (
-    article.titulo_oficial ||
-    article.descricao ||
-    article.modelo ||
-    article.artigo ||
+    safeArticle.titulo_oficial ||
+    safeArticle.descricao ||
+    safeArticle.modelo ||
+    safeArticle.artigo ||
     "Artigo"
   );
 }
