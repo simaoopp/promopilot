@@ -33,6 +33,7 @@ const ARTICLE_SELECT = [
   "pvp1",
   "pvp2",
   "pvp3",
+  "estado",
   "codigo_barras",
   "fonte_oficial",
   "raw_hash",
@@ -159,6 +160,7 @@ export function mapRowToArticle(row = {}) {
           ? String(row.pvp2)
           : "",
     pvp3: row.pvp3 != null ? String(row.pvp3) : "",
+    estado: row.estado || "",
     codigoBarras: row.codigo_barras || "",
     fonte_oficial: row.fonte_oficial || "",
     raw_hash: row.raw_hash || "",
@@ -563,6 +565,48 @@ export async function findArticleByIdentifiers({ artigoInterno = "", codigoBarra
   }
 
   return data ? mapRowToArticle(data) : null;
+}
+
+
+export async function findArticleForSellerAssistant({
+  artigoInterno = "",
+  codigoBarras = "",
+  accessToken = "",
+  organizationId = null,
+} = {}) {
+  const artigo = String(artigoInterno || "").trim();
+  const barcode = String(codigoBarras || "").trim();
+
+  if (!artigo && !barcode) return null;
+
+  const client = accessToken
+    ? getUserClient(accessToken)
+    : requireAdminClient("Consulta da ficha para assistente do vendedor");
+
+  async function runLookup(column, value) {
+    if (!value) return null;
+
+    let query = client
+      .from(ARTICLES_TABLE)
+      .select(ARTICLE_SELECT)
+      .eq(column, value)
+      .limit(1);
+
+    if (organizationId) {
+      query = query.eq("organization_id", organizationId);
+    }
+
+    const { data, error } = await query.maybeSingle();
+
+    if (error) throw error;
+    return data ? mapRowToArticle(data) : null;
+  }
+
+  return (
+    (await runLookup("artigo", artigo)) ||
+    (await runLookup("codigo_barras", barcode)) ||
+    null
+  );
 }
 
 export async function upsertArticle(article = {}) {

@@ -201,3 +201,42 @@
     display: none;
   }
 }
+
+@media (max-width: 700px) {
+  .global-seller-ai {
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
+  }
+
+  .global-seller-ai-panel {
+    left: 0;
+    right: 0;
+    width: auto;
+    bottom: 64px;
+    height: min(72vh, 620px);
+    border-radius: 18px;
+  }
+
+  .global-seller-ai-launcher {
+    min-height: 50px;
+    padding: 7px 12px 7px 8px;
+  }
+
+  .global-seller-ai-launcher-icon {
+    width: 34px;
+    height: 34px;
+  }
+
+  .global-seller-ai-search-row {
+    grid-template-columns: 1fr;
+  }
+
+  .global-seller-ai-search-row .btn {
+    width: 100%;
+  }
+
+  .global-seller-ai-composer-footer {
+    align-items: stretch;
+  }
+}

@@ -1,5 +1,11 @@
-const AI_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
-const AI_RATE_LIMIT_MAX_REQUESTS = 20;
+const AI_RATE_LIMIT_WINDOW_MS = Math.max(
+  60_000,
+  Number(process.env.AI_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000),
+);
+const AI_RATE_LIMIT_MAX_REQUESTS = Math.max(
+  10,
+  Number(process.env.AI_RATE_LIMIT_MAX_REQUESTS || 60),
+);
 const aiRateLimitStore = new Map();
 
 function getClientIp(req) {
@@ -15,10 +21,12 @@ function getClientIp(req) {
 export function aiRateLimit(req, res, next) {
   const now = Date.now();
   const ip = getClientIp(req);
-  const entry = aiRateLimitStore.get(ip);
+  const userId = String(req.authUser?.id || req.auth?.user?.id || "").trim();
+  const key = userId ? `user:${userId}` : `ip:${ip}`;
+  const entry = aiRateLimitStore.get(key);
 
   if (!entry || now > entry.resetAt) {
-    aiRateLimitStore.set(ip, {
+    aiRateLimitStore.set(key, {
       count: 1,
       resetAt: now + AI_RATE_LIMIT_WINDOW_MS,
     });
@@ -39,7 +47,7 @@ export function aiRateLimit(req, res, next) {
   }
 
   entry.count += 1;
-  aiRateLimitStore.set(ip, entry);
+  aiRateLimitStore.set(key, entry);
 
   return next();
 }
@@ -49,9 +57,9 @@ export function startAiRateLimitCleanup() {
     () => {
       const now = Date.now();
 
-      for (const [ip, entry] of aiRateLimitStore.entries()) {
+      for (const [key, entry] of aiRateLimitStore.entries()) {
         if (now > entry.resetAt) {
-          aiRateLimitStore.delete(ip);
+          aiRateLimitStore.delete(key);
         }
       }
     },

@@ -11,17 +11,8 @@ import ArticleDetailsModal from "../components/home/ArticleDetailsModal";
 import CampaignDetailsModal from "../components/home/CampaignDetailsModal";
 import AutomaticCampaignDetailsModal from "../components/home/AutomaticCampaignDetailsModal";
 import ConfirmDeleteModal from "../components/home/ConfirmDeleteModal";
-import {
-  enrichArtigoWithAi,
-  warmupApi,
-  mergeArtigoData,
-  mergeArtigosIntoList,
-  syncUpdatedArtigoToCache,
-} from "../services/artigosService";
-import {
-  getCatalogoPesquisaSnapshot,
-  syncUpdatedArtigoToCatalogoPesquisa,
-} from "../services/catalogoPesquisaService";
+import { warmupApi } from "../services/artigosService";
+import { getCatalogoPesquisaSnapshot } from "../services/catalogoPesquisaService";
 import { loadCampaignHistory, removeCampaignFromHistory } from "../utils/campaignHistory";
 import {
   loadAutomaticCampaignHistory,
@@ -30,9 +21,6 @@ import {
 import {
   formatarAutorCampanha,
   formatarDataHistorico,
-  hasUsefulTechData,
-  mapArtigoToAiResultado,
-  normalizeAiResultado,
 } from "../utils/homepageAi";
 import "../styles/styles.css";
 
@@ -50,10 +38,6 @@ export default function HomePage() {
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const [catalogoTotal] = useState(initialCatalogo.total || 0);
   const [artigoSelecionado, setArtigoSelecionado] = useState(null);
-  const [aiAberta, setAiAberta] = useState(false);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiErro, setAiErro] = useState("");
-  const [aiResultado, setAiResultado] = useState(null);
   const [historicoCampanhas, setHistoricoCampanhas] = useState([]);
   const [historicoCampanhasAutomaticas, setHistoricoCampanhasAutomaticas] = useState([]);
   const [campanhaSelecionada, setCampanhaSelecionada] = useState(null);
@@ -130,18 +114,10 @@ export default function HomePage() {
 
   function abrirPopupArtigo(item) {
     setArtigoSelecionado(item);
-    setAiAberta(false);
-    setAiErro("");
-    setAiResultado(null);
-    setAiLoading(false);
   }
 
   function fecharPopupArtigo() {
     setArtigoSelecionado(null);
-    setAiAberta(false);
-    setAiErro("");
-    setAiResultado(null);
-    setAiLoading(false);
   }
 
   function abrirPopupCampanha(campanha) {
@@ -194,43 +170,6 @@ export default function HomePage() {
     navigate("/EtiquetasCampanha", { state: { campanhaDuplicada: campanha } });
   }
 
-  async function abrirPopupAI() {
-    if (!artigoSelecionado) return;
-
-    setAiAberta(true);
-    setAiErro("");
-    setAiResultado(null);
-
-    if (hasUsefulTechData(artigoSelecionado)) {
-      setAiResultado(mapArtigoToAiResultado(artigoSelecionado));
-      return;
-    }
-
-    setAiLoading(true);
-
-    try {
-      const payload = {
-        artigoInterno: artigoSelecionado.artigo || "",
-        descricao: artigoSelecionado.descricao || "",
-        codigoBarras: artigoSelecionado.codigoBarras || "",
-      };
-
-      const data = await enrichArtigoWithAi(payload);
-      const artigoAtualizado = mergeArtigoData(artigoSelecionado, data?.artigoAtualizado);
-      const resultadoNormalizado = normalizeAiResultado(data?.resultado, artigoAtualizado);
-
-      setAiResultado(resultadoNormalizado);
-      setArtigoSelecionado(artigoAtualizado);
-      setSugestoes((prev) => mergeArtigosIntoList(prev, artigoAtualizado));
-      syncUpdatedArtigoToCache(artigoAtualizado);
-      syncUpdatedArtigoToCatalogoPesquisa(artigoAtualizado);
-    } catch (error) {
-      console.error("Erro completo AI:", error);
-      setAiErro(error?.message || "Erro ao obter dados do artigo.");
-    } finally {
-      setAiLoading(false);
-    }
-  }
 
   function abrirPesquisaEmEtiquetas() {
     const termo = String(pesquisa || "").trim();
@@ -323,12 +262,7 @@ export default function HomePage() {
 
       <ArticleDetailsModal
         artigo={artigoSelecionado}
-        aiAberta={aiAberta}
-        aiLoading={aiLoading}
-        aiErro={aiErro}
-        aiResultado={aiResultado}
         onClose={fecharPopupArtigo}
-        onOpenAi={abrirPopupAI}
       />
 
       <CampaignDetailsModal

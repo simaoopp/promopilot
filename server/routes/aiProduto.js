@@ -1,7 +1,9 @@
 import {
+  answerSellerQuestion,
   enrichSingleArticle,
   isRetryableGeminiError,
   validateAiProdutoPayload,
+  validateSellerAssistantPayload,
 } from "../services/aiProdutoService.js";
 
 export function registerAiProdutoRoutes(app, { requireAuth, aiRateLimit, aiEnabled = false }) {
@@ -56,4 +58,50 @@ export function registerAiProdutoRoutes(app, { requireAuth, aiRateLimit, aiEnabl
       });
     }
   });
+
+  app.post("/api/ai-vendedor", requireAuth, aiRateLimit, async (req, res) => {
+    try {
+      if (!aiEnabled) {
+        return res.status(503).json({
+          ok: false,
+          error: "Assistente do vendedor indisponível: GEMINI_API_KEY em falta.",
+        });
+      }
+
+      const validation = validateSellerAssistantPayload(req.body || {});
+
+      if (!validation.ok) {
+        return res.status(validation.statusCode).json({
+          ok: false,
+          error: validation.error,
+        });
+      }
+
+      const result = await answerSellerQuestion({
+        ...validation.value,
+        accessToken: req.accessToken,
+        organizationId: req.organizationId || null,
+      });
+
+      return res.json({ ok: true, ...result });
+    } catch (error) {
+      if (isRetryableGeminiError(error)) {
+        return res.status(503).json({
+          ok: false,
+          error:
+            "O assistente está com elevada procura neste momento. Tenta novamente dentro de instantes.",
+        });
+      }
+
+      const statusCode = Number(error?.statusCode || 500);
+
+      console.error("Erro /api/ai-vendedor:", error);
+
+      return res.status(statusCode).json({
+        ok: false,
+        error: error?.message || "Erro interno no assistente do vendedor.",
+      });
+    }
+  });
+
 }
