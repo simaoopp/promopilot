@@ -1,7 +1,10 @@
 import { supabaseAdminClient } from "../lib/supabaseClients.js";
 import { AppError } from "../middleware/errorHandler.js";
 
-const MAX_BATCH_SIZE = Number(process.env.ARTICLE_DB_SYNC_MAX_BATCH_SIZE || 500);
+const MAX_BATCH_SIZE = Number(process.env.ARTICLE_DB_SYNC_MAX_BATCH_SIZE || 120);
+const DB_READ_CHUNK_SIZE = Number(process.env.ARTICLE_DB_SYNC_READ_CHUNK_SIZE || 80);
+const DB_WRITE_CHUNK_SIZE = Number(process.env.ARTICLE_DB_SYNC_WRITE_CHUNK_SIZE || 40);
+const DB_TIMEOUT_RETRIES = Math.max(0, Number(process.env.ARTICLE_DB_SYNC_TIMEOUT_RETRIES || 2));
 const ARTICLE_COLUMNS = ["artigo", "descricao", "pvp1", "pvp2", "pvp3", "estado"];
 
 function text(value) {
@@ -56,6 +59,88 @@ function requireClient() {
     throw new AppError("SERVICE_UNAVAILABLE", "Serviço de base de dados indisponível.", { status: 503 });
   }
   return supabaseAdminClient;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function chunk(items, size) {
+  const safeSize = Math.max(1, Number(size) || 1);
+  const result = [];
+  for (let index = 0; index < items.length; index += safeSize) {
+    result.push(items.slice(index, index + safeSize));
+  }
+  return result;
+}
+
+function isStatementTimeout(error) {
+  return String(error?.code || "") === "57014" ||
+    /statement timeout|canceling statement/i.test(String(error?.message || ""));
+}
+
+async function runDbOperation(operation, { label = "database operation", retries = DB_TIMEOUT_RETRIES } = {}) {
+  let attempt = 0;
+
+  while (true) {
+    const result = await operation();
+
+    if (!result?.error) {
+      return result;
+    }
+
+    if (!isStatementTimeout(result.error) || attempt >= retries) {
+      throw result.error;
+    }
+
+    attempt += 1;
+    console.warn(`[article-db-sync] ${label} timeout; retry ${attempt}/${retries}`, {
+      code: result.error.code,
+      message: result.error.message,
+    });
+
+    await sleep(250 * attempt);
+  }
+}
+
+async function fetchExistingArticles(client, codes) {
+  const rows = [];
+
+  for (const codeChunk of chunk(codes, DB_READ_CHUNK_SIZE)) {
+    const result = await runDbOperation(
+      () =>
+        client
+          .from("articles")
+          .select("artigo,pvp1,pvp2,pvp3,estado")
+          .in("artigo", codeChunk),
+      { label: `read ${codeChunk.length} articles` },
+    );
+
+    rows.push(...(result.data || []));
+  }
+
+  return rows;
+}
+
+async function writeArticleUpdates(client, updates) {
+  for (const updateChunk of chunk(updates, DB_WRITE_CHUNK_SIZE)) {
+    await runDbOperation(
+      () =>
+        client
+          .from("articles")
+          .upsert(updateChunk, { onConflict: "artigo" }),
+      { label: `update ${updateChunk.length} articles` },
+    );
+  }
+}
+
+async function writeArticleInserts(client, inserts) {
+  for (const insertChunk of chunk(inserts, DB_WRITE_CHUNK_SIZE)) {
+    await runDbOperation(
+      () => client.from("articles").insert(insertChunk),
+      { label: `insert ${insertChunk.length} articles` },
+    );
+  }
 }
 
 async function resolveOrganizationId({ req, client }) {
@@ -122,7 +207,7 @@ export async function processArticleDatabaseSyncBatch({ req, syncId, rows }) {
 
   const { data: log, error: logError } = await client
     .from("article_sync_logs")
-    .select("id,organization_id,status")
+    .select("id,organization_id,status,processed_rows,updated_rows,inserted_rows,unchanged_rows,pvp1_changes,pvp2_changes,pvp3_changes,estado_changes")
     .eq("id", syncId)
     .eq("user_id", req.authUser.id)
     .maybeSingle();
@@ -131,13 +216,9 @@ export async function processArticleDatabaseSyncBatch({ req, syncId, rows }) {
   if (log.status !== "processing") throw new AppError("VALIDATION_ERROR", "Esta sincronização já terminou.");
 
   const codes = [...new Set(normalizedRows.map((row) => row.artigo))];
-  const { data: existingData, error: existingError } = await client
-    .from("articles")
-    .select("artigo,pvp1,pvp2,pvp3,estado")
-    .in("artigo", codes);
-  if (existingError) throw existingError;
+  const existingData = await fetchExistingArticles(client, codes);
 
-  const existing = new Map((existingData || []).map((row) => [row.artigo, row]));
+  const existing = new Map(existingData.map((row) => [row.artigo, row]));
   const updates = [];
   const inserts = [];
   const changedFields = { pvp1: 0, pvp2: 0, pvp3: 0, estado: 0 };
@@ -175,13 +256,11 @@ export async function processArticleDatabaseSyncBatch({ req, syncId, rows }) {
   }
 
   if (updates.length) {
-    const { error } = await client.from("articles").upsert(updates, { onConflict: "artigo" });
-    if (error) throw error;
+    await writeArticleUpdates(client, updates);
   }
 
   if (inserts.length) {
-    const { error } = await client.from("articles").insert(inserts);
-    if (error) throw error;
+    await writeArticleInserts(client, inserts);
   }
 
   const { data: updatedLog, error: updateLogError } = await client

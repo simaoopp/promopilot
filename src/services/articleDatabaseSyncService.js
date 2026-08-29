@@ -2,7 +2,7 @@ import * as XLSX from "xlsx";
 import { supabase } from "../lib/supabase";
 
 const API_BASE_URL = String(process.env.REACT_APP_API_BASE_URL || "").replace(/\/+$/, "");
-const BATCH_SIZE = 500;
+const BATCH_SIZE = 100;
 
 function normalizeHeader(value = "") {
   return String(value || "")
