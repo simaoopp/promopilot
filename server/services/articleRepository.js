@@ -577,36 +577,54 @@ export async function findArticleForSellerAssistant({
   const artigo = String(artigoInterno || "").trim();
   const barcode = String(codigoBarras || "").trim();
 
-  if (!artigo && !barcode) return null;
-
-  const client = accessToken
-    ? getUserClient(accessToken)
-    : requireAdminClient("Consulta da ficha para assistente do vendedor");
-
-  async function runLookup(column, value) {
-    if (!value) return null;
-
-    let query = client
-      .from(ARTICLES_TABLE)
-      .select(ARTICLE_SELECT)
-      .eq(column, value)
-      .limit(1);
-
-    if (organizationId) {
-      query = query.eq("organization_id", organizationId);
-    }
-
-    const { data, error } = await query.maybeSingle();
-
-    if (error) throw error;
-    return data ? mapRowToArticle(data) : null;
+  if (!artigo && !barcode) {
+    return null;
   }
 
-  return (
-    (await runLookup("artigo", artigo)) ||
-    (await runLookup("codigo_barras", barcode)) ||
-    null
-  );
+  // Usa primeiro o lookup canónico já usado pelo catálogo/etiquetas.
+  // Este RPC é SECURITY DEFINER, resolve corretamente o tenant e evita
+  // que as políticas RLS da tabela façam o artigo "desaparecer" para a IA.
+  const canonical = await findArticleByIdentifiers({
+    artigoInterno: artigo,
+    codigoBarras: barcode,
+    accessToken,
+    organizationId,
+  });
+
+  if (!canonical) {
+    return null;
+  }
+
+  // Quando o service_role está disponível, completa a ficha com todos os
+  // campos ricos (características técnicas, resumo vendedor, grounding, etc.).
+  // Nunca fazemos uma leitura admin sem organization_id explícito.
+  if (supabaseAdminClient && organizationId && canonical.artigo) {
+    const { data, error } = await supabaseAdminClient
+      .from(ARTICLES_TABLE)
+      .select(ARTICLE_SELECT)
+      .eq("organization_id", organizationId)
+      .eq("artigo", canonical.artigo)
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      console.warn(
+        "[seller-assistant] Não foi possível carregar a ficha rica; usando ficha canónica.",
+        {
+          code: error.code,
+          message: error.message,
+          artigo: canonical.artigo,
+          organizationId,
+        },
+      );
+    } else if (data) {
+      return mapRowToArticle(data);
+    }
+  }
+
+  // Mesmo que a ficha rica não possa ser carregada, o artigo existe e o
+  // assistente deve funcionar com os dados devolvidos pelo RPC canónico.
+  return canonical;
 }
 
 export async function upsertArticle(article = {}) {
