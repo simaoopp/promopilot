@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import { PROMOPILOT_BRAND } from "../brand/promopilot";
 import { getPasswordValidationMessage, isValidPassword } from "../utils/validators";
 import ArticleDatabaseSyncPanel from "./admin/ArticleDatabaseSyncPanel";
+import UserManagementPanel from "./admin/UserManagementPanel";
 
 export default function Sidebar({
   menuAberto,
@@ -24,6 +25,7 @@ export default function Sidebar({
   const [erroPassword, setErroPassword] = useState("");
   const [sucessoPassword, setSucessoPassword] = useState("");
   const [articleDbPanelOpen, setArticleDbPanelOpen] = useState(false);
+  const [userManagementOpen, setUserManagementOpen] = useState(false);
 
   const contaMenuRef = useRef(null);
 
@@ -54,6 +56,10 @@ export default function Sidebar({
   }, [nomeUtilizador]);
 
   const lojaAtual = String(profile?.store || profile?.store_id || "Operação").trim();
+
+  const canManageUsers =
+    ["admin", "owner"].includes(String(profile?.role || "").trim().toLowerCase()) ||
+    String(user?.email || "").trim().toLowerCase() === "simao.pereira@susiarte.com";
 
   useEffect(() => {
     if (rotaEtiquetasAtiva) setSubmenuEtiquetasAberto(true);
@@ -211,6 +217,19 @@ export default function Sidebar({
                 <span>{user?.email || lojaAtual}</span>
               </div>
 
+              {canManageUsers && (
+                <button
+                  type="button"
+                  className="topbar-account-menu-item"
+                  onClick={() => {
+                    setMenuContaAberto(false);
+                    setUserManagementOpen(true);
+                  }}
+                >
+                  Gerir utilizadores
+                </button>
+              )}
+
               {String(user?.email || "").trim().toLowerCase() === "simao.pereira@susiarte.com" && (
                 <button
                   type="button"
@@ -339,6 +358,11 @@ export default function Sidebar({
       </aside>
 
       <ArticleDatabaseSyncPanel user={user} open={articleDbPanelOpen} onClose={() => setArticleDbPanelOpen(false)} />
+
+      <UserManagementPanel
+        open={userManagementOpen}
+        onClose={() => setUserManagementOpen(false)}
+      />
 
       {modalPasswordAberto && (
         <div className="force-password-overlay">

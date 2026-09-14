@@ -541,3 +541,29 @@
   0% { left: -35%; }
   100% { left: 120%; }
 }
+
+
+.pp-login-forgot-password {
+  justify-self: end;
+  margin: -2px 0 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #ec6707;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pp-login-forgot-password:disabled {
+  opacity: .55;
+  cursor: wait;
+}
+
+.login-reset-success {
+  margin: 10px 0 0;
+  color: #27734d;
+  font-size: 12px;
+  line-height: 1.5;
+}

@@ -27,6 +27,7 @@ export function AuthProvider({ children }) {
   const [profile, setProfile] = useState(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [loadingProfile, setLoadingProfile] = useState(false);
+  const [passwordRecovery, setPasswordRecovery] = useState(false);
 
   const lastLoadedProfileUserId = useRef(null);
   const profileRef = useRef(null);
@@ -98,6 +99,19 @@ export function AuthProvider({ children }) {
         }
 
         const currentUser = data?.session?.user ?? null;
+        const recoveryUrl =
+          typeof window !== "undefined" &&
+          (
+            /(?:^|[?#&])type=recovery(?:&|$)/i.test(
+              `${window.location.search}${window.location.hash}`,
+            ) ||
+            new URLSearchParams(window.location.search).get("reset") === "1"
+          );
+
+        if (currentUser && recoveryUrl) {
+          setPasswordRecovery(true);
+        }
+
         setUser(currentUser);
         setLoadingAuth(false);
 
@@ -133,10 +147,15 @@ export function AuthProvider({ children }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
       if (!active) return;
 
       const currentUser = session?.user ?? null;
+
+      if (event === "PASSWORD_RECOVERY") {
+        setPasswordRecovery(true);
+      }
+
       setUser(currentUser);
       setLoadingAuth(false);
 
@@ -184,6 +203,7 @@ export function AuthProvider({ children }) {
     lastLoadedProfileUserId.current = null;
     preloadedCatalogUserId.current = null;
     setLoadingProfile(false);
+    setPasswordRecovery(false);
   }, []);
 
   const updatePassword = useCallback(async (newPassword) => {
@@ -193,6 +213,39 @@ export function AuthProvider({ children }) {
 
     if (error) throw error;
   }, []);
+
+
+  const requestPasswordReset = useCallback(async (email) => {
+    const cleanEmail = String(email || "").trim().toLowerCase();
+
+    if (!cleanEmail) {
+      throw new Error("Indica o email da conta.");
+    }
+
+    const redirectTo = `${window.location.origin}/login?reset=1`;
+
+    const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+      redirectTo,
+    });
+
+    if (error) throw error;
+  }, []);
+
+  const completePasswordRecovery = useCallback(
+    async (newPassword) => {
+      await updatePassword(newPassword);
+      setPasswordRecovery(false);
+
+      if (typeof window !== "undefined") {
+        window.history.replaceState(
+          {},
+          document.title,
+          `${window.location.origin}/login`,
+        );
+      }
+    },
+    [updatePassword],
+  );
 
   const completeOnboarding = useCallback(
     async ({ password, first_name, last_name, store, requirePassword }) => {
@@ -240,9 +293,12 @@ export function AuthProvider({ children }) {
       onboardingRequired,
       requiresPasswordChange,
       missingProfileFields,
+      passwordRecovery,
       signIn,
       signOut,
       updatePassword,
+      requestPasswordReset,
+      completePasswordRecovery,
       completeOnboarding,
       refreshProfile,
     }),
@@ -254,9 +310,12 @@ export function AuthProvider({ children }) {
       onboardingRequired,
       requiresPasswordChange,
       missingProfileFields,
+      passwordRecovery,
       signIn,
       signOut,
       updatePassword,
+      requestPasswordReset,
+      completePasswordRecovery,
       completeOnboarding,
       refreshProfile,
     ],
