@@ -115,8 +115,8 @@ export default function UserManagementPanel({ open, onClose }) {
             <span className="admin-users-eyebrow">Supabase Auth</span>
             <h2 id="admin-users-title">Gerir utilizadores</h2>
             <p>
-              Convites e alteração de palavra-passe são enviados por email
-              através do Supabase.
+              Convites e recuperação de palavra-passe são enviados por email
+              através do Supabase pelo administrador.
             </p>
           </div>
 
@@ -262,7 +262,7 @@ export default function UserManagementPanel({ open, onClose }) {
             </label>
 
             <div className="admin-users-note">
-              Não definimos a palavra-passe manualmente. O Supabase envia um
+              A recuperação só pode ser iniciada aqui por um administrador. O Supabase envia um
               link seguro e o próprio utilizador escolhe a nova palavra-passe.
             </div>
 

@@ -215,21 +215,6 @@ export function AuthProvider({ children }) {
   }, []);
 
 
-  const requestPasswordReset = useCallback(async (email) => {
-    const cleanEmail = String(email || "").trim().toLowerCase();
-
-    if (!cleanEmail) {
-      throw new Error("Indica o email da conta.");
-    }
-
-    const redirectTo = `${window.location.origin}/login?reset=1`;
-
-    const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
-      redirectTo,
-    });
-
-    if (error) throw error;
-  }, []);
 
   const completePasswordRecovery = useCallback(
     async (newPassword) => {
@@ -297,7 +282,6 @@ export function AuthProvider({ children }) {
       signIn,
       signOut,
       updatePassword,
-      requestPasswordReset,
       completePasswordRecovery,
       completeOnboarding,
       refreshProfile,
@@ -314,7 +298,6 @@ export function AuthProvider({ children }) {
       signIn,
       signOut,
       updatePassword,
-      requestPasswordReset,
       completePasswordRecovery,
       completeOnboarding,
       refreshProfile,

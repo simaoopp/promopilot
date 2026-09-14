@@ -13,7 +13,6 @@ export default function Login() {
     loadingAuth,
     loadingProfile,
     signIn,
-    requestPasswordReset,
     onboardingRequired,
     requiresPasswordChange,
     passwordRecovery,
@@ -24,8 +23,6 @@ export default function Login() {
   const [erro, setErro] = useState("");
   const [carregando, setCarregando] = useState(false);
   const [mostrarSenha, setMostrarSenha] = useState(false);
-  const [resetLoading, setResetLoading] = useState(false);
-  const [resetMessage, setResetMessage] = useState("");
 
   const mostrarModalOnboarding = !!user && !loadingProfile && onboardingRequired;
 
@@ -60,32 +57,6 @@ export default function Login() {
   }
 
 
-  async function handleForgotPassword() {
-    setErro("");
-    setResetMessage("");
-
-    const cleanEmail = String(email || "").trim();
-
-    if (!cleanEmail) {
-      setErro("Escreve primeiro o email da conta.");
-      return;
-    }
-
-    try {
-      setResetLoading(true);
-      await requestPasswordReset(cleanEmail);
-      setResetMessage(
-        "Se a conta existir, o Supabase enviou um email para definires uma nova palavra-passe.",
-      );
-    } catch (resetError) {
-      setErro(
-        resetError?.message ||
-          "Não foi possível enviar o email de recuperação.",
-      );
-    } finally {
-      setResetLoading(false);
-    }
-  }
 
   return (
     <div className="login-page pp-login-page">
@@ -167,21 +138,11 @@ export default function Login() {
                   </button>
                 </div>
 
-                <button
-                  type="button"
-                  className="pp-login-forgot-password"
-                  onClick={handleForgotPassword}
-                  disabled={carregando || resetLoading}
-                >
-                  {resetLoading ? "A enviar..." : "Esqueci-me da palavra-passe"}
-                </button>
-
                 <button type="submit" className="login-submit pp-login-submit" disabled={carregando}>
                   <span>{carregando ? "A entrar..." : "Entrar"}</span>
                 </button>
 
                 {erro && <p className="login-erro">{erro}</p>}
-                {resetMessage && <p className="login-reset-success">{resetMessage}</p>}
               </form>
 
               <div className="pp-login-footer-note">
