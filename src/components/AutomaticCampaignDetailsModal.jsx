@@ -68,7 +68,7 @@ export default function AutomaticCampaignDetailsModal({
       setCodesCopied(true);
       window.setTimeout(() => setCodesCopied(false), 1800);
     } catch (error) {
-      console.error("Não foi possível copiar os códigos de atualização/reposição PVP.", error);
+      console.error("Não foi possível copiar os códigos de atualização PVP.", error);
     }
   }
 
@@ -134,7 +134,7 @@ export default function AutomaticCampaignDetailsModal({
           {pvpUpdateCodes.length ? (
             <div className="automatic-campaign-pvp-update">
               <div>
-                <strong>Atualização/Reposição PVP · fora da promoção</strong>
+                <strong>Atualização PVP · fora da promoção</strong>
                 <p>
                   {pvpUpdateCodes.length} artigo{pvpUpdateCodes.length === 1 ? "" : "s"} não {pvpUpdateCodes.length === 1 ? "foi" : "foram"} incluído{pvpUpdateCodes.length === 1 ? "" : "s"} no PDF.
                 </p>

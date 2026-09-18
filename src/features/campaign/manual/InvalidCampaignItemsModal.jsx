@@ -22,7 +22,7 @@ export default function InvalidCampaignItemsModal({
         </div>
 
         <p className="popup-text">
-          Os artigos com “Atualização PVP” na informação nunca são impressos como promoção e passam para “Copiar código”. Os restantes aparecem aqui quando o PVP2 anterior é menor ou igual ao PVP2 atual. Quando o PVP atual for inferior ao PVP3, podes selecionar apenas esses artigos para impressão com a comparação PVP atual/PVP3.
+          Os artigos com “Atualização PVP” ou “Reposição PVP” na informação nunca são impressos como promoção e passam para “Copiar código”. Os restantes aparecem aqui quando o PVP2 anterior é menor ou igual ao PVP2 atual. Quando o PVP atual for inferior ao PVP3, podes selecionar apenas esses artigos para impressão com a comparação PVP atual/PVP3.
         </p>
 
         <div className="popup-actions">
@@ -82,7 +82,7 @@ export default function InvalidCampaignItemsModal({
                         onChange={() => alternarComparacaoPvp3Popup(item)}
                       />
                     </td>
-                    <td>{atualizacaoPvp ? "Atualização PVP" : "Preço sem desconto"}</td>
+                    <td>{atualizacaoPvp ? "Atualização/Reposição PVP" : "Preço sem desconto"}</td>
                     <td>{item.codigo}</td>
                     <td>{item.descricao}</td>
                     <td>{formatarEuro(item.antes)}€</td>

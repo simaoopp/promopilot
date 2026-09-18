@@ -403,7 +403,7 @@
 }
 
 
-/* AUTOMATIC CAMPAIGN · PVP UPDATE EXCLUSIONS */
+/* AUTOMATIC CAMPAIGN · PVP UPDATE / RESET EXCLUSIONS */
 .automatic-campaign-pvp-update {
   display: grid;
   gap: 12px;

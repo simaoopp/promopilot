@@ -30,11 +30,13 @@ export function isPvpUpdatePromotionInfo(itemOrText = "") {
   const normalized = normalizePromotionInfo(getPromotionInfoText(itemOrText));
   if (!normalized) return false;
 
-  // Aceita a grafia correta e a variante que aparece por vezes nas campanhas:
-  // "ATUALIZAÇÃO PVP" / "ATULIZAÇÃO PVP".
+  // Tudo o que represente apenas manutenção do PVP fica fora da promoção:
+  // "ATUALIZAÇÃO PVP", "ATUALIZAÇÃO DE PVP", "ATULIZAÇÃO PVP",
+  // "REPOSIÇÃO PVP" e "REPOSIÇÃO DE PVP".
   return (
     /\bATUALIZACAO(?: DE)? PVP\b/.test(normalized) ||
-    /\bATULIZACAO(?: DE)? PVP\b/.test(normalized)
+    /\bATULIZACAO(?: DE)? PVP\b/.test(normalized) ||
+    /\bREPOSICAO(?: DE)? PVP\b/.test(normalized)
   );
 }
 

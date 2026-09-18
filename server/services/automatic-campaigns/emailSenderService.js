@@ -93,7 +93,7 @@ function buildEmailBody({ storeLabel, totalItems, subject, pvpUpdateCodes = [], 
   if (codes.length) {
     lines.push(
       "",
-      "ATUALIZAÇÃO PVP — artigos excluídos da promoção:",
+      "ATUALIZAÇÃO/REPOSIÇÃO PVP — artigos excluídos da promoção:",
       codes.join("|"),
       "Estes códigos não foram incluídos nas etiquetas promocionais.",
     );
@@ -126,7 +126,7 @@ function buildEmailHtml({ storeLabel, totalItems, subject, pvpUpdateCodes = [], 
            <p><strong>Total de etiquetas:</strong> 0</p>`}
       ${codes.length
         ? `<div style="margin:20px 0;padding:16px;border-radius:10px;background:#fff7ed;border:1px solid #fed7aa;">
-             <p style="margin:0 0 8px;"><strong>Atualização PVP — artigos excluídos da promoção</strong></p>
+             <p style="margin:0 0 8px;"><strong>Atualização/Reposição PVP — artigos excluídos da promoção</strong></p>
              <p style="margin:0 0 8px;">Estes artigos não foram incluídos nas etiquetas. Copia os códigos abaixo:</p>
              <p style="margin:0;padding:10px 12px;border-radius:8px;background:#ffffff;font-family:monospace;word-break:break-all;">${escapeHtml(codeText)}</p>
            </div>`

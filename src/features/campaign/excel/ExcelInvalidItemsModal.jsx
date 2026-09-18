@@ -27,8 +27,8 @@ export default function ExcelInvalidItemsModal({
 
         <p className="popup-text">
           {modeloImportado === EXCEL_FORMATS.SHOPPING
-            ? "Os artigos abaixo foram selecionados para impressão, mas têm o preço sem promoção menor ou igual ao preço com promoção, ou estão marcados como Atualização PVP."
-            : "Os artigos com “Atualização PVP” nunca são impressos como promoção e passam para “Copiar código”. Os restantes aparecem aqui quando o PVP2 atual é maior ou igual ao PVP2 antes. Quando o PVP atual for inferior ao PVP3, podes selecionar apenas esses artigos para impressão com a comparação PVP atual/PVP3."}
+            ? "Os artigos abaixo foram selecionados para impressão, mas têm o preço sem promoção menor ou igual ao preço com promoção, ou estão marcados como Atualização/Reposição PVP."
+            : "Os artigos com “Atualização PVP” ou “Reposição PVP” nunca são impressos como promoção e passam para “Copiar código”. Os restantes aparecem aqui quando o PVP2 atual é maior ou igual ao PVP2 antes. Quando o PVP atual for inferior ao PVP3, podes selecionar apenas esses artigos para impressão com a comparação PVP atual/PVP3."}
         </p>
 
         <div className="popup-actions">
@@ -96,7 +96,7 @@ export default function ExcelInvalidItemsModal({
                         />
                       </td>
                     ) : null}
-                    <td>{atualizacaoPvp ? "Atualização PVP" : "Preço sem desconto"}</td>
+                    <td>{atualizacaoPvp ? "Atualização/Reposição PVP" : "Preço sem desconto"}</td>
                     <td>{item.codigo}</td>
                     <td>{item.descricao}</td>
                     <td>{formatarEuro(item.antes)}€</td>
