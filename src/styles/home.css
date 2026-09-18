@@ -401,3 +401,40 @@
   margin: 0;
   line-height: 1.45;
 }
+
+
+/* AUTOMATIC CAMPAIGN · PVP UPDATE EXCLUSIONS */
+.automatic-campaign-pvp-update {
+  display: grid;
+  gap: 12px;
+  margin: 14px 0;
+  padding: 16px;
+  border: 1px solid #fed7aa;
+  border-radius: 14px;
+  background: #fff7ed;
+}
+
+.automatic-campaign-pvp-update strong {
+  display: block;
+  color: #9a3412;
+}
+
+.automatic-campaign-pvp-update p {
+  margin: 4px 0 0;
+  color: #7c2d12;
+}
+
+.automatic-campaign-pvp-update code {
+  display: block;
+  padding: 10px 12px;
+  overflow-wrap: anywhere;
+  border: 1px solid #ffedd5;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #431407;
+  font-size: 12px;
+}
+
+.automatic-campaign-pvp-update .btn {
+  justify-self: start;
+}

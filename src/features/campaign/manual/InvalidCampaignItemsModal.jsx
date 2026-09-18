@@ -1,5 +1,6 @@
 import { artigoElegivelComparacaoPvp3 } from "../../../utils/pvp3Promotion";
 import { formatarEuro } from "../../../utils/formatters";
+import { isPvpUpdatePromotionInfo } from "../../../shared/campaign-label/promotionInfoRules";
 
 export default function InvalidCampaignItemsModal({
   aberto,
@@ -17,11 +18,11 @@ export default function InvalidCampaignItemsModal({
     <div className="popup-overlay">
       <div className="popup-card">
         <div className="popup-header">
-          <h2>Artigos com preço superior</h2>
+          <h2>Artigos fora da promoção</h2>
         </div>
 
         <p className="popup-text">
-          Os artigos abaixo foram selecionados para impressão, mas têm o PVP2 anterior menor ou igual ao PVP2 atual. Quando o PVP atual for inferior ao PVP3, podes selecionar o artigo para impressão com a comparação PVP atual/PVP3. Os artigos selecionados nessa comparação não entram no botão “Copiar código”.
+          Os artigos com “Atualização PVP” na informação nunca são impressos como promoção e passam para “Copiar código”. Os restantes aparecem aqui quando o PVP2 anterior é menor ou igual ao PVP2 atual. Quando o PVP atual for inferior ao PVP3, podes selecionar apenas esses artigos para impressão com a comparação PVP atual/PVP3.
         </p>
 
         <div className="popup-actions">
@@ -47,6 +48,7 @@ export default function InvalidCampaignItemsModal({
             <thead>
               <tr>
                 <th>Imprimir PVP atual/PVP3</th>
+                <th>Motivo</th>
                 <th>Código</th>
                 <th>Designação</th>
                 <th>PVP2 Antes</th>
@@ -57,6 +59,7 @@ export default function InvalidCampaignItemsModal({
 
             <tbody>
               {artigosInvalidosPopup.map((item) => {
+                const atualizacaoPvp = isPvpUpdatePromotionInfo(item);
                 const elegivelPvp3 = artigoElegivelComparacaoPvp3(item);
 
                 return (
@@ -79,6 +82,7 @@ export default function InvalidCampaignItemsModal({
                         onChange={() => alternarComparacaoPvp3Popup(item)}
                       />
                     </td>
+                    <td>{atualizacaoPvp ? "Atualização PVP" : "Preço sem desconto"}</td>
                     <td>{item.codigo}</td>
                     <td>{item.descricao}</td>
                     <td>{formatarEuro(item.antes)}€</td>

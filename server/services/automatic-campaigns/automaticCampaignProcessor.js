@@ -7,6 +7,10 @@ import { sendAutomaticCampaignEmail } from "./emailSenderService.js";
 import { applyAutomaticFormatRulesToItems, countAutomaticFormats, normalizeCampaignFormat } from "./formatRulesService.js";
 import { filterAutomaticCampaignDiscountItems } from "./priceRulesService.js";
 import {
+  getCampaignArticleCodes,
+  splitCampaignItemsByPromotionInfo,
+} from "../../../src/shared/campaign-label/promotionInfoRules.js";
+import {
   buildAutomaticCampaignRow,
   findAutomaticCampaignDuplicate,
   updateAutomaticCampaignRow,
@@ -58,20 +62,26 @@ export async function processAutomaticCampaignEmail(emailInput = {}, options = {
   });
 
   const historyTitle = config.titleFromEmail ? (parsed?.title || email.subject || title) : title;
-  const printableRows = filterAutomaticCampaignDiscountItems(parsed.rows);
-  const ignoredRows = parsed.rows.length - printableRows.length;
+  const { printableCandidates, pvpUpdateItems } = splitCampaignItemsByPromotionInfo(parsed.rows);
+  const printableRows = filterAutomaticCampaignDiscountItems(printableCandidates);
+  const ignoredPriceRows = printableCandidates.length - printableRows.length;
+  const ignoredRows = ignoredPriceRows + pvpUpdateItems.length;
   const itemsByStore = splitAutomaticCampaignByStore(printableRows);
+  const pvpUpdateItemsByStore = splitAutomaticCampaignByStore(pvpUpdateItems);
   const results = [];
 
   for (const store of Object.values(automaticCampaignStores)) {
     const items = applyAutomaticFormatRulesToItems(itemsByStore[store.key] || [], format);
+    const pvpUpdateStoreItems = pvpUpdateItemsByStore[store.key] || [];
+    const pvpUpdateCodes = getCampaignArticleCodes(pvpUpdateStoreItems);
     const formatCounts = countAutomaticFormats(items);
 
-    if (!items.length) {
+    if (!items.length && !pvpUpdateCodes.length) {
       results.push({
         storeKey: store.key,
         store: store.store,
         totalItems: 0,
+        pvpUpdateCodes: [],
         formatCounts,
         skipped: true,
         reason: "Sem artigos para esta loja.",
@@ -121,17 +131,19 @@ export async function processAutomaticCampaignEmail(emailInput = {}, options = {
     let savedRow = dryRun ? initialRow : await upsertAutomaticCampaignRow(initialRow);
 
     try {
-      const pdfBuffer = await generateAutomaticCampaignPdf({
-        items,
-        title,
-        storeLabel: store.label,
-        format,
-        anoValidade: new Date().getFullYear(),
-      });
+      const pdfBuffer = items.length
+        ? await generateAutomaticCampaignPdf({
+            items,
+            title,
+            storeLabel: store.label,
+            format,
+            anoValidade: new Date().getFullYear(),
+          })
+        : null;
 
       let pdfInfo = { path: "", signedUrl: "" };
 
-      if (!dryRun) {
+      if (!dryRun && pdfBuffer) {
         pdfInfo = await uploadAutomaticCampaignPdf({
           pdfBuffer,
           emailMessageId: email.messageId,
@@ -150,9 +162,10 @@ export async function processAutomaticCampaignEmail(emailInput = {}, options = {
           to: store.email,
           storeLabel: store.label,
           pdfBuffer,
-          filename: buildPdfFilename(store.key, email.subject),
+          filename: pdfBuffer ? buildPdfFilename(store.key, email.subject) : "",
           totalItems: items.length,
           subject: email.subject,
+          pvpUpdateCodes,
         });
         status = "sent";
         emailSentAt = new Date().toISOString();
@@ -164,6 +177,8 @@ export async function processAutomaticCampaignEmail(emailInput = {}, options = {
         [`${store.key}Bucket`]: pdfInfo.bucket || "",
         [`${store.key}EmailTo`]: store.email || "",
         [`${store.key}EmailSentAt`]: emailSentAt,
+        pvpUpdateCodes: pvpUpdateCodes.join("|"),
+        pvpUpdateTotal: pvpUpdateCodes.length,
       };
 
       const patch = {
@@ -184,6 +199,7 @@ export async function processAutomaticCampaignEmail(emailInput = {}, options = {
         storeKey: store.key,
         store: store.store,
         totalItems: items.length,
+        pvpUpdateCodes,
         formatCounts,
         status,
         pdfPath: pdfInfo.path,
@@ -209,6 +225,7 @@ export async function processAutomaticCampaignEmail(emailInput = {}, options = {
         storeKey: store.key,
         store: store.store,
         totalItems: items.length,
+        pvpUpdateCodes,
         formatCounts,
         status: "error",
         error: patch.error_message,
@@ -234,6 +251,8 @@ export async function processAutomaticCampaignEmail(emailInput = {}, options = {
       subjectDate: parsed.subjectDate,
       printableItems: printableRows.length,
       ignoredItems: ignoredRows,
+      ignoredPvpUpdateItems: pvpUpdateItems.length,
+      ignoredPriceItems: ignoredPriceRows,
     },
     results,
   };

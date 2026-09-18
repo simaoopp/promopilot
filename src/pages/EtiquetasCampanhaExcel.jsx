@@ -12,6 +12,7 @@ import { useToast } from "../components/ToastProvider";
 import "../styles/styles.css";
 import { parseNumero } from "../utils/formatters";
 import { PROMOTION_PRICE_SOURCES } from "../utils/promotionPricing";
+import { isPvpUpdatePromotionInfo } from "../shared/campaign-label/promotionInfoRules";
 import { addCampaignToHistory, createCampaignSnapshot } from "../utils/campaignHistory";
 import { aplicarFiltroTexto, compararNumero, dividirEmPaginas } from "../utils/filters";
 import EditableCampaignDate from "../components/EditableCampaignDate";
@@ -151,8 +152,10 @@ export default function EtiquetasExcelPage() {
     }));
   }
 
-  async function guardarCampanhaNoHistorico(origem = "manual") {
-    const itensSelecionados = dados.filter((item) => item.selecionado);
+  async function guardarCampanhaNoHistorico(origem = "manual", itensOverride = null) {
+    const itensSelecionados = Array.isArray(itensOverride)
+      ? itensOverride
+      : dados.filter((item) => item.selecionado);
     if (!itensSelecionados.length) return false;
 
     const store = String(profile?.store || "").trim();
@@ -594,7 +597,7 @@ export default function EtiquetasExcelPage() {
       return;
     }
 
-    await guardarCampanhaNoHistorico("impressao");
+    await guardarCampanhaNoHistorico("impressao", restantesValidos);
     await printDocument();
   }
 
@@ -613,6 +616,8 @@ export default function EtiquetasExcelPage() {
     }
 
     const invalidos = selecionados.filter((item) => {
+      if (isPvpUpdatePromotionInfo(item)) return true;
+
       if (item.tipo_registo === EXCEL_FORMATS.SHOPPING) {
         return (
           parseNumero(item.antes) > 0 &&

@@ -1,6 +1,7 @@
 export * from "./formatters.js";
 export * from "./campaignTitleRules.js";
 export * from "./promotionPricing.js";
+export * from "./promotionInfoRules.js";
 export * from "./formatRules.js";
 export * from "./autoFontRules.js";
 export * from "./barcodeRules.js";

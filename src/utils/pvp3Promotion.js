@@ -1,10 +1,13 @@
 import { parseNumero } from "./formatters";
+import { isPvpUpdatePromotionInfo } from "../shared/campaign-label/promotionInfoRules";
 
 export function parsePrecoComparacao(valor) {
   return parseNumero(valor);
 }
 
 export function artigoElegivelComparacaoPvp3(item) {
+  if (isPvpUpdatePromotionInfo(item)) return false;
+
   const pvpAtual = parsePrecoComparacao(item?.atual);
   const pvp3 = parsePrecoComparacao(item?.pv3);
 

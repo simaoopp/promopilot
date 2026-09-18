@@ -26,6 +26,7 @@ import {
 import { aplicarFiltroTexto, compararNumero } from "../utils/filters";
 import { formatarEuro, parseNumero } from "../utils/formatters";
 import { PROMOTION_PRICE_SOURCES } from "../utils/promotionPricing";
+import { isPvpUpdatePromotionInfo } from "../shared/campaign-label/promotionInfoRules";
 import { parseTabelaColada } from "../utils/parsers";
 import ManualCampaignToolbar from "../features/campaign/manual/ManualCampaignToolbar";
 import ManualCampaignTable from "../features/campaign/manual/ManualCampaignTable";
@@ -455,8 +456,10 @@ export default function EtiquetasPage() {
     }
   }
 
-  async function guardarCampanhaNoHistorico(origem = "manual") {
-    const itensSelecionados = dados.filter((item) => item.selecionado);
+  async function guardarCampanhaNoHistorico(origem = "manual", itensOverride = null) {
+    const itensSelecionados = Array.isArray(itensOverride)
+      ? itensOverride
+      : dados.filter((item) => item.selecionado);
     if (!itensSelecionados.length) return false;
 
     const store = String(profile?.store || "").trim();
@@ -624,7 +627,7 @@ export default function EtiquetasPage() {
       return;
     }
 
-    await guardarCampanhaNoHistorico("impressao");
+    await guardarCampanhaNoHistorico("impressao", restantesValidos);
     await printDocument();
   }
 
@@ -643,7 +646,9 @@ export default function EtiquetasPage() {
     }
 
     const invalidos = selecionados.filter(
-      (item) => parseNumero(item.antes) <= parseNumero(item.atual),
+      (item) =>
+        isPvpUpdatePromotionInfo(item) ||
+        parseNumero(item.antes) <= parseNumero(item.atual),
     );
 
     if (invalidos.length > 0) {

@@ -63,27 +63,74 @@ function createTransport(config, attempt) {
   });
 }
 
-function buildEmailBody({ storeLabel, totalItems, subject }) {
-  return [
+function normalizePvpUpdateCodes(codes = []) {
+  const source = Array.isArray(codes)
+    ? codes
+    : String(codes || "").split(/[|,;\n]+/);
+
+  return [...new Set(source.map((code) => String(code || "").trim()).filter(Boolean))];
+}
+
+function buildEmailBody({ storeLabel, totalItems, subject, pvpUpdateCodes = [], hasPdf = false }) {
+  const codes = normalizePvpUpdateCodes(pvpUpdateCodes);
+  const lines = [
     "Bom dia,",
     "",
-    `Segue em anexo o PDF com as etiquetas de campanha para a loja ${storeLabel}.`,
-    `Total de etiquetas: ${totalItems}.`,
-    subject ? `Email de origem: ${subject}.` : "",
+  ];
+
+  if (hasPdf) {
+    lines.push(
+      `Segue em anexo o PDF com as etiquetas de campanha para a loja ${storeLabel}.`,
+      `Total de etiquetas: ${Number(totalItems || 0)}.`,
+    );
+  } else {
+    lines.push(
+      `Não existem etiquetas promocionais para gerar para a loja ${storeLabel}.`,
+      "Total de etiquetas: 0.",
+    );
+  }
+
+  if (codes.length) {
+    lines.push(
+      "",
+      "ATUALIZAÇÃO PVP — artigos excluídos da promoção:",
+      codes.join("|"),
+      "Estes códigos não foram incluídos nas etiquetas promocionais.",
+    );
+  }
+
+  if (subject) {
+    lines.push("", `Email de origem: ${subject}.`);
+  }
+
+  lines.push(
     "",
     "Cumprimentos,",
     "Sistema automático Expert Administração",
-  ]
-    .filter((line) => line !== "")
-    .join("\n");
+  );
+
+  return lines.join("\n");
 }
 
-function buildEmailHtml({ storeLabel, totalItems, subject }) {
+function buildEmailHtml({ storeLabel, totalItems, subject, pvpUpdateCodes = [], hasPdf = false }) {
+  const codes = normalizePvpUpdateCodes(pvpUpdateCodes);
+  const codeText = codes.join("|");
+
   return `
     <div style="font-family: Arial, sans-serif; color: #111827; line-height: 1.5;">
       <p>Bom dia,</p>
-      <p>Segue em anexo o PDF com as etiquetas de campanha para a loja <strong>${escapeHtml(storeLabel)}</strong>.</p>
-      <p><strong>Total de etiquetas:</strong> ${Number(totalItems || 0)}</p>
+      ${hasPdf
+        ? `<p>Segue em anexo o PDF com as etiquetas de campanha para a loja <strong>${escapeHtml(storeLabel)}</strong>.</p>
+           <p><strong>Total de etiquetas:</strong> ${Number(totalItems || 0)}</p>`
+        : `<p>Não existem etiquetas promocionais para gerar para a loja <strong>${escapeHtml(storeLabel)}</strong>.</p>
+           <p><strong>Total de etiquetas:</strong> 0</p>`}
+      ${codes.length
+        ? `<div style="margin:20px 0;padding:16px;border-radius:10px;background:#fff7ed;border:1px solid #fed7aa;">
+             <p style="margin:0 0 8px;"><strong>Atualização PVP — artigos excluídos da promoção</strong></p>
+             <p style="margin:0 0 8px;">Estes artigos não foram incluídos nas etiquetas. Copia os códigos abaixo:</p>
+             <p style="margin:0;padding:10px 12px;border-radius:8px;background:#ffffff;font-family:monospace;word-break:break-all;">${escapeHtml(codeText)}</p>
+           </div>`
+        : ""}
       ${subject ? `<p><strong>Email de origem:</strong> ${escapeHtml(subject)}</p>` : ""}
       <p>Cumprimentos,<br/>Sistema automático Expert Administração</p>
     </div>
@@ -118,26 +165,30 @@ function buildMessageSubject(storeLabel) {
   return `PROMOÇÃO - Etiquetas de campanha - ${storeLabel}`;
 }
 
-async function sendViaResend({ config, to, storeLabel, pdfBuffer, filename, totalItems, subject }) {
+async function sendViaResend({ config, to, storeLabel, pdfBuffer, filename, totalItems, subject, pvpUpdateCodes = [] }) {
   if (!hasEmailApiConfig(config)) {
     throw new Error("API de email não configurada. Define CAMPAIGN_EMAIL_PROVIDER=resend, RESEND_API_KEY e CAMPAIGN_EMAIL_FROM_ADDRESS.");
   }
 
   const endpoint = `${config.emailApi.baseUrl.replace(/\/+$/, "")}/emails`;
   const recipients = normalizeRecipients(to);
+  const hasPdf = Boolean(pdfBuffer && Buffer.from(pdfBuffer).length);
   const payload = {
     from: config.emailApi.from,
     to: recipients,
     subject: buildMessageSubject(storeLabel),
-    text: buildEmailBody({ storeLabel, totalItems, subject }),
-    html: buildEmailHtml({ storeLabel, totalItems, subject }),
-    attachments: [
+    text: buildEmailBody({ storeLabel, totalItems, subject, pvpUpdateCodes, hasPdf }),
+    html: buildEmailHtml({ storeLabel, totalItems, subject, pvpUpdateCodes, hasPdf }),
+  };
+
+  if (hasPdf) {
+    payload.attachments = [
       {
         filename: filename || `etiquetas-${storeLabel || "loja"}.pdf`,
         content: Buffer.from(pdfBuffer).toString("base64"),
       },
-    ],
-  };
+    ];
+  }
 
   if (config.emailApi.replyTo) {
     payload.reply_to = config.emailApi.replyTo;
@@ -193,7 +244,7 @@ async function sendViaResend({ config, to, storeLabel, pdfBuffer, filename, tota
   }
 }
 
-async function sendViaSmtp({ config, to, storeLabel, pdfBuffer, filename, totalItems, subject }) {
+async function sendViaSmtp({ config, to, storeLabel, pdfBuffer, filename, totalItems, subject, pvpUpdateCodes = [] }) {
   if (!hasSmtpConfig(config)) {
     throw new Error("SMTP não configurado. Define CAMPAIGN_SMTP_HOST, CAMPAIGN_SMTP_FROM e credenciais se necessário.");
   }
@@ -211,19 +262,26 @@ async function sendViaSmtp({ config, to, storeLabel, pdfBuffer, filename, totalI
     }
 
     try {
-      const result = await transporter.sendMail({
+      const hasPdf = Boolean(pdfBuffer && Buffer.from(pdfBuffer).length);
+      const message = {
         from: config.smtp.from,
         to,
         subject: buildMessageSubject(storeLabel),
-        text: buildEmailBody({ storeLabel, totalItems, subject }),
-        attachments: [
+        text: buildEmailBody({ storeLabel, totalItems, subject, pvpUpdateCodes, hasPdf }),
+        html: buildEmailHtml({ storeLabel, totalItems, subject, pvpUpdateCodes, hasPdf }),
+      };
+
+      if (hasPdf) {
+        message.attachments = [
           {
             filename: filename || `etiquetas-${storeLabel || "loja"}.pdf`,
             content: pdfBuffer,
             contentType: "application/pdf",
           },
-        ],
-      });
+        ];
+      }
+
+      const result = await transporter.sendMail(message);
 
       if (config.debug || config.smtp.debug) {
         console.log(
@@ -260,7 +318,7 @@ async function sendViaSmtp({ config, to, storeLabel, pdfBuffer, filename, totalI
   throw new Error(`Falha no envio SMTP após ${attempts.length} tentativa(s). ${buildErrorMessage(errors)}`);
 }
 
-export async function sendAutomaticCampaignEmail({ to, storeLabel, pdfBuffer, filename, totalItems, subject }) {
+export async function sendAutomaticCampaignEmail({ to, storeLabel, pdfBuffer, filename, totalItems, subject, pvpUpdateCodes = [] }) {
   const config = getAutomaticCampaignConfig();
 
   if (!to) {
@@ -268,11 +326,11 @@ export async function sendAutomaticCampaignEmail({ to, storeLabel, pdfBuffer, fi
   }
 
   if (config.emailProvider === "resend") {
-    return sendViaResend({ config, to, storeLabel, pdfBuffer, filename, totalItems, subject });
+    return sendViaResend({ config, to, storeLabel, pdfBuffer, filename, totalItems, subject, pvpUpdateCodes });
   }
 
   if (config.emailProvider === "smtp") {
-    return sendViaSmtp({ config, to, storeLabel, pdfBuffer, filename, totalItems, subject });
+    return sendViaSmtp({ config, to, storeLabel, pdfBuffer, filename, totalItems, subject, pvpUpdateCodes });
   }
 
   throw new Error(`CAMPAIGN_EMAIL_PROVIDER inválido: ${config.emailProvider}. Usa "resend" ou "smtp".`);
