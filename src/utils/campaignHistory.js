@@ -1,10 +1,22 @@
 import { supabase } from "../lib/supabase";
+import {
+  campaignRetentionExpiry,
+  deriveCampaignEndAt,
+} from "../shared/campaign-label/campaignLifecycle";
 
 const CAMPAIGNS_TABLE = "campaigns";
 const MAX_ITEMS = 50;
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function isPraiaStore(value = "") {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .includes("praia");
 }
 
 function mapRowToCampaign(row = {}) {
@@ -19,6 +31,7 @@ function mapRowToCampaign(row = {}) {
     createdByEmail: row.created_by_email || "",
     criadoEm: row.created_at || "",
     expiraEm: row.expires_at || "",
+    campaignEndAt: row.campaign_end_at || "",
     totalArtigos:
       typeof row.total_artigos === "number"
         ? row.total_artigos
@@ -41,13 +54,30 @@ export function normalizeCampaignSnapshot(snapshot = {}) {
     createdBy: String(snapshot.createdBy || "Utilizador").trim() || "Utilizador",
     createdByEmail: String(snapshot.createdByEmail || "").trim(),
     criadoEm: snapshot.criadoEm || nowIso(),
-    expiraEm:
-      snapshot.expiraEm ||
-      new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+    campaignEndAt: snapshot.campaignEndAt || "",
+    expiraEm: snapshot.expiraEm || "",
     totalArtigos: Array.isArray(snapshot.dados) ? snapshot.dados.filter(Boolean).length : 0,
     store: String(snapshot.store || "").trim(),
     userId: String(snapshot.userId || "").trim(),
   };
+
+  if (!normalized.campaignEndAt) {
+    normalized.campaignEndAt =
+      deriveCampaignEndAt({
+        items: normalized.dados,
+        anoValidade: normalized.anoValidade,
+        createdAt: normalized.criadoEm,
+      }) || "";
+  }
+
+  if (!normalized.expiraEm) {
+    normalized.expiraEm = campaignRetentionExpiry({
+      campaignEndAt: isPraiaStore(normalized.store) ? normalized.campaignEndAt : null,
+      createdAt: normalized.criadoEm,
+      retentionDays: 30,
+      fallbackDays: 2,
+    });
+  }
 
   if (!normalized.store) {
     throw new Error("A campanha precisa de uma loja associada.");
@@ -70,6 +100,13 @@ function mapSnapshotToRow(snapshot = {}) {
     created_by_email: normalized.createdByEmail,
     created_at: normalized.criadoEm,
     expires_at: normalized.expiraEm,
+    campaign_end_at: normalized.campaignEndAt || null,
+    end_notification_status:
+      isPraiaStore(normalized.store) &&
+      normalized.campaignEndAt &&
+      new Date(normalized.campaignEndAt).getTime() > Date.now()
+        ? "pending"
+        : "skipped",
     total_artigos: normalized.totalArtigos,
     store: normalized.store,
     user_id: normalized.userId || null,
@@ -89,20 +126,34 @@ export function createCampaignSnapshot({
 }) {
   const agora = new Date();
 
+  const safeDados = Array.isArray(dados) ? dados.filter(Boolean) : [];
+  const safeAno = anoValidade || agora.getFullYear();
+  const criadoEm = agora.toISOString();
+  const campaignEndAt =
+    deriveCampaignEndAt({
+      items: safeDados,
+      anoValidade: safeAno,
+      createdAt: criadoEm,
+    }) || "";
+
   return {
     id: `camp-${agora.getTime()}`,
     titulo: String(titulo || "PROMO").trim() || "PROMO",
-    dados: Array.isArray(dados) ? dados.filter(Boolean) : [],
-    anoValidade: anoValidade || agora.getFullYear(),
+    dados: safeDados,
+    anoValidade: safeAno,
     formatoEtiqueta: formatoEtiqueta || "a6",
     origem,
     createdBy: String(createdBy || "Utilizador").trim() || "Utilizador",
     createdByEmail: String(createdByEmail || "").trim(),
-    criadoEm: agora.toISOString(),
-    expiraEm: new Date(
-      agora.getTime() + 2 * 24 * 60 * 60 * 1000,
-    ).toISOString(),
-    totalArtigos: Array.isArray(dados) ? dados.filter(Boolean).length : 0,
+    criadoEm,
+    campaignEndAt,
+    expiraEm: campaignRetentionExpiry({
+      campaignEndAt: isPraiaStore(store) ? campaignEndAt : null,
+      createdAt: criadoEm,
+      retentionDays: 30,
+      fallbackDays: 2,
+    }),
+    totalArtigos: safeDados.length,
     store: String(store || "").trim(),
     userId: String(userId || "").trim(),
   };
@@ -138,7 +189,7 @@ export async function loadCampaignHistory(store) {
   const { data, error } = await supabase
     .from(CAMPAIGNS_TABLE)
     .select(
-      "id, titulo, dados, ano_validade, formato_etiqueta, origem, created_by, created_by_email, created_at, expires_at, total_artigos, store, user_id",
+      "id, titulo, dados, ano_validade, formato_etiqueta, origem, created_by, created_by_email, created_at, expires_at, campaign_end_at, total_artigos, store, user_id",
     )
     .eq("store", storeValue)
     .gt("expires_at", nowIso())
@@ -163,7 +214,7 @@ export async function addCampaignToHistory(snapshot) {
     .from(CAMPAIGNS_TABLE)
     .upsert(row, { onConflict: "id" })
     .select(
-      "id, titulo, dados, ano_validade, formato_etiqueta, origem, created_by, created_by_email, created_at, expires_at, total_artigos, store, user_id",
+      "id, titulo, dados, ano_validade, formato_etiqueta, origem, created_by, created_by_email, created_at, expires_at, campaign_end_at, total_artigos, store, user_id",
     )
     .single();
 
@@ -172,6 +223,30 @@ export async function addCampaignToHistory(snapshot) {
   }
 
   return mapRowToCampaign(data);
+}
+
+export async function loadCampaignById(id, store) {
+  const campaignId = String(id || "").trim();
+  const storeValue = String(store || "").trim();
+
+  if (!campaignId || !storeValue) {
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from(CAMPAIGNS_TABLE)
+    .select(
+      "id, titulo, dados, ano_validade, formato_etiqueta, origem, created_by, created_by_email, created_at, expires_at, campaign_end_at, total_artigos, store, user_id",
+    )
+    .eq("id", campaignId)
+    .eq("store", storeValue)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return data ? mapRowToCampaign(data) : null;
 }
 
 export async function removeCampaignFromHistory(id, store) {

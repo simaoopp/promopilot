@@ -91,9 +91,17 @@ export default function AutomaticCampaignDetailsModal({
 
         <div className="ai-popup-scroll">
           <div className="popup-status-row">
+            {campanha.campaignEndAt && new Date(campanha.campaignEndAt).getTime() <= Date.now() ? (
+              <span className="popup-chip">Estado campanha: Concluída</span>
+            ) : null}
             <span className="popup-chip">
               Criada em: {formatarDataHistorico(campanha.criadoEm)}
             </span>
+            {campanha.campaignEndAt ? (
+              <span className="popup-chip">
+                Fim: {formatarDataHistorico(campanha.campaignEndAt)}
+              </span>
+            ) : null}
             <span className="popup-chip">Artigos: {campanha.totalArtigos || 0}</span>
             <span className="popup-chip">Loja: {campanha.store || "-"}</span>
             <span className="popup-chip">Estado: {getStatusLabel(campanha.status)}</span>

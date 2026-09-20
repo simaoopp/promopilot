@@ -1,5 +1,5 @@
 import React from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 function LoadingScreen() {
@@ -12,18 +12,22 @@ function LoadingScreen() {
 }
 
 export default function ProtectedRoute({ children }) {
+  const location = useLocation();
   const { user, loadingAuth, loadingProfile, onboardingRequired } = useAuth();
 
   if (loadingAuth || (user && loadingProfile)) {
     return <LoadingScreen />;
   }
 
+  const returnTo = `${location.pathname}${location.search}${location.hash}`;
+  const loginTarget = `/login?next=${encodeURIComponent(returnTo)}`;
+
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to={loginTarget} replace state={{ from: location }} />;
   }
 
   if (onboardingRequired) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to={loginTarget} replace state={{ from: location }} />;
   }
 
   return children;

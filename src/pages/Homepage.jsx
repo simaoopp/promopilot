@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../components/ToastProvider";
 import HomeHero from "../components/home/HomeHero";
@@ -13,8 +13,13 @@ import AutomaticCampaignDetailsModal from "../components/home/AutomaticCampaignD
 import ConfirmDeleteModal from "../components/home/ConfirmDeleteModal";
 import { warmupApi } from "../services/artigosService";
 import { getCatalogoPesquisaSnapshot } from "../services/catalogoPesquisaService";
-import { loadCampaignHistory, removeCampaignFromHistory } from "../utils/campaignHistory";
 import {
+  loadCampaignById,
+  loadCampaignHistory,
+  removeCampaignFromHistory,
+} from "../utils/campaignHistory";
+import {
+  loadAutomaticCampaignById,
   loadAutomaticCampaignHistory,
   removeAutomaticCampaignFromHistory,
 } from "../utils/automaticCampaignHistory";
@@ -26,6 +31,7 @@ import "../styles/styles.css";
 
 export default function HomePage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { profile } = useAuth();
   const toast = useToast();
 
@@ -44,6 +50,8 @@ export default function HomePage() {
   const [campanhaAutomaticaSelecionada, setCampanhaAutomaticaSelecionada] = useState(null);
   const [campanhaPendenteRemocao, setCampanhaPendenteRemocao] = useState(null);
   const [campanhaAutomaticaPendenteRemocao, setCampanhaAutomaticaPendenteRemocao] = useState(null);
+  const deepLinkCampaignId = String(searchParams.get("campaignId") || "").trim();
+  const deepLinkCampaignSource = String(searchParams.get("campaignSource") || "manual").trim().toLowerCase();
 
   useEffect(() => {
     // Warmup leve: evita que a primeira pesquisa da homepage pague sozinha o cold start do Render.
@@ -91,6 +99,62 @@ export default function HomePage() {
   }, [profile?.store]);
 
   useEffect(() => {
+    let active = true;
+    const campaignId = deepLinkCampaignId;
+    const source = deepLinkCampaignSource;
+    const store = String(profile?.store || "").trim();
+
+    if (!campaignId || !store) {
+      return () => {
+        active = false;
+      };
+    }
+
+    async function openDeepLinkedCampaign() {
+      try {
+        const campaign = source === "automatic"
+          ? await loadAutomaticCampaignById(campaignId, store)
+          : await loadCampaignById(campaignId, store);
+
+        if (!active) return;
+
+        if (!campaign) {
+          toast.error("A campanha já não está disponível ou não pertence à tua loja.");
+          const next = new URLSearchParams(searchParams);
+          next.delete("campaignId");
+          next.delete("campaignSource");
+          setSearchParams(next, { replace: true });
+          return;
+        }
+
+        if (source === "automatic") {
+          setCampanhaAutomaticaSelecionada(campaign);
+          setCampanhaSelecionada(null);
+        } else {
+          setCampanhaSelecionada(campaign);
+          setCampanhaAutomaticaSelecionada(null);
+        }
+      } catch (error) {
+        console.error("Não foi possível abrir a campanha do link.", error);
+        if (active) toast.error("Não foi possível abrir a campanha.");
+      }
+    }
+
+    openDeepLinkedCampaign();
+
+    return () => {
+      active = false;
+    };
+  }, [
+    deepLinkCampaignId,
+    deepLinkCampaignSource,
+    profile?.store,
+    searchParams,
+    setSearchParams,
+    toast,
+  ]);
+
+  useEffect(() => {
     // A homepage deixou de consultar /api/artigos automaticamente.
     // Pesquisa de artigos é uma ação explícita do utilizador na página Etiquetas,
     // evitando timeouts e ruído em produção quando a homepage abre.
@@ -124,8 +188,17 @@ export default function HomePage() {
     setCampanhaSelecionada(campanha);
   }
 
+  function limparDeepLinkCampanha() {
+    if (!searchParams.has("campaignId") && !searchParams.has("campaignSource")) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete("campaignId");
+    next.delete("campaignSource");
+    setSearchParams(next, { replace: true });
+  }
+
   function fecharPopupCampanha() {
     setCampanhaSelecionada(null);
+    limparDeepLinkCampanha();
   }
 
   function abrirPopupCampanhaAutomatica(campanha) {
@@ -134,6 +207,7 @@ export default function HomePage() {
 
   function fecharPopupCampanhaAutomatica() {
     setCampanhaAutomaticaSelecionada(null);
+    limparDeepLinkCampanha();
   }
 
   async function apagarCampanha(id) {

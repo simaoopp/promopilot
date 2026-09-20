@@ -1,4 +1,8 @@
 import { supabase } from "../lib/supabase";
+import {
+  campaignRetentionExpiry,
+  deriveCampaignEndAt,
+} from "../shared/campaign-label/campaignLifecycle";
 
 const AUTOMATIC_CAMPAIGNS_TABLE = "automatic_campaigns";
 const MAX_ITEMS = 50;
@@ -7,9 +11,14 @@ function nowIso() {
   return new Date().toISOString();
 }
 
-function plusDaysIso(date, days) {
-  return new Date(date.getTime() + days * 24 * 60 * 60 * 1000).toISOString();
+function isPraiaStore(value = "") {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .includes("praia");
 }
+
 
 function safeArray(value) {
   return Array.isArray(value) ? value.filter(Boolean) : [];
@@ -31,6 +40,7 @@ function mapRowToAutomaticCampaign(row = {}) {
     createdByEmail: row.created_by_email || "",
     criadoEm: row.created_at || "",
     expiraEm: row.expires_at || "",
+    campaignEndAt: row.campaign_end_at || "",
     totalArtigos:
       typeof row.total_artigos === "number"
         ? row.total_artigos
@@ -67,7 +77,8 @@ export function normalizeAutomaticCampaignSnapshot(snapshot = {}) {
       String(snapshot.createdBy || "Sistema automático").trim() || "Sistema automático",
     createdByEmail: String(snapshot.createdByEmail || "").trim(),
     criadoEm: snapshot.criadoEm || agora.toISOString(),
-    expiraEm: snapshot.expiraEm || plusDaysIso(agora, 2),
+    expiraEm: snapshot.expiraEm || "",
+    campaignEndAt: snapshot.campaignEndAt || "",
     totalArtigos:
       typeof snapshot.totalArtigos === "number" ? snapshot.totalArtigos : dados.length,
     store: String(snapshot.store || "").trim(),
@@ -83,6 +94,24 @@ export function normalizeAutomaticCampaignSnapshot(snapshot = {}) {
     errorMessage: String(snapshot.errorMessage || "").trim(),
     rawEmailText: "",
   };
+
+  if (!normalized.campaignEndAt) {
+    normalized.campaignEndAt =
+      deriveCampaignEndAt({
+        items: normalized.dados,
+        anoValidade: normalized.anoValidade,
+        createdAt: normalized.criadoEm,
+      }) || "";
+  }
+
+  if (!normalized.expiraEm) {
+    normalized.expiraEm = campaignRetentionExpiry({
+      campaignEndAt: isPraiaStore(normalized.store) ? normalized.campaignEndAt : null,
+      createdAt: normalized.criadoEm,
+      retentionDays: 30,
+      fallbackDays: 2,
+    });
+  }
 
   if (!normalized.store) {
     throw new Error("A campanha automática precisa de uma loja associada.");
@@ -105,6 +134,13 @@ function mapAutomaticSnapshotToRow(snapshot = {}) {
     created_by_email: normalized.createdByEmail,
     created_at: normalized.criadoEm,
     expires_at: normalized.expiraEm,
+    campaign_end_at: normalized.campaignEndAt || null,
+    end_notification_status:
+      isPraiaStore(normalized.store) &&
+      normalized.campaignEndAt &&
+      new Date(normalized.campaignEndAt).getTime() > Date.now()
+        ? "pending"
+        : "skipped",
     total_artigos: normalized.totalArtigos,
     store: normalized.store,
     user_id: normalized.userId || null,
@@ -153,7 +189,6 @@ export function createAutomaticCampaignSnapshot({
     createdBy,
     createdByEmail,
     criadoEm: agora.toISOString(),
-    expiraEm: plusDaysIso(agora, 2),
     totalArtigos: safeArray(dados).length,
     store,
     userId,
@@ -200,7 +235,7 @@ export async function loadAutomaticCampaignHistory(store) {
   const { data, error } = await supabase
     .from(AUTOMATIC_CAMPAIGNS_TABLE)
     .select(
-      "id, titulo, dados, ano_validade, formato_etiqueta, origem, created_by, created_by_email, created_at, expires_at, total_artigos, store, user_id, email_message_id, email_subject, email_from, email_received_at, processed_at, status, pdf_url, pdfs, error_message",
+      "id, titulo, dados, ano_validade, formato_etiqueta, origem, created_by, created_by_email, created_at, expires_at, campaign_end_at, total_artigos, store, user_id, email_message_id, email_subject, email_from, email_received_at, processed_at, status, pdf_url, pdfs, error_message",
     )
     .eq("store", storeValue)
     .gt("expires_at", nowIso())
@@ -225,7 +260,7 @@ export async function addAutomaticCampaignToHistory(snapshot) {
     .from(AUTOMATIC_CAMPAIGNS_TABLE)
     .upsert(row, { onConflict: "id" })
     .select(
-      "id, titulo, dados, ano_validade, formato_etiqueta, origem, created_by, created_by_email, created_at, expires_at, total_artigos, store, user_id, email_message_id, email_subject, email_from, email_received_at, processed_at, status, pdf_url, pdfs, error_message",
+      "id, titulo, dados, ano_validade, formato_etiqueta, origem, created_by, created_by_email, created_at, expires_at, campaign_end_at, total_artigos, store, user_id, email_message_id, email_subject, email_from, email_received_at, processed_at, status, pdf_url, pdfs, error_message",
     )
     .single();
 
@@ -234,6 +269,30 @@ export async function addAutomaticCampaignToHistory(snapshot) {
   }
 
   return mapRowToAutomaticCampaign(data);
+}
+
+export async function loadAutomaticCampaignById(id, store) {
+  const campaignId = String(id || "").trim();
+  const storeValue = String(store || "").trim();
+
+  if (!campaignId || !storeValue) {
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from(AUTOMATIC_CAMPAIGNS_TABLE)
+    .select(
+      "id, titulo, dados, ano_validade, formato_etiqueta, origem, created_by, created_by_email, created_at, expires_at, campaign_end_at, total_artigos, store, user_id, email_message_id, email_subject, email_from, email_received_at, processed_at, status, pdf_url, pdfs, error_message",
+    )
+    .eq("id", campaignId)
+    .eq("store", storeValue)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return data ? mapRowToAutomaticCampaign(data) : null;
 }
 
 export async function removeAutomaticCampaignFromHistory(id, store) {

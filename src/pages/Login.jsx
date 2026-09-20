@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import ForcePasswordChangeModal from "../components/ForcePasswordChangeModal";
 import PasswordRecoveryModal from "../components/PasswordRecoveryModal";
 import PromoPilotMark from "../components/brand/PromoPilotMark";
@@ -8,6 +8,7 @@ import { PROMOPILOT_BRAND, PROMOPILOT_MODULES } from "../brand/promopilot";
 import "../styles/styles.css";
 
 export default function Login() {
+  const location = useLocation();
   const {
     user,
     loadingAuth,
@@ -38,7 +39,16 @@ export default function Login() {
   }
 
   if (user && !onboardingRequired && !passwordRecovery) {
-    return <Navigate to="/Homepage" replace />;
+    const from = location.state?.from;
+    const stateReturnTo = from?.pathname
+      ? `${from.pathname}${from.search || ""}${from.hash || ""}`
+      : "";
+    const queryReturnTo = new URLSearchParams(location.search).get("next") || "";
+    const safeQueryReturnTo = queryReturnTo.startsWith("/") && !queryReturnTo.startsWith("//")
+      ? queryReturnTo
+      : "";
+    const returnTo = stateReturnTo || safeQueryReturnTo || "/Homepage";
+    return <Navigate to={returnTo} replace />;
   }
 
   async function handleSubmit(e) {

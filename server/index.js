@@ -4,6 +4,7 @@ import { startAiRateLimitCleanup } from "./middleware/aiRateLimit.js";
 import { logRuntimeInfo, warnMissingRuntimeConfig } from "./bootstrap/runtimeInfo.js";
 import { warmArticlesCache } from "./services/articleRepository.js";
 import { startCampaignEmailWorker } from "./workers/campaignEmailWorker.js";
+import { startCampaignEndNotificationWorker } from "./workers/campaignEndNotificationWorker.js";
 
 warnMissingRuntimeConfig();
 
@@ -17,6 +18,7 @@ if (process.env.WARM_ARTICLES_CACHE !== "0") {
 }
 
 startCampaignEmailWorker();
+startCampaignEndNotificationWorker();
 
 app.listen(PORT, "0.0.0.0", () => {
   logRuntimeInfo("LISTEN");
