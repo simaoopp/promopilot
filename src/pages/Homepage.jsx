@@ -10,16 +10,13 @@ import HomeSummarySection from "../components/home/HomeSummarySection";
 import ArticleDetailsModal from "../components/home/ArticleDetailsModal";
 import CampaignDetailsModal from "../components/home/CampaignDetailsModal";
 import AutomaticCampaignDetailsModal from "../components/home/AutomaticCampaignDetailsModal";
+import EndedCampaignDetailsModal from "../components/home/EndedCampaignDetailsModal";
 import ConfirmDeleteModal from "../components/home/ConfirmDeleteModal";
 import { warmupApi } from "../services/artigosService";
 import { getCatalogoPesquisaSnapshot } from "../services/catalogoPesquisaService";
+import { loadEndedCampaignArchive } from "../services/campaignEndNotificationService";
+import { loadCampaignHistory, removeCampaignFromHistory } from "../utils/campaignHistory";
 import {
-  loadCampaignById,
-  loadCampaignHistory,
-  removeCampaignFromHistory,
-} from "../utils/campaignHistory";
-import {
-  loadAutomaticCampaignById,
   loadAutomaticCampaignHistory,
   removeAutomaticCampaignFromHistory,
 } from "../utils/automaticCampaignHistory";
@@ -50,8 +47,7 @@ export default function HomePage() {
   const [campanhaAutomaticaSelecionada, setCampanhaAutomaticaSelecionada] = useState(null);
   const [campanhaPendenteRemocao, setCampanhaPendenteRemocao] = useState(null);
   const [campanhaAutomaticaPendenteRemocao, setCampanhaAutomaticaPendenteRemocao] = useState(null);
-  const deepLinkCampaignId = String(searchParams.get("campaignId") || "").trim();
-  const deepLinkCampaignSource = String(searchParams.get("campaignSource") || "manual").trim().toLowerCase();
+  const [campanhaTerminadaSelecionada, setCampanhaTerminadaSelecionada] = useState(null);
 
   useEffect(() => {
     // Warmup leve: evita que a primeira pesquisa da homepage pague sozinha o cold start do Render.
@@ -99,60 +95,37 @@ export default function HomePage() {
   }, [profile?.store]);
 
   useEffect(() => {
-    let active = true;
-    const campaignId = deepLinkCampaignId;
-    const source = deepLinkCampaignSource;
-    const store = String(profile?.store || "").trim();
-
-    if (!campaignId || !store) {
-      return () => {
-        active = false;
-      };
+    const notificationId = String(searchParams.get("endedCampaign") || "").trim();
+    if (!notificationId) {
+      setCampanhaTerminadaSelecionada(null);
+      return;
     }
 
-    async function openDeepLinkedCampaign() {
-      try {
-        const campaign = source === "automatic"
-          ? await loadAutomaticCampaignById(campaignId, store)
-          : await loadCampaignById(campaignId, store);
+    let active = true;
 
+    async function openEndedCampaignFromEmail() {
+      try {
+        const campaign = await loadEndedCampaignArchive(notificationId);
         if (!active) return;
 
         if (!campaign) {
-          toast.error("A campanha já não está disponível ou não pertence à tua loja.");
-          const next = new URLSearchParams(searchParams);
-          next.delete("campaignId");
-          next.delete("campaignSource");
-          setSearchParams(next, { replace: true });
+          toast.error("A campanha terminada não está disponível para esta conta.");
           return;
         }
 
-        if (source === "automatic") {
-          setCampanhaAutomaticaSelecionada(campaign);
-          setCampanhaSelecionada(null);
-        } else {
-          setCampanhaSelecionada(campaign);
-          setCampanhaAutomaticaSelecionada(null);
-        }
+        setCampanhaTerminadaSelecionada(campaign);
       } catch (error) {
-        console.error("Não foi possível abrir a campanha do link.", error);
-        if (active) toast.error("Não foi possível abrir a campanha.");
+        console.error("Não foi possível abrir o arquivo da campanha terminada.", error);
+        if (active) toast.error("Não foi possível abrir os detalhes da campanha terminada.");
       }
     }
 
-    openDeepLinkedCampaign();
+    openEndedCampaignFromEmail();
 
     return () => {
       active = false;
     };
-  }, [
-    deepLinkCampaignId,
-    deepLinkCampaignSource,
-    profile?.store,
-    searchParams,
-    setSearchParams,
-    toast,
-  ]);
+  }, [searchParams, toast]);
 
   useEffect(() => {
     // A homepage deixou de consultar /api/artigos automaticamente.
@@ -188,17 +161,8 @@ export default function HomePage() {
     setCampanhaSelecionada(campanha);
   }
 
-  function limparDeepLinkCampanha() {
-    if (!searchParams.has("campaignId") && !searchParams.has("campaignSource")) return;
-    const next = new URLSearchParams(searchParams);
-    next.delete("campaignId");
-    next.delete("campaignSource");
-    setSearchParams(next, { replace: true });
-  }
-
   function fecharPopupCampanha() {
     setCampanhaSelecionada(null);
-    limparDeepLinkCampanha();
   }
 
   function abrirPopupCampanhaAutomatica(campanha) {
@@ -207,7 +171,13 @@ export default function HomePage() {
 
   function fecharPopupCampanhaAutomatica() {
     setCampanhaAutomaticaSelecionada(null);
-    limparDeepLinkCampanha();
+  }
+
+  function fecharPopupCampanhaTerminada() {
+    setCampanhaTerminadaSelecionada(null);
+    const next = new URLSearchParams(searchParams);
+    next.delete("endedCampaign");
+    setSearchParams(next, { replace: true });
   }
 
   async function apagarCampanha(id) {
@@ -353,6 +323,12 @@ export default function HomePage() {
         onDuplicate={duplicarCampanha}
         onRequestDelete={setCampanhaAutomaticaPendenteRemocao}
         formatarDataHistorico={formatarDataHistorico}
+      />
+
+      <EndedCampaignDetailsModal
+        campaign={campanhaTerminadaSelecionada}
+        onClose={fecharPopupCampanhaTerminada}
+        onDuplicate={duplicarCampanha}
       />
 
       <ConfirmDeleteModal

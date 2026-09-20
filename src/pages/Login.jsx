@@ -26,6 +26,11 @@ export default function Login() {
   const [mostrarSenha, setMostrarSenha] = useState(false);
 
   const mostrarModalOnboarding = !!user && !loadingProfile && onboardingRequired;
+  const requestedReturnTo = String(location.state?.returnTo || "").trim();
+  const returnTo =
+    requestedReturnTo.startsWith("/") && !requestedReturnTo.startsWith("//")
+      ? requestedReturnTo
+      : "/Homepage";
 
   if (loadingAuth || (user && loadingProfile)) {
     return (
@@ -39,15 +44,6 @@ export default function Login() {
   }
 
   if (user && !onboardingRequired && !passwordRecovery) {
-    const from = location.state?.from;
-    const stateReturnTo = from?.pathname
-      ? `${from.pathname}${from.search || ""}${from.hash || ""}`
-      : "";
-    const queryReturnTo = new URLSearchParams(location.search).get("next") || "";
-    const safeQueryReturnTo = queryReturnTo.startsWith("/") && !queryReturnTo.startsWith("//")
-      ? queryReturnTo
-      : "";
-    const returnTo = stateReturnTo || safeQueryReturnTo || "/Homepage";
     return <Navigate to={returnTo} replace />;
   }
 

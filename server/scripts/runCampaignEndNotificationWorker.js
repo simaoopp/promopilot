@@ -1,44 +1,31 @@
 import "dotenv/config";
 import { runCampaignEndNotificationWorker } from "../services/campaign-lifecycle/campaignEndNotificationService.js";
 
-function readArgValue(name, fallback = "") {
-  const prefix = `${name}=`;
-  const match = process.argv.find((arg) => String(arg).startsWith(prefix));
-  return match ? String(match).slice(prefix.length) : fallback;
+function getArgValue(prefix) {
+  const item = process.argv.slice(2).find((arg) => arg.startsWith(`${prefix}=`));
+  return item ? item.slice(prefix.length + 1) : "";
 }
 
-function hasArg(name) {
-  return process.argv.includes(name);
-}
+const dryRun = process.argv.includes("--dry-run");
+const limitRaw = getArgValue("--limit");
+const limit = limitRaw ? Number.parseInt(limitRaw, 10) : undefined;
 
-async function main() {
-  const explicitDryRun = hasArg("--dry-run");
-  const explicitSend = hasArg("--send");
-  const sendEnabled = ["1", "true", "yes", "sim", "on"].includes(
-    String(process.env.CAMPAIGN_END_EMAIL_SEND_ENABLED || "").trim().toLowerCase(),
-  );
-
-  const dryRun = explicitDryRun || (!explicitSend && !sendEnabled);
-  const limit = Math.min(
-    100,
-    Math.max(1, Number.parseInt(readArgValue("--limit", "20"), 10) || 20),
-  );
-
-  console.log("[campaign-end] Worker iniciado.", {
+try {
+  console.log("[campaign-end] Início", {
     dryRun,
-    limit,
-    timeZone: "Atlantic/Azores",
+    limit: Number.isFinite(limit) ? limit : undefined,
+    at: new Date().toISOString(),
   });
 
-  const result = await runCampaignEndNotificationWorker({
-    dryRun,
-    limit,
-  });
+  const result = await runCampaignEndNotificationWorker({ dryRun, limit });
 
-  console.log("[campaign-end] Worker concluído.", result);
-}
+  console.log("[campaign-end] Resultado");
+  console.log(JSON.stringify(result, null, 2));
 
-main().catch((error) => {
-  console.error("[campaign-end] Worker falhou:", error);
+  if (!result.ok && !dryRun) {
+    process.exitCode = 1;
+  }
+} catch (error) {
+  console.error("[campaign-end] Falha:", error);
   process.exitCode = 1;
-});
+}

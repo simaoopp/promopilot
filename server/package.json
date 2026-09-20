@@ -12,8 +12,7 @@
     "qa:saas": "node --check middleware/tenant.js && node --check routes/saasAdmin.js",
     "qa:all": "npm run smoke && npm run qa:saas",
     "worker:campaign-end": "node scripts/runCampaignEndNotificationWorker.js",
-    "worker:campaign-end:dry-run": "node scripts/runCampaignEndNotificationWorker.js --dry-run",
-    "worker:campaign-end:send": "node scripts/runCampaignEndNotificationWorker.js --send"
+    "worker:campaign-end:dry-run": "node scripts/runCampaignEndNotificationWorker.js --dry-run"
   },
   "dependencies": {
     "@google/genai": "^0.14.1",

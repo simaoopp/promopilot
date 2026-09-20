@@ -1,43 +1,37 @@
 import { supabase } from "../lib/supabase";
 
-const TABLE = "campaign_end_notifications";
-
-export async function getEndedCampaignNotification(id) {
+export async function loadEndedCampaignArchive(id) {
   const safeId = String(id || "").trim();
+  if (!safeId) return null;
 
-  if (!safeId) {
-    throw new Error("Campanha inválida.");
-  }
-
-  const { data, error } = await supabase
-    .from(TABLE)
-    .select(
-      "id,source_type,source_campaign_id,title,store,origin,campaign_year,items,total_items,end_date,status,notified_at,created_at",
-    )
-    .eq("id", safeId)
-    .maybeSingle();
+  const { data, error } = await supabase.rpc("get_campaign_end_archive", {
+    p_id: safeId,
+  });
 
   if (error) throw error;
-  if (!data) throw new Error("Campanha não encontrada ou sem acesso.");
+
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) return null;
 
   return {
-    id: data.id,
-    sourceType: data.source_type,
-    sourceCampaignId: data.source_campaign_id,
-    title: data.title || "Campanha",
-    store: data.store || "",
-    origin: data.origin || "",
-    campaignYear: data.campaign_year || "",
-    items: Array.isArray(data.items) ? data.items : [],
-    totalItems:
-      typeof data.total_items === "number"
-        ? data.total_items
-        : Array.isArray(data.items)
-          ? data.items.length
+    notificationId: row.id,
+    sourceType: row.source_type || "manual",
+    id: row.campaign_id,
+    titulo: row.title || "Campanha",
+    dados: Array.isArray(row.items) ? row.items : [],
+    anoValidade: row.year_validity || new Date().getFullYear(),
+    totalArtigos:
+      typeof row.article_count === "number"
+        ? row.article_count
+        : Array.isArray(row.items)
+          ? row.items.length
           : 0,
-    endDate: data.end_date || "",
-    status: data.status || "",
-    notifiedAt: data.notified_at || "",
-    createdAt: data.created_at || "",
+    store: row.store || "",
+    criadoEm: row.campaign_created_at || "",
+    terminouEm: row.campaign_end_at || "",
+    notificadoEm: row.sent_at || "",
+    origem: row.source_type === "automatic" ? "automatico-email" : "manual",
+    formatoEtiqueta: row.source_type === "automatic" ? "automatico" : "a6",
+    archivedEndNotification: true,
   };
 }
