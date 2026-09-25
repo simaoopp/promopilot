@@ -10,11 +10,9 @@ import HomeSummarySection from "../components/home/HomeSummarySection";
 import ArticleDetailsModal from "../components/home/ArticleDetailsModal";
 import CampaignDetailsModal from "../components/home/CampaignDetailsModal";
 import AutomaticCampaignDetailsModal from "../components/home/AutomaticCampaignDetailsModal";
-import EndedCampaignDetailsModal from "../components/home/EndedCampaignDetailsModal";
 import ConfirmDeleteModal from "../components/home/ConfirmDeleteModal";
 import { warmupApi } from "../services/artigosService";
 import { getCatalogoPesquisaSnapshot } from "../services/catalogoPesquisaService";
-import { loadEndedCampaignArchive } from "../services/campaignEndNotificationService";
 import { loadCampaignHistory, removeCampaignFromHistory } from "../utils/campaignHistory";
 import {
   loadAutomaticCampaignHistory,
@@ -28,7 +26,7 @@ import "../styles/styles.css";
 
 export default function HomePage() {
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const { profile } = useAuth();
   const toast = useToast();
 
@@ -47,7 +45,6 @@ export default function HomePage() {
   const [campanhaAutomaticaSelecionada, setCampanhaAutomaticaSelecionada] = useState(null);
   const [campanhaPendenteRemocao, setCampanhaPendenteRemocao] = useState(null);
   const [campanhaAutomaticaPendenteRemocao, setCampanhaAutomaticaPendenteRemocao] = useState(null);
-  const [campanhaTerminadaSelecionada, setCampanhaTerminadaSelecionada] = useState(null);
 
   useEffect(() => {
     // Warmup leve: evita que a primeira pesquisa da homepage pague sozinha o cold start do Render.
@@ -95,39 +92,6 @@ export default function HomePage() {
   }, [profile?.store]);
 
   useEffect(() => {
-    const notificationId = String(searchParams.get("endedCampaign") || "").trim();
-    if (!notificationId) {
-      setCampanhaTerminadaSelecionada(null);
-      return;
-    }
-
-    let active = true;
-
-    async function openEndedCampaignFromEmail() {
-      try {
-        const campaign = await loadEndedCampaignArchive(notificationId);
-        if (!active) return;
-
-        if (!campaign) {
-          toast.error("A campanha terminada não está disponível para esta conta.");
-          return;
-        }
-
-        setCampanhaTerminadaSelecionada(campaign);
-      } catch (error) {
-        console.error("Não foi possível abrir o arquivo da campanha terminada.", error);
-        if (active) toast.error("Não foi possível abrir os detalhes da campanha terminada.");
-      }
-    }
-
-    openEndedCampaignFromEmail();
-
-    return () => {
-      active = false;
-    };
-  }, [searchParams, toast]);
-
-  useEffect(() => {
     // A homepage deixou de consultar /api/artigos automaticamente.
     // Pesquisa de artigos é uma ação explícita do utilizador na página Etiquetas,
     // evitando timeouts e ruído em produção quando a homepage abre.
@@ -148,6 +112,27 @@ export default function HomePage() {
         .slice(0, 4),
     [historicoCampanhasAutomaticas],
   );
+
+
+  useEffect(() => {
+    const campaignId = String(searchParams.get("campaignId") || "").trim();
+    const campaignType = String(searchParams.get("campaignType") || "").trim().toLowerCase();
+
+    if (!campaignId) return;
+
+    if (campaignType === "automatic") {
+      const match = historicoCampanhasAutomaticas.find(
+        (campaign) => String(campaign?.id || "") === campaignId,
+      );
+      if (match) setCampanhaAutomaticaSelecionada(match);
+      return;
+    }
+
+    const match = historicoCampanhas.find(
+      (campaign) => String(campaign?.id || "") === campaignId,
+    );
+    if (match) setCampanhaSelecionada(match);
+  }, [searchParams, historicoCampanhas, historicoCampanhasAutomaticas]);
 
   function abrirPopupArtigo(item) {
     setArtigoSelecionado(item);
@@ -171,13 +156,6 @@ export default function HomePage() {
 
   function fecharPopupCampanhaAutomatica() {
     setCampanhaAutomaticaSelecionada(null);
-  }
-
-  function fecharPopupCampanhaTerminada() {
-    setCampanhaTerminadaSelecionada(null);
-    const next = new URLSearchParams(searchParams);
-    next.delete("endedCampaign");
-    setSearchParams(next, { replace: true });
   }
 
   async function apagarCampanha(id) {
@@ -323,12 +301,6 @@ export default function HomePage() {
         onDuplicate={duplicarCampanha}
         onRequestDelete={setCampanhaAutomaticaPendenteRemocao}
         formatarDataHistorico={formatarDataHistorico}
-      />
-
-      <EndedCampaignDetailsModal
-        campaign={campanhaTerminadaSelecionada}
-        onClose={fecharPopupCampanhaTerminada}
-        onDuplicate={duplicarCampanha}
       />
 
       <ConfirmDeleteModal

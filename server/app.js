@@ -16,6 +16,7 @@ import { registerQuoteDossierRoutes } from "./routes/quoteDossiers.js";
 import { registerResendInboundWebhookRoute } from "./routes/resendInboundWebhook.js";
 import { registerSaasAdminRoutes } from "./routes/saasAdmin.js";
 import { registerArticleDatabaseSyncRoutes } from "./routes/articleDatabaseSync.js";
+import { registerCampaignLifecycleRoutes } from "./routes/campaignLifecycle.js";
 import { isAiEnabled } from "./services/aiProdutoService.js";
 
 export function createApp() {
@@ -50,6 +51,7 @@ export function createApp() {
   registerQuoteDossierRoutes(app, { requireAuth: authStack });
   registerSaasAdminRoutes(app, { requireAuth: authStack, requireAdmin });
   registerArticleDatabaseSyncRoutes(app, { requireAuth, attachTenantContext });
+  registerCampaignLifecycleRoutes(app, { requireAuth: authStack });
 
   app.use(notFoundHandler);
   app.use(errorHandler);
