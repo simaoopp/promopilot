@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { createHash } from "node:crypto";
 import { supabaseAdminClient, hasSupabaseAdminConfig } from "../../lib/supabaseClients.js";
 
 const TABLE = "campaign_end_notifications";
@@ -20,6 +21,27 @@ function readBoolean(name, fallback = false) {
 
 function normalizeEmail(value = "") {
   return String(value || "").trim().toLowerCase();
+}
+
+function buildResendIdempotencyKey(notification, recipient) {
+  const notificationId = String(notification?.id || "unknown").trim() || "unknown";
+  const email = normalizeEmail(recipient?.email);
+  const recipientHash = createHash("sha256").update(email).digest("hex").slice(0, 24);
+  return `campaign-end/${notificationId}/${recipientHash}`;
+}
+
+function describeNetworkError(error) {
+  const parts = [];
+  const message = error?.message || String(error || "Erro de rede desconhecido");
+  if (message) parts.push(message);
+
+  const causeCode = error?.cause?.code || error?.code;
+  if (causeCode) parts.push(`code=${causeCode}`);
+
+  const causeMessage = error?.cause?.message;
+  if (causeMessage && causeMessage !== message) parts.push(causeMessage);
+
+  return parts.join(" | ");
 }
 
 function escapeHtml(value = "") {
@@ -250,7 +272,7 @@ export function buildCampaignEndEmail(notification, recipient, config = getConfi
                 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
                   <tr>
                     <td style="font-size:11px;line-height:1.5;color:#aeb8bf;">Mensagem automática PromoPilot<br/>Enviada apenas à equipa associada à Loja da Praia.</td>
-                    <td align="right" style="font-size:11px;color:#74818a;">${escapeHtml(formatDate(new Date().toISOString(), { withTime: true }))}</td>
+                    <td align="right" style="font-size:11px;color:#74818a;">Fim: ${escapeHtml(formatDate(notification.campaign_end_at, { withTime: true }))}</td>
                   </tr>
                 </table>
               </td>
@@ -372,6 +394,7 @@ async function sendViaResend({ recipient, notification, config }) {
   }
 
   const message = buildCampaignEndEmail(notification, recipient, config);
+  const idempotencyKey = buildResendIdempotencyKey(notification, recipient);
   const payload = {
     from: config.from,
     to: [recipient.email],
@@ -382,14 +405,23 @@ async function sendViaResend({ recipient, notification, config }) {
 
   if (config.replyTo) payload.reply_to = config.replyTo;
 
-  const response = await fetch(`${config.resendBaseUrl}/emails`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${config.resendApiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
+  let response;
+  try {
+    response = await fetch(`${config.resendBaseUrl}/emails`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${config.resendApiKey}`,
+        "Content-Type": "application/json",
+        "Idempotency-Key": idempotencyKey,
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch (error) {
+    const wrapped = new Error(`Resend network error: ${describeNetworkError(error)}`);
+    wrapped.cause = error;
+    wrapped.idempotencyKey = idempotencyKey;
+    throw wrapped;
+  }
 
   const raw = await response.text();
   let body = null;
@@ -400,12 +432,18 @@ async function sendViaResend({ recipient, notification, config }) {
   }
 
   if (!response.ok) {
-    throw new Error(`Resend ${response.status}: ${body?.message || body?.error || raw || response.statusText}`);
+    const error = new Error(
+      `Resend ${response.status}: ${body?.message || body?.error || raw || response.statusText}`,
+    );
+    error.idempotencyKey = idempotencyKey;
+    error.status = response.status;
+    throw error;
   }
 
   return {
     id: body?.id || body?.data?.id || "",
     subject: message.subject,
+    idempotencyKey,
   };
 }
 
@@ -508,6 +546,7 @@ async function processNotification(row, { config, dryRun = false }) {
         status: "sent",
         sentAt: new Date().toISOString(),
         providerId: sent.id || "",
+        idempotencyKey: sent.idempotencyKey,
       };
       sentEmails.push(recipient.email);
       await updateNotification(claimed.id, {
@@ -520,6 +559,8 @@ async function processNotification(row, { config, dryRun = false }) {
         status: "error",
         lastAttemptAt: new Date().toISOString(),
         error: message.slice(0, 1000),
+        idempotencyKey:
+          error?.idempotencyKey || buildResendIdempotencyKey(claimed, recipient),
       };
       failures.push(`${recipient.email}: ${message}`);
       await updateNotification(claimed.id, { recipient_delivery: delivery });
