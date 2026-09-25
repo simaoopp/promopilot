@@ -23,6 +23,19 @@ function normalizeEmail(value = "") {
   return String(value || "").trim().toLowerCase();
 }
 
+function normalizeStore(value = "") {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+function isPraiaStore(value = "") {
+  return normalizeStore(value).includes("praia");
+}
+
 function buildResendIdempotencyKey(notification, recipient) {
   const notificationId = String(notification?.id || "unknown").trim() || "unknown";
   const email = normalizeEmail(recipient?.email);
@@ -169,7 +182,7 @@ function buildArticleRows(notification) {
 export function buildCampaignEndEmail(notification, recipient, config = getConfig()) {
   const title = String(notification.title || "Campanha").trim() || "Campanha";
   const total = Number(notification.article_count || safeArray(notification.items).length || 0);
-  const detailsUrl = `${config.appUrl}/Homepage?endedCampaign=${encodeURIComponent(notification.id)}`;
+  const detailsUrl = `${config.appUrl}/CampanhaTerminada/${encodeURIComponent(notification.id)}`;
   const recipientName = String(recipient?.firstName || "").trim();
   const greeting = recipientName ? `Olá ${escapeHtml(recipientName)},` : "Olá,";
   const { rows, remaining } = buildArticleRows(notification);
@@ -338,11 +351,15 @@ async function getPraiaRecipients(notification, config) {
   const { data: profiles, error: profilesError } = await supabaseAdminClient
     .from("profiles")
     .select("id,first_name,last_name,store,default_organization_id")
-    .eq("store", config.store);
+    .ilike("store", "%praia%");
 
   if (profilesError) throw profilesError;
 
-  let eligibleProfiles = safeArray(profiles);
+  // A UI usa normalmente "Loja da Praia", mas aceitamos também variantes
+  // como "Praia" / "Praia da Vitória" para não perder destinatários válidos.
+  let eligibleProfiles = safeArray(profiles).filter((profile) =>
+    isPraiaStore(profile?.store),
+  );
 
   if (notification.organization_id && eligibleProfiles.length) {
     const profileIds = eligibleProfiles.map((profile) => profile.id).filter(Boolean);
@@ -463,10 +480,10 @@ async function resetStaleSendingRows() {
 
 async function listDueNotifications({ limit, maxAttempts, store }) {
   const now = new Date().toISOString();
-  const { data, error } = await supabaseAdminClient
+
+  let query = supabaseAdminClient
     .from(TABLE)
     .select("*")
-    .eq("store", store)
     .in("status", ["pending", "error"])
     .not("campaign_end_at", "is", null)
     .lte("campaign_end_at", now)
@@ -474,8 +491,16 @@ async function listDueNotifications({ limit, maxAttempts, store }) {
     .order("campaign_end_at", { ascending: true })
     .limit(limit);
 
+  query = isPraiaStore(store)
+    ? query.ilike("store", "%praia%")
+    : query.eq("store", store);
+
+  const { data, error } = await query;
+
   if (error) throw error;
-  return safeArray(data);
+  return safeArray(data).filter((row) =>
+    isPraiaStore(store) ? isPraiaStore(row?.store) : true,
+  );
 }
 
 async function claimNotification(row) {
