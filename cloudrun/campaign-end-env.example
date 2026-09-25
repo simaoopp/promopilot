@@ -1,0 +1,17 @@
+NODE_ENV=production
+
+# Feature ativa dentro do Cloud Run Job.
+CAMPAIGN_END_EMAIL_ENABLED=1
+CAMPAIGN_END_STORE_NAME=Loja da Praia
+CAMPAIGN_END_WORKER_LIMIT=50
+CAMPAIGN_END_MAX_ATTEMPTS=24
+
+CAMPAIGN_END_EMAIL_FROM=PromoPilot <no-reply@send.promopilot.pt>
+CAMPAIGN_END_EMAIL_REPLY_TO=
+APP_PUBLIC_URL=https://www.promopilot.pt
+PROMOPILOT_EMAIL_LOGO_URL=https://www.promopilot.pt/logo192.png
+
+# Secrets no Google Secret Manager:
+# RESEND_API_KEY
+# SUPABASE_URL
+# SUPABASE_SERVICE_ROLE_KEY

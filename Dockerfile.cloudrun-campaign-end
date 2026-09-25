@@ -1,0 +1,16 @@
+FROM node:20-bookworm-slim
+
+WORKDIR /app/server
+
+ENV NODE_ENV=production
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+ENV NPM_CONFIG_AUDIT=false
+ENV NPM_CONFIG_FUND=false
+ENV NPM_CONFIG_UPDATE_NOTIFIER=false
+
+COPY server/package.json server/package-lock.json ./
+RUN npm ci --omit=dev --no-audit --no-fund
+
+COPY server ./
+
+CMD ["node", "scripts/runCampaignEndNotificationWorker.js"]

@@ -1,0 +1,61 @@
+substitutions:
+  _REGION: europe-southwest1
+  _REPOSITORY: etiquetas-prom
+  _IMAGE: campaign-end-worker
+  _JOB: promopilot-campaign-end-worker
+  _RUNTIME_SERVICE_ACCOUNT: cloud-run-campaign-worker@etiquetas-prom-prod.iam.gserviceaccount.com
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - Dockerfile.cloudrun-campaign-end
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$SHORT_SHA
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:latest
+      - .
+
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$SHORT_SHA
+
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:latest
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - jobs
+      - deploy
+      - ${_JOB}
+      - --image
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$SHORT_SHA
+      - --region
+      - ${_REGION}
+      - --service-account
+      - ${_RUNTIME_SERVICE_ACCOUNT}
+      - --tasks
+      - "1"
+      - --parallelism
+      - "1"
+      - --max-retries
+      - "1"
+      - --task-timeout
+      - "5m"
+      - --cpu
+      - "1"
+      - --memory
+      - "512Mi"
+      - --set-env-vars
+      - NODE_ENV=production,CAMPAIGN_END_EMAIL_ENABLED=1,CAMPAIGN_END_STORE_NAME=Loja da Praia,CAMPAIGN_END_WORKER_LIMIT=50,CAMPAIGN_END_MAX_ATTEMPTS=24,CAMPAIGN_END_EMAIL_FROM=PromoPilot <no-reply@send.promopilot.pt>,APP_PUBLIC_URL=https://www.promopilot.pt,PROMOPILOT_EMAIL_LOGO_URL=https://www.promopilot.pt/logo192.png
+      - --set-secrets
+      - RESEND_API_KEY=resend-api-key:latest,SUPABASE_URL=supabase-url:latest,SUPABASE_SERVICE_ROLE_KEY=supabase-service-role-key:latest
+
+options:
+  logging: CLOUD_LOGGING_ONLY
