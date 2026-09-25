@@ -35,3 +35,18 @@ export async function loadEndedCampaignArchive(id) {
     archivedEndNotification: true,
   };
 }
+
+export async function getEndedCampaignNotification(id) {
+  const campaign = await loadEndedCampaignArchive(id);
+
+  if (!campaign) return null;
+
+  return {
+    ...campaign,
+    title: campaign.titulo,
+    items: campaign.dados,
+    totalItems: campaign.totalArtigos,
+    campaignYear: campaign.anoValidade,
+    endDate: campaign.terminouEm,
+  };
+}
