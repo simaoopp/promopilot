@@ -1,73 +1,31 @@
 import { canAccessStore } from "../middleware/auth.js";
-import {
-  getCampaignEndNotificationById,
-  isPraiaCampaignStore,
-} from "../services/campaign-lifecycle/campaignEndNotificationService.js";
-
-function isPraiaUser(req) {
-  const store = String(req.auth?.store || req.authProfile?.store || "").trim();
-  return isPraiaCampaignStore(store);
-}
+import { AppError } from "../middleware/errorHandler.js";
+import { getCampaignEndNotificationById } from "../services/campaign-lifecycle/campaignEndNotificationService.js";
 
 export function registerCampaignLifecycleRoutes(app, { requireAuth }) {
-  app.get("/api/campaign-lifecycle/end-notifications/:id", requireAuth, async (req, res) => {
-    try {
-      const notification = await getCampaignEndNotificationById(req.params.id);
-      if (!notification) {
-        return res.status(404).json({ ok: false, error: "Campanha terminada não encontrada." });
+  app.get(
+    "/api/campaign-lifecycle/ended/:id",
+    ...requireAuth,
+    async (req, res, next) => {
+      try {
+        const id = String(req.params?.id || "").trim();
+        if (!id) {
+          throw new AppError("VALIDATION_ERROR", "Identificador da campanha em falta.", { status: 400 });
+        }
+
+        const campaign = await getCampaignEndNotificationById(id);
+        if (!campaign) {
+          throw new AppError("NOT_FOUND", "Campanha não encontrada.", { status: 404 });
+        }
+
+        if (!canAccessStore(req, campaign.store)) {
+          throw new AppError("FORBIDDEN", "Esta campanha não pertence à tua loja.", { status: 403 });
+        }
+
+        return res.json({ ok: true, item: campaign });
+      } catch (error) {
+        return next(error);
       }
-
-      const requestOrg = String(req.organizationId || "").trim();
-      const notificationOrg = String(notification.organization_id || "").trim();
-
-      if (
-        requestOrg &&
-        notificationOrg &&
-        requestOrg !== notificationOrg &&
-        !req.isAdmin
-      ) {
-        return res.status(403).json({ ok: false, error: "Campanha não autorizada para esta organização." });
-      }
-
-      const storeAuthorized =
-        isPraiaUser(req) ||
-        canAccessStore(req, notification.store);
-
-      if (!storeAuthorized) {
-        return res.status(403).json({
-          ok: false,
-          error: "Esta campanha está reservada à equipa da Loja da Praia.",
-        });
-      }
-
-      const snapshot = notification.campaign_snapshot || {};
-      return res.json({
-        ok: true,
-        notification: {
-          id: notification.id,
-          source: notification.source_type,
-          campaignId: notification.campaign_id,
-          store: notification.store,
-          title: notification.campaign_title,
-          campaignEndDate: notification.campaign_end_date,
-          status: notification.status,
-          sentAt: notification.sent_at,
-        },
-        campaign: {
-          ...snapshot,
-          id: snapshot.id || notification.campaign_id,
-          source: snapshot.source || notification.source_type,
-          titulo: snapshot.titulo || notification.campaign_title,
-          store: snapshot.store || notification.store,
-          campaignEndDate: snapshot.campaignEndDate || notification.campaign_end_date,
-        },
-      });
-    } catch (error) {
-      console.error("Erro em GET /api/campaign-lifecycle/end-notifications/:id:", error);
-      return res.status(500).json({
-        ok: false,
-        error: error?.message || "Erro ao carregar a campanha terminada.",
-      });
-    }
-  });
+    },
+  );
 }

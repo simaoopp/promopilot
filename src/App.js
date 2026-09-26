@@ -15,7 +15,7 @@ const Etiquetas = lazy(() => import("./pages/Etiquetas"));
 const Homepage = lazy(() => import("./pages/Homepage"));
 const Login = lazy(() => import("./pages/Login"));
 const OrcamentosDossiersPage = lazy(() => import("./pages/OrcamentosDossiers"));
-const CampanhaTerminadaPage = lazy(() => import("./pages/CampanhaTerminada"));
+const EndedCampaignDetails = lazy(() => import("./pages/EndedCampaignDetails"));
 
 function PageFallback() {
   return (
@@ -62,7 +62,7 @@ export default function App() {
           <Route path="/Etiquetas" element={<ProtectedRoute><Etiquetas /></ProtectedRoute>} />
           <Route path="/EtiquetasCampanhaExcel" element={<ProtectedRoute><EtiquetasExcelPage /></ProtectedRoute>} />
           <Route path="/OrcamentosDossiers" element={<ProtectedRoute><OrcamentosDossiersPage /></ProtectedRoute>} />
-          <Route path="/CampanhaTerminada/:id" element={<ProtectedRoute><CampanhaTerminadaPage /></ProtectedRoute>} />
+          <Route path="/Campanhas/terminadas/:id" element={<ProtectedRoute><EndedCampaignDetails /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to={rotaInicial} replace />} />
         </Routes>
       </Suspense>
