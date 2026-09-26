@@ -6,7 +6,7 @@ function readArgs(argv = process.argv.slice(2)) {
   const rawLimit = argv.find((arg) => arg.startsWith("--limit="));
   const limit = rawLimit
     ? Number.parseInt(rawLimit.split("=")[1] || "", 10)
-    : Number.parseInt(process.env.CAMPAIGN_END_NOTIFICATION_BATCH_SIZE || "50", 10);
+    : Number.parseInt(process.env.CAMPAIGN_END_WORKER_LIMIT || process.env.CAMPAIGN_END_NOTIFICATION_BATCH_SIZE || "50", 10);
   return { dryRun, limit: Number.isFinite(limit) ? limit : 50 };
 }
 

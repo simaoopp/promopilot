@@ -53,7 +53,7 @@ steps:
       - --memory
       - "512Mi"
       - --set-env-vars
-      - NODE_ENV=production,CAMPAIGN_END_EMAIL_ENABLED=1,CAMPAIGN_END_STORE_NAME=Loja da Praia,CAMPAIGN_END_WORKER_LIMIT=50,CAMPAIGN_END_MAX_ATTEMPTS=24,CAMPAIGN_END_EMAIL_FROM=PromoPilot <no-reply@send.promopilot.pt>,APP_PUBLIC_URL=https://www.promopilot.pt,PROMOPILOT_EMAIL_LOGO_URL=https://www.promopilot.pt/logo192.png
+      - NODE_ENV=production,CAMPAIGN_END_EMAIL_ENABLED=1,CAMPAIGN_END_STORE_NAME=Loja da Praia,CAMPAIGN_END_WORKER_LIMIT=50,CAMPAIGN_END_MAX_ATTEMPTS=24,CAMPAIGN_END_EMAIL_TIMEOUT_MS=30000,CAMPAIGN_END_EMAIL_FROM=PromoPilot <no-reply@send.promopilot.pt>,APP_PUBLIC_URL=https://www.promopilot.pt,PROMOPILOT_EMAIL_LOGO_URL=https://www.promopilot.pt/logo192.png
       - --set-secrets
       - RESEND_API_KEY=resend-api-key:latest,SUPABASE_URL=supabase-url:latest,SUPABASE_SERVICE_ROLE_KEY=supabase-service-role-key:latest
 

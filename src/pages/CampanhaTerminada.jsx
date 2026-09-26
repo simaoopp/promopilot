@@ -166,7 +166,7 @@ export default function CampanhaTerminada() {
           <h1>{campaign.title}</h1>
           <p>
             A campanha terminou em <strong>{formatDate(campaign.endDate)}</strong>.
-            Esta página mantém o snapshot operacional mesmo depois de sair do histórico curto.
+            Este registo mantém o snapshot operacional da campanha para consulta e fecho em loja.
           </p>
         </div>
 
@@ -191,7 +191,7 @@ export default function CampanhaTerminada() {
         </article>
         <article>
           <span>Origem</span>
-          <strong>{campaign.sourceType === "automatic" ? "Automática" : "Manual"}</strong>
+          <strong>{campaign.sourceType === "automatic" ? "Automática" : String(campaign.origem || "").toLowerCase().includes("excel") ? "Excel" : "Manual"}</strong>
         </article>
         <article>
           <span>Fim</span>

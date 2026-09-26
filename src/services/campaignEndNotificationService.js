@@ -1,52 +1,44 @@
-import { supabase } from "../lib/supabase";
+import { getEndedCampaignNotification as fetchEndedCampaignNotification } from "./campaignLifecycleService";
 
-export async function loadEndedCampaignArchive(id) {
-  const safeId = String(id || "").trim();
-  if (!safeId) return null;
-
-  const { data, error } = await supabase.rpc("get_campaign_end_archive", {
-    p_id: safeId,
-  });
-
-  if (error) throw error;
-
-  const row = Array.isArray(data) ? data[0] : data;
-  if (!row) return null;
+function normalizeCampaign(body = {}) {
+  const notification = body?.notification || {};
+  const snapshot = body?.campaign || {};
+  const items = Array.isArray(snapshot.dados) ? snapshot.dados : [];
 
   return {
-    notificationId: row.id,
-    sourceType: row.source_type || "manual",
-    id: row.campaign_id,
-    titulo: row.title || "Campanha",
-    dados: Array.isArray(row.items) ? row.items : [],
-    anoValidade: row.year_validity || new Date().getFullYear(),
+    notificationId: notification.id || "",
+    sourceType: notification.source || snapshot.source || "manual",
+    id: snapshot.id || notification.campaignId || "",
+    title: snapshot.titulo || notification.title || "Campanha",
+    titulo: snapshot.titulo || notification.title || "Campanha",
+    items,
+    dados: items,
+    totalItems:
+      Number(snapshot.totalArtigos) ||
+      Number(snapshot.total_artigos) ||
+      items.length,
     totalArtigos:
-      typeof row.article_count === "number"
-        ? row.article_count
-        : Array.isArray(row.items)
-          ? row.items.length
-          : 0,
-    store: row.store || "",
-    criadoEm: row.campaign_created_at || "",
-    terminouEm: row.campaign_end_at || "",
-    notificadoEm: row.sent_at || "",
-    origem: row.source_type === "automatic" ? "automatico-email" : "manual",
-    formatoEtiqueta: row.source_type === "automatic" ? "automatico" : "a6",
+      Number(snapshot.totalArtigos) ||
+      Number(snapshot.total_artigos) ||
+      items.length,
+    campaignYear: snapshot.anoValidade || snapshot.ano_validade || new Date().getFullYear(),
+    anoValidade: snapshot.anoValidade || snapshot.ano_validade || new Date().getFullYear(),
+    store: snapshot.store || notification.store || "",
+    endDate: snapshot.campaignEndDate || notification.campaignEndDate || "",
+    terminouEm: snapshot.campaignEndDate || notification.campaignEndDate || "",
+    criadoEm: snapshot.criadoEm || snapshot.created_at || "",
+    notificadoEm: notification.sentAt || "",
+    origem: snapshot.origem || (notification.source === "automatic" ? "automatico-email" : "manual"),
+    formatoEtiqueta: snapshot.formatoEtiqueta || snapshot.formato_etiqueta || "a6",
     archivedEndNotification: true,
   };
 }
 
 export async function getEndedCampaignNotification(id) {
-  const campaign = await loadEndedCampaignArchive(id);
+  const body = await fetchEndedCampaignNotification(id);
+  return normalizeCampaign(body);
+}
 
-  if (!campaign) return null;
-
-  return {
-    ...campaign,
-    title: campaign.titulo,
-    items: campaign.dados,
-    totalItems: campaign.totalArtigos,
-    campaignYear: campaign.anoValidade,
-    endDate: campaign.terminouEm,
-  };
+export async function loadEndedCampaignArchive(id) {
+  return getEndedCampaignNotification(id);
 }
