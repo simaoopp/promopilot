@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../components/ToastProvider";
 import HomeHero from "../components/home/HomeHero";
@@ -11,10 +11,10 @@ import ArticleDetailsModal from "../components/home/ArticleDetailsModal";
 import CampaignDetailsModal from "../components/home/CampaignDetailsModal";
 import AutomaticCampaignDetailsModal from "../components/home/AutomaticCampaignDetailsModal";
 import ConfirmDeleteModal from "../components/home/ConfirmDeleteModal";
-import EndedCampaignDetailsModal from "../components/home/EndedCampaignDetailsModal";
+import CampaignEndedDetailsModal from "../components/home/CampaignEndedDetailsModal";
 import { warmupApi } from "../services/artigosService";
+import { getCampaignEndNotification } from "../services/campaignEndNotificationService";
 import { getCatalogoPesquisaSnapshot } from "../services/catalogoPesquisaService";
-import { getCampaignEndNotification } from "../services/campaignEndNotificationsService";
 import { loadCampaignHistory, removeCampaignFromHistory } from "../utils/campaignHistory";
 import {
   loadAutomaticCampaignHistory,
@@ -28,6 +28,7 @@ import "../styles/styles.css";
 
 export default function HomePage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { profile } = useAuth();
   const toast = useToast();
 
@@ -46,41 +47,50 @@ export default function HomePage() {
   const [campanhaAutomaticaSelecionada, setCampanhaAutomaticaSelecionada] = useState(null);
   const [campanhaPendenteRemocao, setCampanhaPendenteRemocao] = useState(null);
   const [campanhaAutomaticaPendenteRemocao, setCampanhaAutomaticaPendenteRemocao] = useState(null);
-  const [endedCampaignNotification, setEndedCampaignNotification] = useState(null);
-  const [campaignEndLinkHandled, setCampaignEndLinkHandled] = useState(false);
+  const [campaignEndedDetail, setCampaignEndedDetail] = useState(null);
+  const [campaignEndedLoading, setCampaignEndedLoading] = useState(false);
+  const [campaignEndedError, setCampaignEndedError] = useState("");
 
   useEffect(() => {
     // Warmup leve: evita que a primeira pesquisa da homepage pague sozinha o cold start do Render.
     warmupApi();
   }, []);
 
-
   useEffect(() => {
-    if (campaignEndLinkHandled) return;
+    const params = new URLSearchParams(location.search);
+    const notificationId = String(params.get("campaignEnd") || "").trim();
+    if (!notificationId) return undefined;
 
-    const notificationId = new URLSearchParams(window.location.search).get("campaignEnd");
-    if (!notificationId) {
-      setCampaignEndLinkHandled(true);
-      return;
-    }
+    let active = true;
+    setCampaignEndedLoading(true);
+    setCampaignEndedError("");
+    setCampaignEndedDetail(null);
 
-    let mounted = true;
     getCampaignEndNotification(notificationId)
       .then((item) => {
-        if (mounted) setEndedCampaignNotification(item);
+        if (active) setCampaignEndedDetail(item);
       })
       .catch((error) => {
-        console.error("Não foi possível abrir o registo de fim de campanha.", error);
-        if (mounted) toast.error(error?.message || "Não foi possível abrir a campanha.");
+        if (active) setCampaignEndedError(error?.message || "Não foi possível carregar a campanha.");
       })
       .finally(() => {
-        if (mounted) setCampaignEndLinkHandled(true);
+        if (active) setCampaignEndedLoading(false);
       });
 
     return () => {
-      mounted = false;
+      active = false;
     };
-  }, [campaignEndLinkHandled, toast]);
+  }, [location.search]);
+
+  function fecharCampaignEndedDetail() {
+    const params = new URLSearchParams(location.search);
+    params.delete("campaignEnd");
+    const query = params.toString();
+    navigate(`${location.pathname}${query ? `?${query}` : ""}`, { replace: true });
+    setCampaignEndedDetail(null);
+    setCampaignEndedError("");
+    setCampaignEndedLoading(false);
+  }
 
   useEffect(() => {
     let isMounted = true;
@@ -203,13 +213,6 @@ export default function HomePage() {
   }
 
 
-  function fecharEndedCampaignNotification() {
-    setEndedCampaignNotification(null);
-    const url = new URL(window.location.href);
-    url.searchParams.delete("campaignEnd");
-    navigate(`${url.pathname}${url.search}`, { replace: true });
-  }
-
   function abrirPesquisaEmEtiquetas() {
     const termo = String(pesquisa || "").trim();
 
@@ -320,11 +323,6 @@ export default function HomePage() {
         formatarDataHistorico={formatarDataHistorico}
       />
 
-      <EndedCampaignDetailsModal
-        notification={endedCampaignNotification}
-        onClose={fecharEndedCampaignNotification}
-      />
-
       <ConfirmDeleteModal
         campanha={campanhaPendenteRemocao}
         onCancel={() => setCampanhaPendenteRemocao(null)}
@@ -336,6 +334,15 @@ export default function HomePage() {
         onCancel={() => setCampanhaAutomaticaPendenteRemocao(null)}
         onConfirm={apagarCampanhaAutomatica}
       />
+
+      {(campaignEndedLoading || campaignEndedDetail || campaignEndedError) && (
+        <CampaignEndedDetailsModal
+          campaign={campaignEndedDetail}
+          loading={campaignEndedLoading}
+          error={campaignEndedError}
+          onClose={fecharCampaignEndedDetail}
+        />
+      )}
     </div>
   );
 }

@@ -1,21 +1,32 @@
 import {
   getCampaignEndNotificationConfig,
-  runCampaignEndNotificationWorker,
+  runCampaignEndNotificationWorkerOnce,
 } from "../services/campaign-lifecycle/campaignEndNotificationService.js";
 
-let timer = null;
+let intervalHandle = null;
+let startupHandle = null;
 let running = false;
 
 async function tick() {
-  if (running) return;
+  if (running) {
+    console.warn("[campaign-end] Execução anterior ainda ativa; ciclo ignorado.");
+    return;
+  }
+
   running = true;
   try {
-    const result = await runCampaignEndNotificationWorker();
-    if (result.due > 0) {
-      console.log("[campaign-end] ciclo concluído", result);
+    const result = await runCampaignEndNotificationWorkerOnce();
+
+    if (result.scanned || result.sent) {
+      console.log("[campaign-end] ciclo concluído", {
+        scanned: result.scanned,
+        sent: result.sent,
+        send: result.send,
+        ok: result.ok,
+      });
     }
   } catch (error) {
-    console.error("[campaign-end] worker falhou:", error?.stack || error);
+    console.error("[campaign-end] erro no ciclo automático:", error?.message || error);
   } finally {
     running = false;
   }
@@ -23,24 +34,38 @@ async function tick() {
 
 export function startCampaignEndNotificationWorker() {
   const config = getCampaignEndNotificationConfig();
+
   if (!config.enabled) {
     console.log("[campaign-end] worker desativado (CAMPAIGN_END_WORKER_ENABLED=0).");
-    return;
+    return null;
   }
 
-  if (timer) return;
+  if (intervalHandle) return intervalHandle;
 
-  console.log(`[campaign-end] worker ativo · store=${config.store} · intervalo=${config.intervalMs}ms`);
+  console.log("[campaign-end] worker ativo", {
+    intervalMs: config.intervalMs,
+    batchSize: config.batchSize,
+    store: config.storeName,
+    sendEnabled: config.sendEnabled,
+    resendConfigured: config.resendConfigured,
+  });
 
-  if (config.runOnStart) {
-    setTimeout(() => void tick(), 2500);
-  }
+  // Primeiro ciclo pouco depois do arranque, sem atrasar o boot da API.
+  startupHandle = setTimeout(() => {
+    startupHandle = null;
+    tick();
+  }, 10_000);
+  startupHandle.unref?.();
 
-  timer = setInterval(() => void tick(), config.intervalMs);
-  timer.unref?.();
+  intervalHandle = setInterval(tick, config.intervalMs);
+  intervalHandle.unref?.();
+
+  return intervalHandle;
 }
 
 export function stopCampaignEndNotificationWorker() {
-  if (timer) clearInterval(timer);
-  timer = null;
+  if (startupHandle) clearTimeout(startupHandle);
+  if (intervalHandle) clearInterval(intervalHandle);
+  startupHandle = null;
+  intervalHandle = null;
 }

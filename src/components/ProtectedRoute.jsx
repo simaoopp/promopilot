@@ -12,21 +12,20 @@ function LoadingScreen() {
 }
 
 export default function ProtectedRoute({ children }) {
-  const { user, loadingAuth, loadingProfile, onboardingRequired } = useAuth();
   const location = useLocation();
+  const { user, loadingAuth, loadingProfile, onboardingRequired } = useAuth();
 
   if (loadingAuth || (user && loadingProfile)) {
     return <LoadingScreen />;
   }
 
-  const returnTo = `${location.pathname}${location.search}${location.hash}`;
-
   if (!user) {
-    return <Navigate to="/login" replace state={{ returnTo }} />;
+    const next = `${location.pathname}${location.search}${location.hash}`;
+    return <Navigate to={`/login?next=${encodeURIComponent(next)}`} replace />;
   }
 
   if (onboardingRequired) {
-    return <Navigate to="/login" replace state={{ returnTo }} />;
+    return <Navigate to="/login" replace />;
   }
 
   return children;

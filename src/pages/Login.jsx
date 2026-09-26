@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import ForcePasswordChangeModal from "../components/ForcePasswordChangeModal";
 import PasswordRecoveryModal from "../components/PasswordRecoveryModal";
 import PromoPilotMark from "../components/brand/PromoPilotMark";
@@ -7,15 +7,10 @@ import { useAuth } from "../context/AuthContext";
 import { PROMOPILOT_BRAND, PROMOPILOT_MODULES } from "../brand/promopilot";
 import "../styles/styles.css";
 
-function getSafeNextPath() {
-  const value = new URLSearchParams(window.location.search).get("next");
-  if (!value || !value.startsWith("/") || value.startsWith("//")) {
-    return "/Homepage";
-  }
-  return value;
-}
-
 export default function Login() {
+  const location = useLocation();
+  const nextParam = new URLSearchParams(location.search).get("next") || "";
+  const nextPath = nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : "/Homepage";
   const {
     user,
     loadingAuth,
@@ -46,7 +41,7 @@ export default function Login() {
   }
 
   if (user && !onboardingRequired && !passwordRecovery) {
-    return <Navigate to={getSafeNextPath()} replace />;
+    return <Navigate to={nextPath} replace />;
   }
 
   async function handleSubmit(e) {

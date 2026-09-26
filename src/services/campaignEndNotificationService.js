@@ -1,44 +1,34 @@
-import { getEndedCampaignNotification as fetchEndedCampaignNotification } from "./campaignLifecycleService";
+import { supabase } from "../lib/supabase";
 
-function normalizeCampaign(body = {}) {
-  const notification = body?.notification || {};
-  const snapshot = body?.campaign || {};
-  const items = Array.isArray(snapshot.dados) ? snapshot.dados : [];
+const API_BASE_URL = String(process.env.REACT_APP_API_BASE_URL || "").replace(/\/+$/, "");
 
-  return {
-    notificationId: notification.id || "",
-    sourceType: notification.source || snapshot.source || "manual",
-    id: snapshot.id || notification.campaignId || "",
-    title: snapshot.titulo || notification.title || "Campanha",
-    titulo: snapshot.titulo || notification.title || "Campanha",
-    items,
-    dados: items,
-    totalItems:
-      Number(snapshot.totalArtigos) ||
-      Number(snapshot.total_artigos) ||
-      items.length,
-    totalArtigos:
-      Number(snapshot.totalArtigos) ||
-      Number(snapshot.total_artigos) ||
-      items.length,
-    campaignYear: snapshot.anoValidade || snapshot.ano_validade || new Date().getFullYear(),
-    anoValidade: snapshot.anoValidade || snapshot.ano_validade || new Date().getFullYear(),
-    store: snapshot.store || notification.store || "",
-    endDate: snapshot.campaignEndDate || notification.campaignEndDate || "",
-    terminouEm: snapshot.campaignEndDate || notification.campaignEndDate || "",
-    criadoEm: snapshot.criadoEm || snapshot.created_at || "",
-    notificadoEm: notification.sentAt || "",
-    origem: snapshot.origem || (notification.source === "automatic" ? "automatico-email" : "manual"),
-    formatoEtiqueta: snapshot.formatoEtiqueta || snapshot.formato_etiqueta || "a6",
-    archivedEndNotification: true,
-  };
+async function getAccessToken() {
+  const { data, error } = await supabase.auth.getSession();
+  if (error) throw error;
+
+  const token = data?.session?.access_token;
+  if (!token) throw new Error("Sessão expirada. Inicia sessão novamente.");
+  return token;
 }
 
-export async function getEndedCampaignNotification(id) {
-  const body = await fetchEndedCampaignNotification(id);
-  return normalizeCampaign(body);
-}
+export async function getCampaignEndNotification(id) {
+  const safeId = String(id || "").trim();
+  if (!safeId) throw new Error("Campanha inválida.");
 
-export async function loadEndedCampaignArchive(id) {
-  return getEndedCampaignNotification(id);
+  const token = await getAccessToken();
+  const response = await fetch(
+    `${API_BASE_URL}/api/campaign-end-notifications/${encodeURIComponent(safeId)}`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || data?.ok === false) {
+    throw new Error(data?.error?.message || data?.error || data?.message || `Erro HTTP ${response.status}`);
+  }
+
+  return data?.item || null;
 }

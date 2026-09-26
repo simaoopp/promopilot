@@ -1,31 +1,44 @@
-import { supabaseAdminClient, hasSupabaseAdminConfig } from "../../lib/supabaseClients.js";
-import { automaticCampaignStores, getAutomaticCampaignConfig } from "../automatic-campaigns/config.js";
+import { hasSupabaseAdminConfig, supabaseAdminClient } from "../../lib/supabaseClients.js";
 
-const NOTIFICATIONS_TABLE = "campaign_end_notifications";
-const DELIVERIES_TABLE = "campaign_end_notification_deliveries";
-const DEFAULT_STORE = automaticCampaignStores.praia?.store || "Loja da Praia";
-const AZORES_TIME_ZONE = "Atlantic/Azores";
+const TABLE = "campaign_end_notifications";
+const DEFAULT_STORE = "Loja da Praia";
 
 function readBoolean(name, fallback = false) {
   const value = process.env[name];
   if (value === undefined || value === null || value === "") return fallback;
-  return ["1", "true", "sim", "yes", "on"].includes(String(value).trim().toLowerCase());
+  return ["1", "true", "sim", "yes", "y", "on"].includes(String(value).toLowerCase().trim());
 }
 
-function readNumber(name, fallback) {
-  const value = Number.parseInt(process.env[name] || "", 10);
-  return Number.isFinite(value) ? value : fallback;
+function readNumber(name, fallback, { min = 1, max = Number.MAX_SAFE_INTEGER } = {}) {
+  const parsed = Number.parseInt(process.env[name] || "", 10);
+  const value = Number.isFinite(parsed) ? parsed : fallback;
+  return Math.max(min, Math.min(max, value));
 }
 
-function requireAdminClient() {
-  if (!hasSupabaseAdminConfig() || !supabaseAdminClient) {
-    throw new Error("SUPABASE_SERVICE_ROLE_KEY é obrigatória para o worker de fim de campanha.");
-  }
-  return supabaseAdminClient;
+function normalizeText(value = "") {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeEmail(value = "") {
+  return String(value || "").trim().toLowerCase();
+}
+
+function splitEmails(value = "") {
+  return [...new Set(
+    String(value || "")
+      .split(/[;,\n]+/)
+      .map(normalizeEmail)
+      .filter(Boolean),
+  )];
 }
 
 function escapeHtml(value = "") {
-  return String(value)
+  return String(value ?? "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -33,360 +46,372 @@ function escapeHtml(value = "") {
     .replace(/'/g, "&#039;");
 }
 
-function normalizeEmail(value = "") {
-  return String(value || "").trim().toLowerCase();
-}
-
-function safeArray(value) {
-  return Array.isArray(value) ? value.filter(Boolean) : [];
-}
-
-function formatDate(value) {
+function formatDatePt(value) {
   if (!value) return "—";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
+  if (Number.isNaN(date.getTime())) return String(value);
+
   return new Intl.DateTimeFormat("pt-PT", {
-    timeZone: AZORES_TIME_ZONE,
+    timeZone: "Atlantic/Azores",
     day: "2-digit",
     month: "long",
     year: "numeric",
   }).format(date);
 }
 
-function formatShortDate(value) {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  return new Intl.DateTimeFormat("pt-PT", {
-    timeZone: AZORES_TIME_ZONE,
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(date);
-}
-
 function formatPrice(value) {
   const raw = String(value ?? "").trim();
-  if (!raw || raw === "-") return "—";
-  if (/€/.test(raw)) return raw;
-  return `${raw} €`;
+  if (!raw) return "";
+
+  let normalized = raw.replace(/[^0-9,.-]/g, "");
+  const lastComma = normalized.lastIndexOf(",");
+  const lastDot = normalized.lastIndexOf(".");
+
+  if (lastComma >= 0 && lastDot >= 0) {
+    normalized = lastComma > lastDot
+      ? normalized.replace(/\./g, "").replace(",", ".")
+      : normalized.replace(/,/g, "");
+  } else if (lastComma >= 0) {
+    normalized = normalized.replace(",", ".");
+  }
+
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed)) return raw;
+
+  return new Intl.NumberFormat("pt-PT", {
+    style: "currency",
+    currency: "EUR",
+  }).format(parsed);
 }
 
-function normalizeItem(item = {}) {
-  return {
-    code: String(item.codigo || item.artigo || item.code || "").trim() || "—",
-    description: String(item.descricao || item.description || "").trim() || "Sem descrição",
-    before: item.antes ?? item.pvp2Antes ?? item.pvp2AntesRaw ?? item.pvpAnterior ?? "",
-    current: item.atual ?? item.pvp2Atual ?? item.pvp2AtualRaw ?? item.pvpPromo ?? "",
-    endDate: String(item.dataFim || "").trim(),
-    info: String(item.info || item.informacao || "").trim(),
-  };
+function getItemCode(item = {}) {
+  return String(item.codigo || item.artigo || item.code || "").trim();
 }
 
-function getPublicUrl() {
-  return String(process.env.APP_PUBLIC_URL || process.env.PUBLIC_APP_URL || process.env.FRONTEND_URL || "https://www.promopilot.pt")
+function getItemDescription(item = {}) {
+  return String(item.descricao || item.description || item.titulo_oficial || "").trim();
+}
+
+function getItemCurrentPrice(item = {}) {
+  return item.atual ?? item.pvp2Atual ?? item.pvp2 ?? item.preco ?? "";
+}
+
+function getConfig() {
+  const publicUrl = String(
+    process.env.APP_PUBLIC_URL ||
+      process.env.PUBLIC_APP_URL ||
+      process.env.FRONTEND_URL ||
+      "https://www.promopilot.pt",
+  )
     .trim()
     .replace(/\/+$/, "");
-}
-
-export function getCampaignEndNotificationConfig() {
-  const emailConfig = getAutomaticCampaignConfig();
-  const publicUrl = getPublicUrl();
 
   return {
     enabled: readBoolean("CAMPAIGN_END_WORKER_ENABLED", false),
-    runOnStart: readBoolean("CAMPAIGN_END_WORKER_RUN_ON_START", true),
-    intervalMs: Math.max(60_000, readNumber("CAMPAIGN_END_WORKER_INTERVAL_MS", 15 * 60 * 1000)),
-    batchSize: Math.max(1, Math.min(100, readNumber("CAMPAIGN_END_WORKER_BATCH_SIZE", 20))),
-    store: String(process.env.CAMPAIGN_END_STORE_NAME || DEFAULT_STORE).trim() || DEFAULT_STORE,
+    sendEnabled: readBoolean("CAMPAIGN_END_SEND_ENABLED", false),
+    intervalMs: readNumber("CAMPAIGN_END_WORKER_INTERVAL_MS", 5 * 60 * 1000, {
+      min: 60_000,
+      max: 24 * 60 * 60 * 1000,
+    }),
+    batchSize: readNumber("CAMPAIGN_END_WORKER_BATCH_SIZE", 25, { min: 1, max: 100 }),
+    maxAttempts: readNumber("CAMPAIGN_END_MAX_ATTEMPTS", 5, { min: 1, max: 20 }),
+    storeName: String(process.env.CAMPAIGN_END_STORE_NAME || DEFAULT_STORE).trim() || DEFAULT_STORE,
     publicUrl,
-    logoUrl: String(process.env.CAMPAIGN_END_EMAIL_LOGO_URL || `${publicUrl}/promopilot-logo.png`).trim(),
-    resendApiKey: process.env.RESEND_API_KEY || emailConfig?.emailApi?.apiKey || "",
-    resendBaseUrl: process.env.RESEND_API_BASE_URL || emailConfig?.emailApi?.baseUrl || "https://api.resend.com",
-    from: process.env.CAMPAIGN_END_EMAIL_FROM_ADDRESS || emailConfig?.emailApi?.from || "",
-    replyTo: process.env.CAMPAIGN_END_EMAIL_REPLY_TO || emailConfig?.emailApi?.replyTo || "",
-    timeoutMs: Math.max(5_000, readNumber("CAMPAIGN_END_EMAIL_TIMEOUT_MS", 30_000)),
+    logoUrl: String(process.env.PROMOPILOT_LOGO_URL || "").trim(),
+    resend: {
+      apiKey: String(process.env.RESEND_API_KEY || process.env.CAMPAIGN_EMAIL_API_KEY || "").trim(),
+      from: String(
+        process.env.CAMPAIGN_END_EMAIL_FROM ||
+          process.env.CAMPAIGN_EMAIL_FROM_ADDRESS ||
+          process.env.CAMPAIGN_SMTP_FROM ||
+          "",
+      ).trim(),
+      replyTo: String(process.env.CAMPAIGN_EMAIL_REPLY_TO || "").trim(),
+      baseUrl: String(process.env.RESEND_API_BASE_URL || "https://api.resend.com").replace(/\/+$/, ""),
+      timeoutMs: readNumber("CAMPAIGN_END_EMAIL_TIMEOUT_MS", 30_000, { min: 5_000, max: 120_000 }),
+    },
+    recipientOverride: splitEmails(process.env.CAMPAIGN_END_RECIPIENT_OVERRIDE || ""),
   };
 }
 
-async function listAllAuthUsers(client) {
+function assertAdminClient() {
+  if (!hasSupabaseAdminConfig() || !supabaseAdminClient) {
+    throw new Error("Supabase service role não configurado para o worker de fim de campanha.");
+  }
+}
+
+async function listAllAuthUsers() {
   const users = [];
   const perPage = 1000;
 
-  for (let page = 1; page <= 20; page += 1) {
-    const { data, error } = await client.auth.admin.listUsers({ page, perPage });
+  for (let page = 1; page <= 100; page += 1) {
+    const { data, error } = await supabaseAdminClient.auth.admin.listUsers({ page, perPage });
     if (error) throw error;
 
-    const chunk = Array.isArray(data?.users) ? data.users : [];
-    users.push(...chunk);
-    if (chunk.length < perPage) break;
+    const current = Array.isArray(data?.users) ? data.users : [];
+    users.push(...current);
+
+    if (current.length < perPage) break;
   }
 
   return users;
 }
 
-export async function listPraiaEmployeeRecipients(store = getCampaignEndNotificationConfig().store) {
-  const client = requireAdminClient();
+async function resolveOrganizationUserIds(organizationId) {
+  if (!organizationId) return null;
 
-  const { data: profiles, error: profileError } = await client
-    .from("profiles")
-    .select("id,first_name,last_name,store,role")
-    .eq("store", store);
-
-  if (profileError) throw profileError;
-
-  const profileRows = safeArray(profiles);
-  if (!profileRows.length) return [];
-
-  const authUsers = await listAllAuthUsers(client);
-  const byId = new Map(authUsers.map((user) => [user.id, user]));
-  const seen = new Set();
-
-  return profileRows
-    .map((profile) => {
-      const authUser = byId.get(profile.id);
-      const email = normalizeEmail(authUser?.email);
-      if (!email || seen.has(email)) return null;
-      seen.add(email);
-
-      return {
-        userId: profile.id,
-        email,
-        firstName: String(profile.first_name || "").trim(),
-        lastName: String(profile.last_name || "").trim(),
-        role: String(profile.role || "user").trim(),
-        store: String(profile.store || "").trim(),
-      };
-    })
-    .filter(Boolean);
-}
-
-async function readDueNotificationsDryRun({ store, limit }) {
-  const client = requireAdminClient();
-  const { data, error } = await client
-    .from(NOTIFICATIONS_TABLE)
-    .select("*")
-    .eq("store", store)
-    .is("notification_sent_at", null)
-    .lte("ends_at", new Date().toISOString())
-    .order("ends_at", { ascending: true })
-    .limit(limit);
+  const { data, error } = await supabaseAdminClient
+    .from("organization_members")
+    .select("user_id,status")
+    .eq("organization_id", organizationId)
+    .eq("status", "active");
 
   if (error) throw error;
-  return safeArray(data);
+
+  return new Set((Array.isArray(data) ? data : []).map((row) => row.user_id).filter(Boolean));
 }
 
-async function claimDueNotifications({ store, limit }) {
-  const client = requireAdminClient();
-  const { data, error } = await client.rpc("claim_campaign_end_notifications", {
-    p_store: store,
-    p_limit: limit,
+export async function resolvePraiaEmployeeRecipients(event = {}, options = {}) {
+  assertAdminClient();
+  const config = options.config || getConfig();
+
+  if (config.recipientOverride.length) {
+    return config.recipientOverride.map((email) => ({
+      id: null,
+      email,
+      firstName: "",
+      lastName: "",
+      store: config.storeName,
+      role: "override",
+    }));
+  }
+
+  const orgUserIds = await resolveOrganizationUserIds(event.organization_id || null);
+
+  let profilesQuery = supabaseAdminClient
+    .from("profiles")
+    .select("id,first_name,last_name,store,role");
+
+  if (orgUserIds && orgUserIds.size === 0) return [];
+  if (orgUserIds && orgUserIds.size > 0) {
+    profilesQuery = profilesQuery.in("id", [...orgUserIds]);
+  }
+
+  const { data: profiles, error: profilesError } = await profilesQuery;
+  if (profilesError) throw profilesError;
+
+  const targetStore = normalizeText(config.storeName);
+  const praiaProfiles = (Array.isArray(profiles) ? profiles : []).filter((profile) => {
+    const store = normalizeText(profile?.store);
+    return store === targetStore || store === "praia" || store === "loja da praia";
   });
 
-  if (error) throw error;
-  return safeArray(data);
-}
+  if (!praiaProfiles.length) return [];
 
-async function ensureDeliveries(notification, recipients) {
-  const client = requireAdminClient();
-  if (!recipients.length) return [];
+  const profileById = new Map(praiaProfiles.map((profile) => [profile.id, profile]));
+  const authUsers = await listAllAuthUsers();
 
-  const rows = recipients.map((recipient) => ({
-    notification_id: notification.id,
-    user_id: recipient.userId,
-    email: recipient.email,
-    first_name: recipient.firstName || "",
-    status: "pending",
-    updated_at: new Date().toISOString(),
-  }));
-
-  const { error: insertError } = await client
-    .from(DELIVERIES_TABLE)
-    .upsert(rows, {
-      onConflict: "notification_id,user_id",
-      ignoreDuplicates: true,
+  return authUsers
+    .filter((user) => profileById.has(user.id))
+    .filter((user) => normalizeEmail(user.email))
+    .filter((user) => Boolean(user.email_confirmed_at || user.confirmed_at))
+    .map((user) => {
+      const profile = profileById.get(user.id) || {};
+      return {
+        id: user.id,
+        email: normalizeEmail(user.email),
+        firstName: String(profile.first_name || "").trim(),
+        lastName: String(profile.last_name || "").trim(),
+        store: String(profile.store || config.storeName).trim(),
+        role: String(profile.role || "user").trim(),
+      };
     });
-
-  if (insertError) throw insertError;
-
-  const { data, error } = await client
-    .from(DELIVERIES_TABLE)
-    .select("*")
-    .eq("notification_id", notification.id)
-    .order("email", { ascending: true });
-
-  if (error) throw error;
-  return safeArray(data);
 }
 
-function buildArticleRowsHtml(items) {
-  const preview = items.slice(0, 20).map(normalizeItem);
+function buildCampaignUrl(event, config) {
+  return `${config.publicUrl}/Homepage?campaignEnd=${encodeURIComponent(event.id)}`;
+}
 
-  return preview
-    .map((item) => `
-      <tr>
-        <td style="padding:12px 10px;border-top:1px solid #edf1f4;font-family:Arial,sans-serif;font-size:12px;color:#1f2937;font-weight:700;vertical-align:top;white-space:nowrap;">${escapeHtml(item.code)}</td>
-        <td style="padding:12px 10px;border-top:1px solid #edf1f4;font-family:Arial,sans-serif;font-size:12px;color:#475569;vertical-align:top;">${escapeHtml(item.description)}</td>
-        <td style="padding:12px 10px;border-top:1px solid #edf1f4;font-family:Arial,sans-serif;font-size:12px;color:#64748b;vertical-align:top;white-space:nowrap;">${escapeHtml(formatPrice(item.before))}</td>
-        <td style="padding:12px 10px;border-top:1px solid #edf1f4;font-family:Arial,sans-serif;font-size:12px;color:#0f172a;font-weight:700;vertical-align:top;white-space:nowrap;">${escapeHtml(formatPrice(item.current))}</td>
-      </tr>
-    `)
+function buildItemsPreview(items = [], limit = 12) {
+  return (Array.isArray(items) ? items : []).filter(Boolean).slice(0, limit);
+}
+
+function buildEmailText({ event, recipient, config }) {
+  const items = Array.isArray(event.items) ? event.items : [];
+  const preview = buildItemsPreview(items);
+  const greeting = recipient.firstName ? `Olá ${recipient.firstName},` : "Olá,";
+  const lines = [
+    greeting,
+    "",
+    `A campanha “${event.title || "Campanha"}” terminou em ${formatDatePt(event.campaign_end_at)}.`,
+    `${event.total_items || items.length} artigo(s) fizeram parte desta campanha na Loja da Praia.`,
+    "",
+    ...preview.map((item) => {
+      const code = getItemCode(item) || "—";
+      const description = getItemDescription(item) || "Artigo";
+      const price = formatPrice(getItemCurrentPrice(item));
+      return `• ${code} — ${description}${price ? ` — ${price}` : ""}`;
+    }),
+  ];
+
+  if (items.length > preview.length) {
+    lines.push(`• +${items.length - preview.length} artigo(s) no detalhe da campanha`);
+  }
+
+  lines.push(
+    "",
+    "Consulta todos os artigos e os detalhes da campanha no PromoPilot:",
+    buildCampaignUrl(event, config),
+    "",
+    "PromoPilot",
+    "Operação de Loja · Campanhas",
+  );
+
+  return lines.join("\n");
+}
+
+function buildEmailHtml({ event, recipient, config }) {
+  const items = Array.isArray(event.items) ? event.items : [];
+  const preview = buildItemsPreview(items);
+  const campaignUrl = buildCampaignUrl(event, config);
+  const greeting = recipient.firstName ? `Olá ${escapeHtml(recipient.firstName)},` : "Olá,";
+  const remaining = Math.max(0, items.length - preview.length);
+  const logo = config.logoUrl
+    ? `<img src="${escapeHtml(config.logoUrl)}" width="190" alt="PromoPilot" style="display:block;max-width:190px;height:auto;border:0;" />`
+    : `<div style="font-size:20px;font-weight:800;letter-spacing:-0.02em;color:#17211c;">PromoPilot</div>`;
+
+  const rows = preview
+    .map((item) => {
+      const code = getItemCode(item) || "—";
+      const description = getItemDescription(item) || "Artigo";
+      const price = formatPrice(getItemCurrentPrice(item));
+
+      return `
+        <tr>
+          <td style="padding:13px 0;border-bottom:1px solid #edf0ee;vertical-align:top;">
+            <div style="font-size:12px;font-weight:700;color:#147bd1;margin-bottom:4px;">${escapeHtml(code)}</div>
+            <div style="font-size:14px;font-weight:700;color:#17211c;line-height:1.4;">${escapeHtml(description)}</div>
+          </td>
+          <td style="padding:13px 0 13px 16px;border-bottom:1px solid #edf0ee;text-align:right;vertical-align:top;white-space:nowrap;font-size:13px;font-weight:700;color:#44534b;">
+            ${price ? escapeHtml(price) : ""}
+          </td>
+        </tr>`;
+    })
     .join("");
-}
-
-function buildEmailHtml({ notification, recipient, detailsUrl, logoUrl }) {
-  const items = safeArray(notification.dados);
-  const total = Number(notification.total_artigos || items.length || 0);
-  const previewCount = Math.min(20, items.length);
-  const remaining = Math.max(0, total - previewCount);
-  const name = recipient.firstName ? `Olá, ${escapeHtml(recipient.firstName)}.` : "Olá.";
-  const sourceLabel = notification.source_table === "automatic_campaigns" ? "Campanha automática" : "Campanha manual";
 
   return `<!doctype html>
 <html>
-<body style="margin:0;padding:0;background:#f3f6f8;">
-  <div style="display:none;max-height:0;overflow:hidden;color:transparent;">A campanha ${escapeHtml(notification.titulo)} terminou. Consulta os artigos e os próximos passos.</div>
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f3f6f8;padding:32px 14px;">
-    <tr><td align="center">
-      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:680px;background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 16px 50px rgba(15,23,42,.10);">
-        <tr>
-          <td style="padding:28px 34px 24px;background:#0f2741;">
-            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"><tr>
-              <td valign="middle">
-                ${logoUrl ? `<img src="${escapeHtml(logoUrl)}" width="150" alt="PromoPilot" style="display:block;max-width:150px;height:auto;border:0;">` : `<div style="font:700 24px Arial,sans-serif;color:#ffffff;">PromoPilot</div>`}
+  <body style="margin:0;padding:0;background:#f4f7f5;font-family:Arial,Helvetica,sans-serif;color:#17211c;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f4f7f5;padding:28px 14px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:620px;background:#ffffff;border-radius:22px;overflow:hidden;box-shadow:0 16px 45px rgba(20,34,27,.08);">
+            <tr>
+              <td style="padding:28px 32px 22px;border-bottom:1px solid #edf0ee;">${logo}</td>
+            </tr>
+            <tr>
+              <td style="padding:30px 32px 8px;">
+                <div style="display:inline-block;padding:7px 10px;border-radius:999px;background:#eef6fc;color:#147bd1;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;">Campanha concluída</div>
+                <h1 style="margin:16px 0 10px;font-size:28px;line-height:1.2;letter-spacing:-.025em;color:#17211c;">${escapeHtml(event.title || "Campanha")}</h1>
+                <p style="margin:0;color:#66736d;font-size:14px;line-height:1.6;">${greeting} a campanha terminou em <strong style="color:#17211c;">${escapeHtml(formatDatePt(event.campaign_end_at))}</strong>. É o momento de confirmar a retirada de comunicação e preços promocionais em loja.</p>
               </td>
-              <td align="right" valign="middle"><span style="display:inline-block;padding:7px 11px;border-radius:999px;background:#dff7e8;color:#17633a;font:700 11px Arial,sans-serif;letter-spacing:.06em;text-transform:uppercase;">Campanha concluída</span></td>
-            </tr></table>
-          </td>
-        </tr>
-        <tr>
-          <td style="padding:32px 34px 10px;">
-            <p style="margin:0 0 9px;font:600 14px Arial,sans-serif;color:#147bd1;">${name}</p>
-            <h1 style="margin:0 0 12px;font:700 28px/1.25 Arial,sans-serif;color:#17212b;">${escapeHtml(notification.titulo || "Campanha")}</h1>
-            <p style="margin:0;font:400 15px/1.65 Arial,sans-serif;color:#5d6b75;">Esta campanha chegou ao fim. O PromoPilot reuniu abaixo a informação essencial para a equipa da <strong>${escapeHtml(notification.store)}</strong>.</p>
-          </td>
-        </tr>
-        <tr>
-          <td style="padding:20px 34px;">
-            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"><tr>
-              <td width="33%" style="padding:14px;background:#f7f9fb;border-radius:12px 0 0 12px;"><div style="font:700 18px Arial,sans-serif;color:#17212b;">${total}</div><div style="margin-top:3px;font:400 11px Arial,sans-serif;color:#77838c;">artigos</div></td>
-              <td width="33%" style="padding:14px;background:#f7f9fb;border-left:1px solid #e8edf1;"><div style="font:700 14px Arial,sans-serif;color:#17212b;">${escapeHtml(formatShortDate(notification.ends_at))}</div><div style="margin-top:3px;font:400 11px Arial,sans-serif;color:#77838c;">fim da campanha</div></td>
-              <td width="34%" style="padding:14px;background:#f7f9fb;border-left:1px solid #e8edf1;border-radius:0 12px 12px 0;"><div style="font:700 13px Arial,sans-serif;color:#17212b;">${escapeHtml(sourceLabel)}</div><div style="margin-top:3px;font:400 11px Arial,sans-serif;color:#77838c;">origem</div></td>
-            </tr></table>
-          </td>
-        </tr>
-        <tr>
-          <td style="padding:4px 34px 8px;">
-            <div style="padding:16px 18px;border-radius:14px;background:#fff8f1;border:1px solid #ffe2c5;">
-              <div style="font:700 12px Arial,sans-serif;color:#9a4d08;text-transform:uppercase;letter-spacing:.05em;">Próximo passo em loja</div>
-              <div style="margin-top:6px;font:400 13px/1.55 Arial,sans-serif;color:#6b5848;">Revê a comunicação promocional, os preços e as etiquetas destes artigos. O detalhe integral permanece disponível no PromoPilot.</div>
-            </div>
-          </td>
-        </tr>
-        <tr>
-          <td style="padding:20px 34px 6px;">
-            <h2 style="margin:0 0 12px;font:700 16px Arial,sans-serif;color:#17212b;">Artigos da campanha</h2>
-            <div style="border:1px solid #e7ecf0;border-radius:14px;overflow:hidden;">
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
-                <thead><tr style="background:#f7f9fb;">
-                  <th align="left" style="padding:10px;font:700 10px Arial,sans-serif;color:#718096;text-transform:uppercase;">Código</th>
-                  <th align="left" style="padding:10px;font:700 10px Arial,sans-serif;color:#718096;text-transform:uppercase;">Artigo</th>
-                  <th align="left" style="padding:10px;font:700 10px Arial,sans-serif;color:#718096;text-transform:uppercase;">Antes</th>
-                  <th align="left" style="padding:10px;font:700 10px Arial,sans-serif;color:#718096;text-transform:uppercase;">Campanha</th>
-                </tr></thead>
-                <tbody>${buildArticleRowsHtml(items)}</tbody>
-              </table>
-            </div>
-            ${remaining > 0 ? `<p style="margin:10px 0 0;font:400 12px Arial,sans-serif;color:#7b8790;">+ ${remaining} artigo${remaining === 1 ? "" : "s"} disponível${remaining === 1 ? "" : "eis"} no detalhe da campanha.</p>` : ""}
-          </td>
-        </tr>
-        <tr>
-          <td align="center" style="padding:26px 34px 34px;">
-            <a href="${escapeHtml(detailsUrl)}" style="display:inline-block;padding:14px 26px;border-radius:12px;background:#147bd1;color:#ffffff;text-decoration:none;font:700 14px Arial,sans-serif;">Ver campanha no PromoPilot</a>
-            <p style="margin:16px 0 0;font:400 11px/1.5 Arial,sans-serif;color:#98a2aa;">Acesso reservado à equipa autorizada. Enviado automaticamente pelo PromoPilot.</p>
-          </td>
-        </tr>
-      </table>
-      <p style="margin:16px 0 0;font:400 11px Arial,sans-serif;color:#9aa4ac;">PromoPilot · Campaign Operations · ${escapeHtml(notification.store)}</p>
-    </td></tr>
-  </table>
-</body>
+            </tr>
+            <tr>
+              <td style="padding:20px 32px;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                  <tr>
+                    <td style="width:50%;padding:16px;border-radius:14px 0 0 14px;background:#f7f9f8;border:1px solid #edf0ee;">
+                      <div style="font-size:11px;color:#8a9690;text-transform:uppercase;letter-spacing:.06em;font-weight:700;">Artigos</div>
+                      <div style="margin-top:5px;font-size:22px;font-weight:800;color:#17211c;">${Number(event.total_items || items.length || 0)}</div>
+                    </td>
+                    <td style="width:50%;padding:16px;border-radius:0 14px 14px 0;background:#f7f9f8;border:1px solid #edf0ee;border-left:0;">
+                      <div style="font-size:11px;color:#8a9690;text-transform:uppercase;letter-spacing:.06em;font-weight:700;">Loja</div>
+                      <div style="margin-top:5px;font-size:16px;font-weight:800;color:#17211c;">${escapeHtml(event.store || config.storeName)}</div>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:0 32px 8px;">
+                <h2 style="margin:0 0 8px;font-size:16px;color:#17211c;">Artigos da campanha</h2>
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">${rows}</table>
+                ${remaining ? `<p style="margin:14px 0 0;font-size:12px;color:#8a9690;">+ ${remaining} artigo${remaining === 1 ? "" : "s"} disponível${remaining === 1 ? "" : "eis"} no detalhe da campanha.</p>` : ""}
+              </td>
+            </tr>
+            <tr>
+              <td align="center" style="padding:26px 32px 32px;">
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                  <tr>
+                    <td style="border-radius:12px;background:#147bd1;">
+                      <a href="${escapeHtml(campaignUrl)}" style="display:inline-block;padding:15px 28px;border-radius:12px;color:#ffffff;text-decoration:none;font-size:14px;font-weight:800;">Abrir campanha no PromoPilot</a>
+                    </td>
+                  </tr>
+                </table>
+                <p style="margin:16px 0 0;font-size:11px;line-height:1.5;color:#9aa49f;">A ligação abre informação operacional da campanha. É necessária autenticação no PromoPilot.</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:20px 32px;background:#fafbfa;border-top:1px solid #edf0ee;">
+                <p style="margin:0;font-size:11px;line-height:1.6;color:#8a9690;">Mensagem automática destinada exclusivamente aos colaboradores da Loja da Praia.</p>
+                <p style="margin:4px 0 0;font-size:11px;color:#a0aaa5;">PromoPilot · Gestão operacional de campanhas</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
 </html>`;
 }
 
-function buildEmailText({ notification, recipient, detailsUrl }) {
-  const items = safeArray(notification.dados).slice(0, 20).map(normalizeItem);
-  const lines = items.map((item) => `• ${item.code} — ${item.description} — ${formatPrice(item.current)}`);
-  const remaining = Math.max(0, Number(notification.total_artigos || notification.dados?.length || 0) - items.length);
-
-  return [
-    recipient.firstName ? `Olá, ${recipient.firstName}.` : "Olá.",
-    "",
-    `A campanha \"${notification.titulo || "Campanha"}\" terminou em ${formatDate(notification.ends_at)}.`,
-    `Loja: ${notification.store}`,
-    `Total de artigos: ${notification.total_artigos || safeArray(notification.dados).length}`,
-    "",
-    "ARTIGOS",
-    ...lines,
-    remaining > 0 ? `+ ${remaining} artigos no PromoPilot.` : "",
-    "",
-    "Próximo passo: revê a comunicação promocional, os preços e as etiquetas em loja.",
-    "",
-    `Ver campanha: ${detailsUrl}`,
-    "",
-    "PromoPilot · Campaign Operations",
-  ].filter(Boolean).join("\n");
-}
-
-async function sendViaResend({ notification, delivery, config }) {
-  if (!config.resendApiKey || !config.from) {
-    throw new Error("Email de fim de campanha não configurado. Define RESEND_API_KEY e CAMPAIGN_EMAIL_FROM_ADDRESS (ou CAMPAIGN_END_EMAIL_FROM_ADDRESS).");
+async function sendResendEmail({ event, recipient, config }) {
+  if (!config.resend.apiKey || !config.resend.from) {
+    throw new Error(
+      "Resend não configurado para notificações de fim de campanha. Define RESEND_API_KEY e CAMPAIGN_END_EMAIL_FROM (ou CAMPAIGN_EMAIL_FROM_ADDRESS).",
+    );
   }
 
-  const recipient = {
-    userId: delivery.user_id,
-    email: delivery.email,
-    firstName: delivery.first_name || "",
-  };
-
-  const detailsUrl = `${config.publicUrl}/Campanhas/terminadas/${encodeURIComponent(notification.id)}`;
-  const payload = {
-    from: config.from,
-    to: [recipient.email],
-    subject: `Campanha concluída · ${notification.titulo || "PromoPilot"}`,
-    html: buildEmailHtml({ notification, recipient, detailsUrl, logoUrl: config.logoUrl }),
-    text: buildEmailText({ notification, recipient, detailsUrl }),
-  };
-
-  if (config.replyTo) payload.reply_to = config.replyTo;
-
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
+  const timeout = setTimeout(() => controller.abort(), config.resend.timeoutMs);
+
+  const payload = {
+    from: config.resend.from,
+    to: [recipient.email],
+    subject: `Campanha concluída · ${event.title || "Campanha"}`,
+    text: buildEmailText({ event, recipient, config }),
+    html: buildEmailHtml({ event, recipient, config }),
+  };
+
+  if (config.resend.replyTo) payload.reply_to = config.resend.replyTo;
 
   try {
-    const response = await fetch(`${String(config.resendBaseUrl).replace(/\/+$/, "")}/emails`, {
+    const response = await fetch(`${config.resend.baseUrl}/emails`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${config.resendApiKey}`,
+        Authorization: `Bearer ${config.resend.apiKey}`,
         "Content-Type": "application/json",
-        "Idempotency-Key": `campaign-end-${notification.id}-${delivery.user_id}`.slice(0, 220),
       },
       body: JSON.stringify(payload),
       signal: controller.signal,
     });
 
-    const raw = await response.text();
+    const bodyText = await response.text();
     let body = null;
-    try { body = raw ? JSON.parse(raw) : null; } catch { body = { raw }; }
-
-    if (!response.ok) {
-      throw new Error(`Resend API falhou (${response.status}): ${body?.message || body?.error || raw || response.statusText}`);
+    try {
+      body = bodyText ? JSON.parse(bodyText) : null;
+    } catch {
+      body = { raw: bodyText };
     }
 
-    return { id: body?.id || body?.data?.id || "", body };
+    if (!response.ok) {
+      throw new Error(`Resend ${response.status}: ${body?.message || body?.error || bodyText || response.statusText}`);
+    }
+
+    return { id: body?.id || body?.data?.id || "", response: body };
   } catch (error) {
     if (error?.name === "AbortError") {
-      throw new Error(`Resend timeout após ${config.timeoutMs}ms.`);
+      throw new Error(`Timeout Resend após ${config.resend.timeoutMs}ms.`);
     }
     throw error;
   } finally {
@@ -394,154 +419,207 @@ async function sendViaResend({ notification, delivery, config }) {
   }
 }
 
-async function updateNotification(id, patch) {
-  const client = requireAdminClient();
-  const { error } = await client
-    .from(NOTIFICATIONS_TABLE)
-    .update({ ...patch, updated_at: new Date().toISOString() })
-    .eq("id", id);
+async function listDueForDryRun(limit) {
+  const now = new Date().toISOString();
+  const { data, error } = await supabaseAdminClient
+    .from(TABLE)
+    .select("*")
+    .in("status", ["pending", "processing"])
+    .lte("campaign_end_at", now)
+    .order("campaign_end_at", { ascending: true })
+    .limit(limit);
+
+  if (error) throw error;
+  return Array.isArray(data) ? data : [];
+}
+
+async function claimDue(limit) {
+  const { data, error } = await supabaseAdminClient.rpc("claim_due_campaign_end_notifications", {
+    p_limit: limit,
+  });
+
+  if (error) throw error;
+  return Array.isArray(data) ? data : [];
+}
+
+async function saveDeliveryProgress(eventId, recipientEmails, providerIds) {
+  const { error } = await supabaseAdminClient
+    .from(TABLE)
+    .update({
+      recipient_emails: [...new Set(recipientEmails.map(normalizeEmail).filter(Boolean))],
+      provider_message_ids: [...new Set(providerIds.filter(Boolean))],
+    })
+    .eq("id", eventId);
+
   if (error) throw error;
 }
 
-async function updateDelivery(notificationId, userId, patch) {
-  const client = requireAdminClient();
-  const { error } = await client
-    .from(DELIVERIES_TABLE)
-    .update({ ...patch, updated_at: new Date().toISOString() })
-    .eq("notification_id", notificationId)
-    .eq("user_id", userId);
+async function markSent(event, recipients, providerIds) {
+  const { error } = await supabaseAdminClient
+    .from(TABLE)
+    .update({
+      status: "sent",
+      sent_at: new Date().toISOString(),
+      locked_at: null,
+      next_attempt_at: null,
+      recipient_emails: recipients.map((recipient) => recipient.email),
+      provider_message_ids: providerIds.filter(Boolean),
+      last_error: "",
+    })
+    .eq("id", event.id);
+
   if (error) throw error;
 }
+
+async function markFailure(event, error, config) {
+  const attempts = Number(event.attempts || 0);
+  const terminal = attempts >= config.maxAttempts;
+  const delayMinutes = Math.min(12 * 60, Math.max(5, 5 * 2 ** Math.max(0, attempts - 1)));
+  const nextAttempt = new Date(Date.now() + delayMinutes * 60 * 1000).toISOString();
+
+  const { error: updateError } = await supabaseAdminClient
+    .from(TABLE)
+    .update({
+      status: terminal ? "failed" : "pending",
+      locked_at: null,
+      next_attempt_at: terminal ? null : nextAttempt,
+      last_error: String(error?.message || error || "Erro desconhecido").slice(0, 4000),
+    })
+    .eq("id", event.id);
+
+  if (updateError) {
+    console.error("[campaign-end] Falha ao registar erro do evento:", updateError);
+  }
+}
+
+export async function runCampaignEndNotificationWorkerOnce(options = {}) {
+  assertAdminClient();
+  const config = getConfig();
+  const dryRun = Boolean(options.dryRun);
+  const send = dryRun ? false : Boolean(options.send ?? config.sendEnabled);
+  const limit = Math.max(1, Math.min(Number(options.limit || config.batchSize) || config.batchSize, 100));
+
+  // Um ciclo sem envio funciona como preview e nunca faz claim/alterações.
+  const events = dryRun || !send ? await listDueForDryRun(limit) : await claimDue(limit);
+  const results = [];
+
+  for (const event of events) {
+    try {
+      const recipients = await resolvePraiaEmployeeRecipients(event, { config });
+
+      if (!recipients.length) {
+        const error = new Error(`Sem destinatários ativos para ${config.storeName}.`);
+        if (!dryRun) await markFailure(event, error, config);
+        results.push({
+          id: event.id,
+          title: event.title,
+          status: dryRun ? "dry-run-no-recipients" : "retry",
+          recipients: [],
+          error: error.message,
+        });
+        continue;
+      }
+
+      if (dryRun || !send) {
+        results.push({
+          id: event.id,
+          title: event.title,
+          campaignEndAt: event.campaign_end_at,
+          totalItems: event.total_items,
+          status: dryRun ? "dry-run" : "send-disabled",
+          recipients: recipients.map((recipient) => recipient.email),
+          campaignUrl: buildCampaignUrl(event, config),
+        });
+        continue;
+      }
+
+      // Guardamos progresso por destinatário. Se a Resend falhar a meio, o retry
+      // não volta a enviar a quem já recebeu a mensagem.
+      const deliveredEmails = new Set(
+        (Array.isArray(event.recipient_emails) ? event.recipient_emails : [])
+          .map(normalizeEmail)
+          .filter(Boolean),
+      );
+      const providerIds = [
+        ...(Array.isArray(event.provider_message_ids) ? event.provider_message_ids : []),
+      ];
+      const pendingRecipients = recipients.filter(
+        (recipient) => !deliveredEmails.has(normalizeEmail(recipient.email)),
+      );
+
+      for (const recipient of pendingRecipients) {
+        const result = await sendResendEmail({ event, recipient, config });
+        deliveredEmails.add(normalizeEmail(recipient.email));
+        if (result?.id) providerIds.push(result.id);
+
+        await saveDeliveryProgress(event.id, [...deliveredEmails], providerIds);
+      }
+
+      const deliveredRecipients = recipients.filter((recipient) =>
+        deliveredEmails.has(normalizeEmail(recipient.email)),
+      );
+
+      await markSent(event, deliveredRecipients, providerIds);
+
+      results.push({
+        id: event.id,
+        title: event.title,
+        status: "sent",
+        recipients: deliveredRecipients.map((recipient) => recipient.email),
+        providerMessageIds: [...new Set(providerIds.filter(Boolean))],
+      });
+    } catch (error) {
+      if (!dryRun) await markFailure(event, error, config);
+      results.push({
+        id: event.id,
+        title: event.title,
+        status: "error",
+        error: error?.message || String(error),
+      });
+    }
+  }
+
+  return {
+    ok: results.every((item) => !["error"].includes(item.status)),
+    dryRun,
+    send,
+    store: config.storeName,
+    scanned: events.length,
+    sent: results.filter((item) => item.status === "sent").length,
+    results,
+  };
+}
+
+export const runCampaignEndNotificationWorker = runCampaignEndNotificationWorkerOnce;
+export const processCampaignEndNotifications = runCampaignEndNotificationWorkerOnce;
 
 export async function getCampaignEndNotificationById(id) {
-  const client = requireAdminClient();
-  const { data, error } = await client
-    .from(NOTIFICATIONS_TABLE)
-    .select("*")
-    .eq("id", id)
+  assertAdminClient();
+  const safeId = String(id || "").trim();
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(safeId)) {
+    return null;
+  }
+
+  const { data, error } = await supabaseAdminClient
+    .from(TABLE)
+    .select("id,source_type,source_campaign_id,organization_id,store,title,items,total_items,campaign_end_at,status,sent_at,created_at")
+    .eq("id", safeId)
     .maybeSingle();
+
   if (error) throw error;
   return data || null;
 }
 
-export async function runCampaignEndNotificationWorker({ dryRun = false, limit } = {}) {
-  const config = getCampaignEndNotificationConfig();
-  const batchSize = Math.max(1, Math.min(Number(limit || config.batchSize), 100));
-  const notifications = dryRun
-    ? await readDueNotificationsDryRun({ store: config.store, limit: batchSize })
-    : await claimDueNotifications({ store: config.store, limit: batchSize });
-
-  const recipients = await listPraiaEmployeeRecipients(config.store);
-  const summary = {
-    dryRun,
-    store: config.store,
-    due: notifications.length,
-    recipients: recipients.length,
-    sentCampaigns: 0,
-    sentEmails: 0,
-    failedCampaigns: 0,
-    waitingRecipients: 0,
-    campaigns: [],
+export function getCampaignEndNotificationConfig() {
+  const config = getConfig();
+  return {
+    enabled: config.enabled,
+    sendEnabled: config.sendEnabled,
+    intervalMs: config.intervalMs,
+    batchSize: config.batchSize,
+    storeName: config.storeName,
+    publicUrl: config.publicUrl,
+    resendConfigured: Boolean(config.resend.apiKey && config.resend.from),
+    recipientOverrideEnabled: config.recipientOverride.length > 0,
   };
-
-  for (const notification of notifications) {
-    const itemSummary = {
-      id: notification.id,
-      title: notification.titulo,
-      endsAt: notification.ends_at,
-      articles: Number(notification.total_artigos || safeArray(notification.dados).length || 0),
-      recipients: recipients.map((recipient) => recipient.email),
-      sent: 0,
-      failed: 0,
-    };
-
-    if (dryRun) {
-      summary.campaigns.push(itemSummary);
-      continue;
-    }
-
-    if (!recipients.length) {
-      await updateNotification(notification.id, {
-        status: "waiting_recipients",
-        recipient_count: 0,
-        last_error: `Não foram encontrados funcionários com profile.store = \"${config.store}\" e email Supabase válido.`,
-      });
-      summary.waitingRecipients += 1;
-      summary.campaigns.push(itemSummary);
-      continue;
-    }
-
-    try {
-      const deliveries = await ensureDeliveries(notification, recipients);
-
-      for (const delivery of deliveries) {
-        if (delivery.status === "sent" && delivery.sent_at) continue;
-
-        try {
-          await updateDelivery(notification.id, delivery.user_id, {
-            status: "sending",
-            attempt_count: Number(delivery.attempt_count || 0) + 1,
-            last_error: null,
-          });
-
-          const result = await sendViaResend({ notification, delivery, config });
-
-          await updateDelivery(notification.id, delivery.user_id, {
-            status: "sent",
-            resend_id: result.id || null,
-            sent_at: new Date().toISOString(),
-            last_error: null,
-          });
-
-          itemSummary.sent += 1;
-          summary.sentEmails += 1;
-        } catch (error) {
-          itemSummary.failed += 1;
-          await updateDelivery(notification.id, delivery.user_id, {
-            status: "failed",
-            last_error: String(error?.message || error).slice(0, 1500),
-          });
-        }
-      }
-
-      const client = requireAdminClient();
-      const { data: finalDeliveries, error: deliveryError } = await client
-        .from(DELIVERIES_TABLE)
-        .select("status,sent_at")
-        .eq("notification_id", notification.id);
-      if (deliveryError) throw deliveryError;
-
-      const all = safeArray(finalDeliveries);
-      const sentCount = all.filter((delivery) => delivery.status === "sent" && delivery.sent_at).length;
-      const failedCount = all.length - sentCount;
-
-      if (all.length > 0 && failedCount === 0) {
-        await updateNotification(notification.id, {
-          status: "sent",
-          notification_sent_at: new Date().toISOString(),
-          recipient_count: sentCount,
-          last_error: null,
-        });
-        summary.sentCampaigns += 1;
-      } else {
-        await updateNotification(notification.id, {
-          status: "failed",
-          recipient_count: sentCount,
-          last_error: `${failedCount} envio(s) por concluir. O worker volta a tentar sem duplicar os já enviados.`,
-        });
-        summary.failedCampaigns += 1;
-      }
-    } catch (error) {
-      summary.failedCampaigns += 1;
-      await updateNotification(notification.id, {
-        status: "failed",
-        last_error: String(error?.message || error).slice(0, 1500),
-      });
-      itemSummary.error = String(error?.message || error);
-    }
-
-    summary.campaigns.push(itemSummary);
-  }
-
-  return summary;
 }
