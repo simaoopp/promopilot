@@ -1,173 +1,109 @@
 import React, { useMemo, useState } from "react";
-import "../../styles/campaignEnd.css";
 
-function formatDate(value) {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-  return new Intl.DateTimeFormat("pt-PT", {
-    timeZone: "Atlantic/Azores",
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
-}
-
-function codeOf(item = {}) {
-  return String(item.codigo || item.artigo || item.article_code || "").trim();
-}
-
-function descriptionOf(item = {}) {
-  return String(item.descricao || item.description || item.titulo_oficial || "").trim();
-}
-
-function money(value) {
-  if (value === null || value === undefined || value === "") return "—";
-  let parsed;
-  if (typeof value === "number") {
-    parsed = value;
-  } else {
-    const text = String(value).trim().replace(/\s/g, "").replace(/€/g, "");
-    parsed = Number.parseFloat(text.includes(",") ? text.replace(/\./g, "").replace(",", ".") : text);
+function formatDate(value = "") {
+  const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (match) return `${match[3]}/${match[2]}/${match[1]}`;
+  if (!value) return "-";
+  try {
+    return new Intl.DateTimeFormat("pt-PT", { dateStyle: "medium" }).format(new Date(value));
+  } catch {
+    return String(value);
   }
-  if (!Number.isFinite(parsed)) return String(value);
-  return new Intl.NumberFormat("pt-PT", { style: "currency", currency: "EUR" }).format(parsed);
 }
 
-function oldPrice(item = {}) {
-  return item.antes ?? item.pvp3 ?? item.old_price ?? "";
+function price(value) {
+  if (value === null || value === undefined || value === "") return "-";
+  const number = Number.parseFloat(String(value).replace(/\s/g, "").replace(",", "."));
+  if (!Number.isFinite(number)) return String(value);
+  return new Intl.NumberFormat("pt-PT", { style: "currency", currency: "EUR" }).format(number);
 }
 
-function newPrice(item = {}) {
-  return item.atual ?? item.pvp2 ?? item.new_price ?? "";
+function code(item = {}) {
+  return String(item.codigo || item.artigo || item.code || "-").trim() || "-";
 }
 
-function validity(item = {}, year) {
-  const start = String(item.dataInicio || item.data_inicio || "").trim();
-  const end = String(item.dataFim || item.data_fim || "").trim();
-  const suffix = (value) => value && value.split("/").length < 3 && year ? `${value}/${year}` : value;
-  if (start && end) return `${suffix(start)} → ${suffix(end)}`;
-  if (end) return `Até ${suffix(end)}`;
-  if (start) return `Desde ${suffix(start)}`;
-  return "—";
-}
-
-export default function EndedCampaignDetailsModal({ campaign, onClose, onDuplicate }) {
+export default function EndedCampaignDetailsModal({ notification, onClose }) {
   const [copied, setCopied] = useState(false);
-  const items = Array.isArray(campaign?.dados) ? campaign.dados : [];
-
-  const codes = useMemo(
-    () => [...new Set(items.map(codeOf).filter(Boolean))],
-    [items],
+  const campaign = notification?.campaign;
+  const items = useMemo(
+    () => (Array.isArray(campaign?.dados) ? campaign.dados.filter(Boolean) : []),
+    [campaign?.dados],
   );
 
-  if (!campaign) return null;
+  if (!notification || !campaign) return null;
+
+  const codes = [...new Set(items.map(code).filter((value) => value && value !== "-"))];
 
   async function copyCodes() {
     if (!codes.length) return;
     try {
-      await navigator.clipboard.writeText(codes.join(" | "));
+      await navigator.clipboard.writeText(codes.join("|"));
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1800);
-    } catch {
-      setCopied(false);
+    } catch (error) {
+      console.error("Não foi possível copiar os códigos da campanha.", error);
     }
   }
 
   return (
-    <div className="popup-overlay campaign-end-overlay" role="dialog" aria-modal="true">
-      <div className="campaign-end-modal">
-        <header className="campaign-end-modal-header">
+    <div className="popup-overlay" role="dialog" aria-modal="true">
+      <div className="popup-card popup-card-historico-pro campaign-ended-modal">
+        <div className="popup-header popup-header-pro">
           <div>
-            <div className="campaign-end-kicker">Campaign lifecycle</div>
-            <div className="campaign-end-title-row">
-              <h2>{campaign.titulo || "Campanha"}</h2>
-              <span className="campaign-end-status">Concluída</span>
-            </div>
-            <p>Snapshot final da campanha enviado à equipa da Loja da Praia.</p>
+            <div className="popup-eyebrow">Campaign Lifecycle</div>
+            <div className="campaign-ended-status">Campanha concluída</div>
+            <h2>{campaign.titulo || notification.title || "Campanha"}</h2>
+            <p className="popup-subtitle">
+              Registo imutável da campanha no momento em que terminou.
+            </p>
           </div>
-          <button type="button" className="popup-close" onClick={onClose} aria-label="Fechar">×</button>
-        </header>
-
-        <div className="campaign-end-modal-scroll">
-          <section className="campaign-end-metrics">
-            <article>
-              <span>Terminou</span>
-              <strong>{formatDate(campaign.terminouEm)}</strong>
-            </article>
-            <article>
-              <span>Origem</span>
-              <strong>{campaign.sourceType === "automatic" ? "Automática por email" : "Campanha normal"}</strong>
-            </article>
-            <article>
-              <span>Artigos</span>
-              <strong>{campaign.totalArtigos || items.length}</strong>
-            </article>
-            <article>
-              <span>Loja</span>
-              <strong>{campaign.store || "Loja da Praia"}</strong>
-            </article>
-          </section>
-
-          <section className="campaign-end-action-card">
-            <div>
-              <span>Fecho operacional</span>
-              <strong>Confirmar comunicação e preço ativo em loja</strong>
-            </div>
-            <p>Este arquivo mantém os artigos da campanha mesmo depois de o histórico normal expirar.</p>
-          </section>
-
-          <section className="campaign-end-items-section">
-            <div className="campaign-end-section-heading">
-              <div>
-                <h3>Artigos da campanha</h3>
-                <p>Códigos, descrição, preço promocional e validade registados no momento da criação.</p>
-              </div>
-              <button type="button" className="btn btn-secondary" onClick={copyCodes} disabled={!codes.length}>
-                {copied ? "Códigos copiados" : "Copiar códigos"}
-              </button>
-            </div>
-
-            <div className="campaign-end-table-wrap">
-              <table className="campaign-end-table">
-                <thead>
-                  <tr>
-                    <th>Código</th>
-                    <th>Artigo</th>
-                    <th>Antes</th>
-                    <th>Promo</th>
-                    <th>Validade</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.length ? items.map((item, index) => (
-                    <tr key={item.id || `${codeOf(item)}-${index}`}>
-                      <td><strong>{codeOf(item) || "—"}</strong></td>
-                      <td>{descriptionOf(item) || "—"}</td>
-                      <td>{money(oldPrice(item))}</td>
-                      <td><strong>{money(newPrice(item))}</strong></td>
-                      <td>{validity(item, campaign.anoValidade)}</td>
-                    </tr>
-                  )) : (
-                    <tr>
-                      <td colSpan="5" className="campaign-end-empty">Sem artigos disponíveis neste snapshot.</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </section>
+          <button type="button" className="popup-close" onClick={onClose}>×</button>
         </div>
 
-        <footer className="campaign-end-modal-footer">
-          <span>{campaign.notificadoEm ? `Notificação enviada em ${formatDate(campaign.notificadoEm)}` : "Arquivo de fim de campanha"}</span>
-          <div>
-            <button type="button" className="btn btn-secondary" onClick={onClose}>Fechar</button>
-            <button type="button" className="btn btn-primary" onClick={() => onDuplicate?.(campaign)}>Criar nova a partir desta</button>
+        <div className="ai-popup-scroll">
+          <div className="popup-status-row">
+            <span className="popup-chip">Terminou: {formatDate(notification.endedOn)}</span>
+            <span className="popup-chip">Artigos: {notification.totalArticles || items.length}</span>
+            <span className="popup-chip">Loja: {notification.store || campaign.store || "-"}</span>
+            <span className="popup-chip">
+              Origem: {notification.source === "automatic" ? "Automática" : "Manual"}
+            </span>
           </div>
-        </footer>
+
+          <div className="campaign-ended-callout">
+            <div>
+              <strong>Revisão de fim de campanha</strong>
+              <p>Confirma os materiais promocionais ainda em exposição e consulta abaixo os artigos abrangidos.</p>
+            </div>
+            <button type="button" className="btn btn-secondary" onClick={copyCodes} disabled={!codes.length}>
+              {copied ? "Códigos copiados" : `Copiar ${codes.length} códigos`}
+            </button>
+          </div>
+
+          <div className="historico-popup-list">
+            {items.length ? items.map((item, index) => (
+              <div key={item.id || `${campaign.id}-${code(item)}-${index}`} className="historico-popup-item">
+                <div className="historico-popup-main">
+                  <strong>{code(item)}</strong>
+                  <span>{item.descricao || item.description || "-"}</span>
+                  {(item.dataInicio || item.dataFim) ? (
+                    <small>{item.dataInicio || "-"} → {item.dataFim || "-"}</small>
+                  ) : null}
+                </div>
+                <div className="historico-popup-prices">
+                  <span>Antes: {price(item.antes ?? item.pvpAnterior ?? item.pvp1)}</span>
+                  <span>Final: {price(item.atual ?? item.pvpAtual ?? item.pvp2)}</span>
+                </div>
+              </div>
+            )) : (
+              <div className="home-history-empty">Não existem artigos guardados neste registo.</div>
+            )}
+          </div>
+        </div>
+
+        <div className="popup-actions popup-actions-pro">
+          <button type="button" className="btn btn-secondary" onClick={onClose}>Fechar</button>
+        </div>
       </div>
     </div>
   );

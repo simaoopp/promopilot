@@ -438,3 +438,68 @@
 .automatic-campaign-pvp-update .btn {
   justify-self: start;
 }
+
+
+/* CAMPAIGN LIFECYCLE · END NOTIFICATION */
+.campaign-ended-modal {
+  max-width: 920px;
+}
+
+.campaign-ended-status {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  margin: 4px 0 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #fff2e8;
+  color: #c85305;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.campaign-ended-callout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin: 18px 0;
+  padding: 16px 18px;
+  border: 1px solid #dce9e2;
+  border-left: 4px solid #21a366;
+  border-radius: 16px;
+  background: #f7faf8;
+}
+
+.campaign-ended-callout strong {
+  display: block;
+  color: #21372c;
+  margin-bottom: 4px;
+}
+
+.campaign-ended-callout p {
+  margin: 0;
+  color: #66736d;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.campaign-ended-modal .historico-popup-main small {
+  display: block;
+  margin-top: 4px;
+  color: #8a9690;
+  font-size: 11px;
+}
+
+@media (max-width: 700px) {
+  .campaign-ended-callout {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .campaign-ended-callout .btn {
+    width: 100%;
+  }
+}

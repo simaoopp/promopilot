@@ -1,24 +1,24 @@
 import "dotenv/config";
 import { runCampaignEndNotificationWorker } from "../services/campaign-lifecycle/campaignEndNotificationService.js";
 
-function readArgs(argv = process.argv.slice(2)) {
-  const dryRun = argv.includes("--dry-run");
-  const rawLimit = argv.find((arg) => arg.startsWith("--limit="));
-  const limit = rawLimit
-    ? Number.parseInt(rawLimit.split("=")[1] || "", 10)
-    : Number.parseInt(process.env.CAMPAIGN_END_WORKER_LIMIT || process.env.CAMPAIGN_END_NOTIFICATION_BATCH_SIZE || "50", 10);
-  return { dryRun, limit: Number.isFinite(limit) ? limit : 50 };
+function hasArg(name) {
+  return process.argv.slice(2).includes(name);
 }
 
-async function main() {
-  const options = readArgs();
-  console.log(`[campaign-end] start dryRun=${options.dryRun} limit=${options.limit}`);
-  const result = await runCampaignEndNotificationWorker(options);
+const send = hasArg("--send");
+const explicitDryRun = hasArg("--dry-run") || hasArg("--no-send");
+const dryRun = explicitDryRun || !send;
+
+try {
+  const result = await runCampaignEndNotificationWorker({
+    dryRun,
+    sendEmails: send && !dryRun,
+  });
+
+  console.log("[campaign-end] resultado");
   console.log(JSON.stringify(result, null, 2));
-  if (result.failed > 0) process.exitCode = 1;
-}
-
-main().catch((error) => {
-  console.error("[campaign-end] fatal", error);
+  process.exitCode = 0;
+} catch (error) {
+  console.error("[campaign-end] erro:", error?.stack || error?.message || error);
   process.exitCode = 1;
-});
+}

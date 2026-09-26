@@ -19,6 +19,37 @@ function safeObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
+
+const CAMPAIGN_RETENTION_DAYS = 45;
+
+function parseCampaignEndDate(value, fallbackYear) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  let match = raw.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+  let year;
+  let month;
+  let day;
+  if (match) {
+    year = Number(match[1]); month = Number(match[2]); day = Number(match[3]);
+  } else {
+    match = raw.match(/^(\d{1,2})[-/.](\d{1,2})(?:[-/.](\d{4}))?$/);
+    if (!match) return null;
+    day = Number(match[1]); month = Number(match[2]); year = Number(match[3] || fallbackYear);
+  }
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+  return date;
+}
+
+function campaignRetentionExpiry(items = [], year, fromDate = new Date()) {
+  const minimum = new Date(fromDate.getTime() + CAMPAIGN_RETENTION_DAYS * 86400000);
+  const ends = safeArray(items).map((item) => parseCampaignEndDate(item?.dataFim, year)).filter(Boolean).sort((a,b) => a-b);
+  const latest = ends.at(-1);
+  if (!latest) return minimum.toISOString();
+  const after = new Date(latest.getTime() + CAMPAIGN_RETENTION_DAYS * 86400000);
+  return new Date(Math.max(minimum.getTime(), after.getTime())).toISOString();
+}
+
 function mapRowToAutomaticCampaign(row = {}) {
   return {
     id: row.id,
@@ -47,9 +78,6 @@ function mapRowToAutomaticCampaign(row = {}) {
     pdfs: safeObject(row.pdfs),
     errorMessage: row.error_message || "",
     rawEmailText: "",
-    campaignEndDate: row.campaign_end_date || "",
-    campaignEndNotificationStatus: row.campaign_end_notification_status || "pending",
-    campaignEndNotifiedAt: row.campaign_end_notified_at || "",
   };
 }
 
@@ -70,7 +98,7 @@ export function normalizeAutomaticCampaignSnapshot(snapshot = {}) {
       String(snapshot.createdBy || "Sistema automático").trim() || "Sistema automático",
     createdByEmail: String(snapshot.createdByEmail || "").trim(),
     criadoEm: snapshot.criadoEm || agora.toISOString(),
-    expiraEm: snapshot.expiraEm || plusDaysIso(agora, 2),
+    expiraEm: snapshot.expiraEm || campaignRetentionExpiry(dados, snapshot.anoValidade || agora.getFullYear(), agora),
     totalArtigos:
       typeof snapshot.totalArtigos === "number" ? snapshot.totalArtigos : dados.length,
     store: String(snapshot.store || "").trim(),
@@ -156,7 +184,7 @@ export function createAutomaticCampaignSnapshot({
     createdBy,
     createdByEmail,
     criadoEm: agora.toISOString(),
-    expiraEm: plusDaysIso(agora, 2),
+    expiraEm: campaignRetentionExpiry(safeArray(dados), anoValidade || agora.getFullYear(), agora),
     totalArtigos: safeArray(dados).length,
     store,
     userId,
@@ -203,7 +231,7 @@ export async function loadAutomaticCampaignHistory(store) {
   const { data, error } = await supabase
     .from(AUTOMATIC_CAMPAIGNS_TABLE)
     .select(
-      "id, titulo, dados, ano_validade, formato_etiqueta, origem, created_by, created_by_email, created_at, expires_at, total_artigos, store, user_id, email_message_id, email_subject, email_from, email_received_at, processed_at, status, pdf_url, pdfs, error_message, campaign_end_date, campaign_end_notification_status, campaign_end_notified_at",
+      "id, titulo, dados, ano_validade, formato_etiqueta, origem, created_by, created_by_email, created_at, expires_at, total_artigos, store, user_id, email_message_id, email_subject, email_from, email_received_at, processed_at, status, pdf_url, pdfs, error_message",
     )
     .eq("store", storeValue)
     .gt("expires_at", nowIso())
@@ -228,7 +256,7 @@ export async function addAutomaticCampaignToHistory(snapshot) {
     .from(AUTOMATIC_CAMPAIGNS_TABLE)
     .upsert(row, { onConflict: "id" })
     .select(
-      "id, titulo, dados, ano_validade, formato_etiqueta, origem, created_by, created_by_email, created_at, expires_at, total_artigos, store, user_id, email_message_id, email_subject, email_from, email_received_at, processed_at, status, pdf_url, pdfs, error_message, campaign_end_date, campaign_end_notification_status, campaign_end_notified_at",
+      "id, titulo, dados, ano_validade, formato_etiqueta, origem, created_by, created_by_email, created_at, expires_at, total_artigos, store, user_id, email_message_id, email_subject, email_from, email_received_at, processed_at, status, pdf_url, pdfs, error_message",
     )
     .single();
 

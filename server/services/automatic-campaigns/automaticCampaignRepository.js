@@ -1,12 +1,8 @@
 import { hasSupabaseAdminConfig, supabaseAdminClient } from "../../lib/supabaseClients.js";
-import {
-  campaignRetentionExpiry,
-  deriveCampaignEndAt,
-} from "../../../src/shared/campaign-label/campaignLifecycle.js";
 
 const TABLE = "automatic_campaigns";
 
-const SAFE_CAMPAIGN_SELECT = "id,organization_id,titulo,dados,ano_validade,formato_etiqueta,origem,created_by,created_by_email,created_at,expires_at,campaign_end_at,total_artigos,store,user_id,email_message_id,email_subject,email_from,email_received_at,processed_at,status,pdf_url,pdfs,error_message,end_notification_status,end_notification_sent_at,end_notification_message_id,end_notification_error,end_notification_attempts,end_notification_last_attempt_at,end_notification_recipients";
+const SAFE_CAMPAIGN_SELECT = "id,organization_id,titulo,dados,ano_validade,formato_etiqueta,origem,created_by,created_by_email,created_at,expires_at,total_artigos,store,user_id,email_message_id,email_subject,email_from,email_received_at,processed_at,status,pdf_url,pdfs,error_message";
 
 function readBoolean(name, fallback = false) {
   const value = process.env[name];
@@ -14,6 +10,59 @@ function readBoolean(name, fallback = false) {
   return ["1", "true", "sim", "yes", "y", "on"].includes(String(value).toLowerCase().trim());
 }
 
+function plusDaysIso(days = 2) {
+  return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+}
+
+function parseCampaignEndDate(value, fallbackYear) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+
+  let match = raw.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+  let year;
+  let month;
+  let day;
+
+  if (match) {
+    year = Number(match[1]);
+    month = Number(match[2]);
+    day = Number(match[3]);
+  } else {
+    match = raw.match(/^(\d{1,2})[-/.](\d{1,2})(?:[-/.](\d{4}))?$/);
+    if (!match) return null;
+    day = Number(match[1]);
+    month = Number(match[2]);
+    year = Number(match[3] || fallbackYear);
+  }
+
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return date;
+}
+
+function campaignRetentionExpiry(items = [], year, keepDays = 5) {
+  const retentionDays = Math.max(
+    30,
+    Number.parseInt(process.env.CAMPAIGN_END_RETENTION_DAYS || "45", 10) || 45,
+  );
+  const minimumExpiry = new Date(Date.now() + Math.max(keepDays, retentionDays) * 24 * 60 * 60 * 1000);
+  const endDates = (Array.isArray(items) ? items : [])
+    .map((item) => parseCampaignEndDate(item?.dataFim, year))
+    .filter(Boolean)
+    .sort((a, b) => a.getTime() - b.getTime());
+  const latestEnd = endDates.at(-1);
+
+  if (!latestEnd) return minimumExpiry.toISOString();
+
+  const afterCampaign = new Date(latestEnd.getTime() + retentionDays * 24 * 60 * 60 * 1000);
+  return new Date(Math.max(minimumExpiry.getTime(), afterCampaign.getTime())).toISOString();
+}
 
 function assertSupabaseAdmin() {
   if (!hasSupabaseAdminConfig()) {
@@ -40,42 +89,19 @@ export function buildAutomaticCampaignRow({
   const safeItems = Array.isArray(items) ? items : [];
   const emailMessageId = String(email?.messageId || email?.uid || email?.id || "").trim();
   const rowId = id || `auto-${emailMessageId || Date.now()}-${storeKey}`;
-  const anoValidade = new Date().getFullYear();
-  const campaignEndAt =
-    deriveCampaignEndAt({
-      items: safeItems,
-      anoValidade,
-      createdAt: now,
-    }) || null;
-  const isPraiaStore = String(store?.store || store?.label || storeKey || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .includes("praia");
-  const expiresAt = campaignRetentionExpiry({
-    campaignEndAt: isPraiaStore ? campaignEndAt : null,
-    createdAt: now,
-    retentionDays: 30,
-    fallbackDays: keepDays,
-  });
 
   return {
     id: rowId,
     organization_id: organizationId || null,
     titulo: title || "PROMOÇÃO",
     dados: safeItems,
-    ano_validade: anoValidade,
+    ano_validade: new Date().getFullYear(),
     formato_etiqueta: format || "automatico",
     origem: "automatico-email",
     created_by: "Sistema automático",
     created_by_email: "",
     created_at: now,
-    expires_at: expiresAt,
-    campaign_end_at: campaignEndAt,
-    end_notification_status:
-      isPraiaStore && campaignEndAt && new Date(campaignEndAt).getTime() > Date.now()
-        ? "pending"
-        : "skipped",
+    expires_at: campaignRetentionExpiry(safeItems, new Date().getFullYear(), keepDays),
     total_artigos: safeItems.length,
     store: store?.store || store?.label || storeKey || "",
     user_id: null,
@@ -250,13 +276,14 @@ export async function findAutomaticCampaignByPdfPath({ path, store = "", organiz
   }) || null;
 }
 
-
-export async function listExpiredAutomaticCampaignRows({ maxAgeDays = 5, limit = 100 } = {}) {
+export async function listExpiredAutomaticCampaignRows({ maxAgeDays: _maxAgeDays = 5, limit = 100 } = {}) {
   assertSupabaseAdmin();
 
   const nowIso = new Date().toISOString();
   const safeLimit = Math.min(500, Math.max(1, Number(limit) || 100));
 
+  // expires_at é a fonte de verdade. Isto evita apagar uma campanha antes da
+  // data real de fim apenas por já ter alguns dias de criação.
   const { data, error } = await supabaseAdminClient
     .from(TABLE)
     .select("id,created_at,expires_at,pdf_url,pdfs,status,email_subject,store")

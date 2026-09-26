@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Navigate, useLocation } from "react-router-dom";
+import { Navigate } from "react-router-dom";
 import ForcePasswordChangeModal from "../components/ForcePasswordChangeModal";
 import PasswordRecoveryModal from "../components/PasswordRecoveryModal";
 import PromoPilotMark from "../components/brand/PromoPilotMark";
@@ -7,8 +7,15 @@ import { useAuth } from "../context/AuthContext";
 import { PROMOPILOT_BRAND, PROMOPILOT_MODULES } from "../brand/promopilot";
 import "../styles/styles.css";
 
+function getSafeNextPath() {
+  const value = new URLSearchParams(window.location.search).get("next");
+  if (!value || !value.startsWith("/") || value.startsWith("//")) {
+    return "/Homepage";
+  }
+  return value;
+}
+
 export default function Login() {
-  const location = useLocation();
   const {
     user,
     loadingAuth,
@@ -26,11 +33,6 @@ export default function Login() {
   const [mostrarSenha, setMostrarSenha] = useState(false);
 
   const mostrarModalOnboarding = !!user && !loadingProfile && onboardingRequired;
-  const requestedReturnTo = String(location.state?.returnTo || "").trim();
-  const returnTo =
-    requestedReturnTo.startsWith("/") && !requestedReturnTo.startsWith("//")
-      ? requestedReturnTo
-      : "/Homepage";
 
   if (loadingAuth || (user && loadingProfile)) {
     return (
@@ -44,7 +46,7 @@ export default function Login() {
   }
 
   if (user && !onboardingRequired && !passwordRecovery) {
-    return <Navigate to={returnTo} replace />;
+    return <Navigate to={getSafeNextPath()} replace />;
   }
 
   async function handleSubmit(e) {

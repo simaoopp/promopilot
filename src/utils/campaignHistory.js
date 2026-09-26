@@ -3,6 +3,55 @@ import { supabase } from "../lib/supabase";
 const CAMPAIGNS_TABLE = "campaigns";
 const MAX_ITEMS = 50;
 
+const CAMPAIGN_RETENTION_DAYS = 45;
+
+function parseCampaignEndDate(value, fallbackYear) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+
+  let match = raw.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+  let year;
+  let month;
+  let day;
+
+  if (match) {
+    year = Number(match[1]);
+    month = Number(match[2]);
+    day = Number(match[3]);
+  } else {
+    match = raw.match(/^(\d{1,2})[-/.](\d{1,2})(?:[-/.](\d{4}))?$/);
+    if (!match) return null;
+    day = Number(match[1]);
+    month = Number(match[2]);
+    year = Number(match[3] || fallbackYear);
+  }
+
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) return null;
+  return date;
+}
+
+function campaignRetentionExpiry(items = [], year, fromDate = new Date()) {
+  const minimumExpiry = new Date(
+    fromDate.getTime() + CAMPAIGN_RETENTION_DAYS * 24 * 60 * 60 * 1000,
+  );
+  const endDates = (Array.isArray(items) ? items : [])
+    .map((item) => parseCampaignEndDate(item?.dataFim, year))
+    .filter(Boolean)
+    .sort((a, b) => a.getTime() - b.getTime());
+  const latestEnd = endDates.at(-1);
+  if (!latestEnd) return minimumExpiry.toISOString();
+
+  const afterCampaign = new Date(
+    latestEnd.getTime() + CAMPAIGN_RETENTION_DAYS * 24 * 60 * 60 * 1000,
+  );
+  return new Date(Math.max(minimumExpiry.getTime(), afterCampaign.getTime())).toISOString();
+}
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -27,9 +76,6 @@ function mapRowToCampaign(row = {}) {
           : 0,
     store: row.store || "",
     userId: row.user_id || "",
-    campaignEndDate: row.campaign_end_date || "",
-    campaignEndNotificationStatus: row.campaign_end_notification_status || "pending",
-    campaignEndNotifiedAt: row.campaign_end_notified_at || "",
   };
 }
 
@@ -46,7 +92,10 @@ export function normalizeCampaignSnapshot(snapshot = {}) {
     criadoEm: snapshot.criadoEm || nowIso(),
     expiraEm:
       snapshot.expiraEm ||
-      new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+      campaignRetentionExpiry(
+        Array.isArray(snapshot.dados) ? snapshot.dados.filter(Boolean) : [],
+        snapshot.anoValidade || new Date().getFullYear(),
+      ),
     totalArtigos: Array.isArray(snapshot.dados) ? snapshot.dados.filter(Boolean).length : 0,
     store: String(snapshot.store || "").trim(),
     userId: String(snapshot.userId || "").trim(),
@@ -102,9 +151,11 @@ export function createCampaignSnapshot({
     createdBy: String(createdBy || "Utilizador").trim() || "Utilizador",
     createdByEmail: String(createdByEmail || "").trim(),
     criadoEm: agora.toISOString(),
-    expiraEm: new Date(
-      agora.getTime() + 2 * 24 * 60 * 60 * 1000,
-    ).toISOString(),
+    expiraEm: campaignRetentionExpiry(
+      Array.isArray(dados) ? dados.filter(Boolean) : [],
+      anoValidade || agora.getFullYear(),
+      agora,
+    ),
     totalArtigos: Array.isArray(dados) ? dados.filter(Boolean).length : 0,
     store: String(store || "").trim(),
     userId: String(userId || "").trim(),
@@ -141,7 +192,7 @@ export async function loadCampaignHistory(store) {
   const { data, error } = await supabase
     .from(CAMPAIGNS_TABLE)
     .select(
-      "id, titulo, dados, ano_validade, formato_etiqueta, origem, created_by, created_by_email, created_at, expires_at, total_artigos, store, user_id, campaign_end_date, campaign_end_notification_status, campaign_end_notified_at",
+      "id, titulo, dados, ano_validade, formato_etiqueta, origem, created_by, created_by_email, created_at, expires_at, total_artigos, store, user_id",
     )
     .eq("store", storeValue)
     .gt("expires_at", nowIso())
@@ -166,7 +217,7 @@ export async function addCampaignToHistory(snapshot) {
     .from(CAMPAIGNS_TABLE)
     .upsert(row, { onConflict: "id" })
     .select(
-      "id, titulo, dados, ano_validade, formato_etiqueta, origem, created_by, created_by_email, created_at, expires_at, total_artigos, store, user_id, campaign_end_date, campaign_end_notification_status, campaign_end_notified_at",
+      "id, titulo, dados, ano_validade, formato_etiqueta, origem, created_by, created_by_email, created_at, expires_at, total_artigos, store, user_id",
     )
     .single();
 

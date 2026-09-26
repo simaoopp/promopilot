@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../components/ToastProvider";
 import HomeHero from "../components/home/HomeHero";
@@ -11,8 +11,10 @@ import ArticleDetailsModal from "../components/home/ArticleDetailsModal";
 import CampaignDetailsModal from "../components/home/CampaignDetailsModal";
 import AutomaticCampaignDetailsModal from "../components/home/AutomaticCampaignDetailsModal";
 import ConfirmDeleteModal from "../components/home/ConfirmDeleteModal";
+import EndedCampaignDetailsModal from "../components/home/EndedCampaignDetailsModal";
 import { warmupApi } from "../services/artigosService";
 import { getCatalogoPesquisaSnapshot } from "../services/catalogoPesquisaService";
+import { getCampaignEndNotification } from "../services/campaignEndNotificationsService";
 import { loadCampaignHistory, removeCampaignFromHistory } from "../utils/campaignHistory";
 import {
   loadAutomaticCampaignHistory,
@@ -26,7 +28,6 @@ import "../styles/styles.css";
 
 export default function HomePage() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const { profile } = useAuth();
   const toast = useToast();
 
@@ -45,11 +46,41 @@ export default function HomePage() {
   const [campanhaAutomaticaSelecionada, setCampanhaAutomaticaSelecionada] = useState(null);
   const [campanhaPendenteRemocao, setCampanhaPendenteRemocao] = useState(null);
   const [campanhaAutomaticaPendenteRemocao, setCampanhaAutomaticaPendenteRemocao] = useState(null);
+  const [endedCampaignNotification, setEndedCampaignNotification] = useState(null);
+  const [campaignEndLinkHandled, setCampaignEndLinkHandled] = useState(false);
 
   useEffect(() => {
     // Warmup leve: evita que a primeira pesquisa da homepage pague sozinha o cold start do Render.
     warmupApi();
   }, []);
+
+
+  useEffect(() => {
+    if (campaignEndLinkHandled) return;
+
+    const notificationId = new URLSearchParams(window.location.search).get("campaignEnd");
+    if (!notificationId) {
+      setCampaignEndLinkHandled(true);
+      return;
+    }
+
+    let mounted = true;
+    getCampaignEndNotification(notificationId)
+      .then((item) => {
+        if (mounted) setEndedCampaignNotification(item);
+      })
+      .catch((error) => {
+        console.error("Não foi possível abrir o registo de fim de campanha.", error);
+        if (mounted) toast.error(error?.message || "Não foi possível abrir a campanha.");
+      })
+      .finally(() => {
+        if (mounted) setCampaignEndLinkHandled(true);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [campaignEndLinkHandled, toast]);
 
   useEffect(() => {
     let isMounted = true;
@@ -113,27 +144,6 @@ export default function HomePage() {
     [historicoCampanhasAutomaticas],
   );
 
-
-  useEffect(() => {
-    const campaignId = String(searchParams.get("campaignId") || "").trim();
-    const campaignType = String(searchParams.get("campaignType") || "").trim().toLowerCase();
-
-    if (!campaignId) return;
-
-    if (campaignType === "automatic") {
-      const match = historicoCampanhasAutomaticas.find(
-        (campaign) => String(campaign?.id || "") === campaignId,
-      );
-      if (match) setCampanhaAutomaticaSelecionada(match);
-      return;
-    }
-
-    const match = historicoCampanhas.find(
-      (campaign) => String(campaign?.id || "") === campaignId,
-    );
-    if (match) setCampanhaSelecionada(match);
-  }, [searchParams, historicoCampanhas, historicoCampanhasAutomaticas]);
-
   function abrirPopupArtigo(item) {
     setArtigoSelecionado(item);
   }
@@ -192,6 +202,13 @@ export default function HomePage() {
     navigate("/EtiquetasCampanha", { state: { campanhaDuplicada: campanha } });
   }
 
+
+  function fecharEndedCampaignNotification() {
+    setEndedCampaignNotification(null);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("campaignEnd");
+    navigate(`${url.pathname}${url.search}`, { replace: true });
+  }
 
   function abrirPesquisaEmEtiquetas() {
     const termo = String(pesquisa || "").trim();
@@ -301,6 +318,11 @@ export default function HomePage() {
         onDuplicate={duplicarCampanha}
         onRequestDelete={setCampanhaAutomaticaPendenteRemocao}
         formatarDataHistorico={formatarDataHistorico}
+      />
+
+      <EndedCampaignDetailsModal
+        notification={endedCampaignNotification}
+        onClose={fecharEndedCampaignNotification}
       />
 
       <ConfirmDeleteModal
