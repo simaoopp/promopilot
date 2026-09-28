@@ -518,3 +518,178 @@ export async function runCampaignEndNotificationWorker({ dryRun = false, today =
 
 export const runCampaignEndNotificationWorkerOnce = runCampaignEndNotificationWorker;
 export default runCampaignEndNotificationWorker;
+
+// PROMOPILOT_CAMPAIGN_END_COMPAT_EXPORTS_V1
+// Compatibilidade entre o worker, as rotas de lifecycle e a página
+// /CampanhaTerminada/:id. Mantém a tabela de deliveries como fonte idempotente.
+
+function normalizeCampaignEndStore(value = "") {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function isPraiaCampaignStore(value = "") {
+  const store = normalizeCampaignEndStore(value);
+  const configured = normalizeCampaignEndStore(PRAIA_STORE);
+
+  return Boolean(
+    store &&
+      (
+        store === configured ||
+        store === "praia" ||
+        store === "loja da praia" ||
+        store.includes("praia")
+      )
+  );
+}
+
+export function getCampaignEndNotificationConfig() {
+  const enabled = !["0", "false", "off", "no"].includes(
+    String(process.env.CAMPAIGN_END_NOTIFICATION_ENABLED ?? "true")
+      .trim()
+      .toLowerCase(),
+  );
+
+  return {
+    enabled,
+    store: PRAIA_STORE,
+    timeZone: DEFAULT_TIME_ZONE,
+    scanLimit: DEFAULT_LIMIT,
+    articlePreviewLimit: ARTICLE_PREVIEW_LIMIT,
+    appUrl: publicAppUrl(),
+  };
+}
+
+async function loadCampaignForEndNotification(campaignType, campaignId) {
+  const automatic = campaignType === "automatic";
+  const table = automatic ? "automatic_campaigns" : "campaigns";
+
+  const select = automatic
+    ? "id,organization_id,titulo,dados,ano_validade,formato_etiqueta,origem,created_at,expires_at,total_artigos,store,status,pdf_url,pdfs"
+    : "id,organization_id,titulo,dados,ano_validade,formato_etiqueta,origem,created_at,expires_at,total_artigos,store";
+
+  const { data, error } = await supabaseAdminClient
+    .from(table)
+    .select(select)
+    .eq("id", campaignId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data || null;
+}
+
+export async function getCampaignEndNotificationById(notificationId) {
+  assertAdminClient();
+
+  const id = String(notificationId || "").trim();
+  if (!id) return null;
+
+  const { data: delivery, error: deliveryError } = await supabaseAdminClient
+    .from(DELIVERY_TABLE)
+    .select(
+      "id,campaign_type,campaign_id,organization_id,store,campaign_title,campaign_end_date,recipient_user_id,recipient_email,status,attempt_count,provider_message_id,last_error,sent_at,created_at,updated_at",
+    )
+    .eq("id", id)
+    .maybeSingle();
+
+  if (deliveryError) {
+    // IDs das notificações são UUID. Um URL inválido deve comportar-se como 404,
+    // não derrubar a rota com 500.
+    if (deliveryError.code === "22P02") return null;
+
+    if (deliveryError.code === "42P01") {
+      throw new Error(
+        "Tabela de notificações em falta. Executa a migration " +
+          "20260928_campaign_end_notification_deliveries.sql no Supabase.",
+      );
+    }
+
+    throw deliveryError;
+  }
+
+  if (!delivery) return null;
+
+  const campaign = await loadCampaignForEndNotification(
+    delivery.campaign_type,
+    delivery.campaign_id,
+  );
+
+  if (!campaign) return null;
+
+  const items = Array.isArray(campaign.dados) ? campaign.dados : [];
+  const year =
+    Number(campaign.ano_validade) ||
+    new Date().getFullYear();
+
+  const endDate =
+    String(delivery.campaign_end_date || "").trim() ||
+    deriveCampaignEndDate(items, year);
+
+  const snapshot = {
+    id: campaign.id,
+    source: delivery.campaign_type,
+    titulo: campaign.titulo || delivery.campaign_title || "Campanha",
+    dados: items,
+    anoValidade: year,
+    ano_validade: year,
+    formatoEtiqueta: campaign.formato_etiqueta || "",
+    formato_etiqueta: campaign.formato_etiqueta || "",
+    origem:
+      campaign.origem ||
+      (delivery.campaign_type === "automatic"
+        ? "automatico-email"
+        : "manual"),
+    criadoEm: campaign.created_at || "",
+    created_at: campaign.created_at || "",
+    expiraEm: campaign.expires_at || "",
+    expires_at: campaign.expires_at || "",
+    totalArtigos:
+      Number(campaign.total_artigos) ||
+      items.length,
+    total_artigos:
+      Number(campaign.total_artigos) ||
+      items.length,
+    store: campaign.store || delivery.store || PRAIA_STORE,
+    campaignEndDate: endDate,
+    campaign_end_date: endDate,
+    organizationId:
+      campaign.organization_id ||
+      delivery.organization_id ||
+      null,
+    organization_id:
+      campaign.organization_id ||
+      delivery.organization_id ||
+      null,
+    ...(delivery.campaign_type === "automatic"
+      ? {
+          status: campaign.status || "",
+          pdfUrl: campaign.pdf_url || "",
+          pdf_url: campaign.pdf_url || "",
+          pdfs: campaign.pdfs || {},
+        }
+      : {}),
+  };
+
+  return {
+    ...delivery,
+    organization_id:
+      delivery.organization_id ||
+      campaign.organization_id ||
+      null,
+    store:
+      delivery.store ||
+      campaign.store ||
+      PRAIA_STORE,
+    campaign_title:
+      delivery.campaign_title ||
+      campaign.titulo ||
+      "Campanha",
+    campaign_end_date: endDate,
+    campaign_snapshot: snapshot,
+  };
+}
+
