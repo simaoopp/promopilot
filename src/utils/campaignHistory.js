@@ -1,56 +1,8 @@
 import { supabase } from "../lib/supabase";
+import { buildCampaignHistoryExpiry } from "../shared/campaign-label/campaignDates";
 
 const CAMPAIGNS_TABLE = "campaigns";
 const MAX_ITEMS = 50;
-
-const CAMPAIGN_RETENTION_DAYS = 45;
-
-function parseCampaignEndDate(value, fallbackYear) {
-  const raw = String(value || "").trim();
-  if (!raw) return null;
-
-  let match = raw.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
-  let year;
-  let month;
-  let day;
-
-  if (match) {
-    year = Number(match[1]);
-    month = Number(match[2]);
-    day = Number(match[3]);
-  } else {
-    match = raw.match(/^(\d{1,2})[-/.](\d{1,2})(?:[-/.](\d{4}))?$/);
-    if (!match) return null;
-    day = Number(match[1]);
-    month = Number(match[2]);
-    year = Number(match[3] || fallbackYear);
-  }
-
-  const date = new Date(Date.UTC(year, month - 1, day));
-  if (
-    date.getUTCFullYear() !== year ||
-    date.getUTCMonth() !== month - 1 ||
-    date.getUTCDate() !== day
-  ) return null;
-  return date;
-}
-
-function campaignRetentionExpiry(items = [], year, fromDate = new Date()) {
-  const minimumExpiry = new Date(
-    fromDate.getTime() + CAMPAIGN_RETENTION_DAYS * 24 * 60 * 60 * 1000,
-  );
-  const endDates = (Array.isArray(items) ? items : [])
-    .map((item) => parseCampaignEndDate(item?.dataFim, year))
-    .filter(Boolean)
-    .sort((a, b) => a.getTime() - b.getTime());
-  const latestEnd = endDates.at(-1);
-  if (!latestEnd) return minimumExpiry.toISOString();
-
-  const afterCampaign = new Date(
-    latestEnd.getTime() + CAMPAIGN_RETENTION_DAYS * 24 * 60 * 60 * 1000,
-  );
-  return new Date(Math.max(minimumExpiry.getTime(), afterCampaign.getTime())).toISOString();
-}
 
 function nowIso() {
   return new Date().toISOString();
@@ -92,10 +44,12 @@ export function normalizeCampaignSnapshot(snapshot = {}) {
     criadoEm: snapshot.criadoEm || nowIso(),
     expiraEm:
       snapshot.expiraEm ||
-      campaignRetentionExpiry(
-        Array.isArray(snapshot.dados) ? snapshot.dados.filter(Boolean) : [],
-        snapshot.anoValidade || new Date().getFullYear(),
-      ),
+      buildCampaignHistoryExpiry({
+        items: Array.isArray(snapshot.dados) ? snapshot.dados : [],
+        fallbackYear: snapshot.anoValidade || new Date().getFullYear(),
+        minimumDays: 2,
+        daysAfterEnd: 2,
+      }),
     totalArtigos: Array.isArray(snapshot.dados) ? snapshot.dados.filter(Boolean).length : 0,
     store: String(snapshot.store || "").trim(),
     userId: String(snapshot.userId || "").trim(),
@@ -151,11 +105,13 @@ export function createCampaignSnapshot({
     createdBy: String(createdBy || "Utilizador").trim() || "Utilizador",
     createdByEmail: String(createdByEmail || "").trim(),
     criadoEm: agora.toISOString(),
-    expiraEm: campaignRetentionExpiry(
-      Array.isArray(dados) ? dados.filter(Boolean) : [],
-      anoValidade || agora.getFullYear(),
-      agora,
-    ),
+    expiraEm: buildCampaignHistoryExpiry({
+      items: Array.isArray(dados) ? dados : [],
+      fallbackYear: anoValidade || agora.getFullYear(),
+      minimumDays: 2,
+      daysAfterEnd: 2,
+      now: agora,
+    }),
     totalArtigos: Array.isArray(dados) ? dados.filter(Boolean).length : 0,
     store: String(store || "").trim(),
     userId: String(userId || "").trim(),

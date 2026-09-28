@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../components/ToastProvider";
 import HomeHero from "../components/home/HomeHero";
@@ -11,9 +11,7 @@ import ArticleDetailsModal from "../components/home/ArticleDetailsModal";
 import CampaignDetailsModal from "../components/home/CampaignDetailsModal";
 import AutomaticCampaignDetailsModal from "../components/home/AutomaticCampaignDetailsModal";
 import ConfirmDeleteModal from "../components/home/ConfirmDeleteModal";
-import CampaignEndedDetailsModal from "../components/home/CampaignEndedDetailsModal";
 import { warmupApi } from "../services/artigosService";
-import { getCampaignEndNotification } from "../services/campaignEndNotificationService";
 import { getCatalogoPesquisaSnapshot } from "../services/catalogoPesquisaService";
 import { loadCampaignHistory, removeCampaignFromHistory } from "../utils/campaignHistory";
 import {
@@ -28,7 +26,7 @@ import "../styles/styles.css";
 
 export default function HomePage() {
   const navigate = useNavigate();
-  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { profile } = useAuth();
   const toast = useToast();
 
@@ -47,50 +45,11 @@ export default function HomePage() {
   const [campanhaAutomaticaSelecionada, setCampanhaAutomaticaSelecionada] = useState(null);
   const [campanhaPendenteRemocao, setCampanhaPendenteRemocao] = useState(null);
   const [campanhaAutomaticaPendenteRemocao, setCampanhaAutomaticaPendenteRemocao] = useState(null);
-  const [campaignEndedDetail, setCampaignEndedDetail] = useState(null);
-  const [campaignEndedLoading, setCampaignEndedLoading] = useState(false);
-  const [campaignEndedError, setCampaignEndedError] = useState("");
 
   useEffect(() => {
     // Warmup leve: evita que a primeira pesquisa da homepage pague sozinha o cold start do Render.
     warmupApi();
   }, []);
-
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const notificationId = String(params.get("campaignEnd") || "").trim();
-    if (!notificationId) return undefined;
-
-    let active = true;
-    setCampaignEndedLoading(true);
-    setCampaignEndedError("");
-    setCampaignEndedDetail(null);
-
-    getCampaignEndNotification(notificationId)
-      .then((item) => {
-        if (active) setCampaignEndedDetail(item);
-      })
-      .catch((error) => {
-        if (active) setCampaignEndedError(error?.message || "Não foi possível carregar a campanha.");
-      })
-      .finally(() => {
-        if (active) setCampaignEndedLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [location.search]);
-
-  function fecharCampaignEndedDetail() {
-    const params = new URLSearchParams(location.search);
-    params.delete("campaignEnd");
-    const query = params.toString();
-    navigate(`${location.pathname}${query ? `?${query}` : ""}`, { replace: true });
-    setCampaignEndedDetail(null);
-    setCampaignEndedError("");
-    setCampaignEndedLoading(false);
-  }
 
   useEffect(() => {
     let isMounted = true;
@@ -131,6 +90,35 @@ export default function HomePage() {
       isMounted = false;
     };
   }, [profile?.store]);
+
+
+  useEffect(() => {
+    const campaignId = String(searchParams.get("campaign") || "").trim();
+    const source = String(searchParams.get("source") || "manual").trim().toLowerCase();
+
+    if (!campaignId) return;
+
+    const isAutomatic = source === "automatic" || source === "automatico";
+    const sourceItems = isAutomatic ? historicoCampanhasAutomaticas : historicoCampanhas;
+    const campaign = (Array.isArray(sourceItems) ? sourceItems : []).find(
+      (item) => String(item?.id || "") === campaignId,
+    );
+
+    if (!campaign) return;
+
+    if (isAutomatic) setCampanhaAutomaticaSelecionada(campaign);
+    else setCampanhaSelecionada(campaign);
+
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("campaign");
+    nextParams.delete("source");
+    setSearchParams(nextParams, { replace: true });
+  }, [
+    historicoCampanhas,
+    historicoCampanhasAutomaticas,
+    searchParams,
+    setSearchParams,
+  ]);
 
   useEffect(() => {
     // A homepage deixou de consultar /api/artigos automaticamente.
@@ -334,15 +322,6 @@ export default function HomePage() {
         onCancel={() => setCampanhaAutomaticaPendenteRemocao(null)}
         onConfirm={apagarCampanhaAutomatica}
       />
-
-      {(campaignEndedLoading || campaignEndedDetail || campaignEndedError) && (
-        <CampaignEndedDetailsModal
-          campaign={campaignEndedDetail}
-          loading={campaignEndedLoading}
-          error={campaignEndedError}
-          onClose={fecharCampaignEndedDetail}
-        />
-      )}
     </div>
   );
 }

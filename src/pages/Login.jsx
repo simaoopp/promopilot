@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Navigate, useLocation } from "react-router-dom";
+import { Navigate } from "react-router-dom";
 import ForcePasswordChangeModal from "../components/ForcePasswordChangeModal";
 import PasswordRecoveryModal from "../components/PasswordRecoveryModal";
 import PromoPilotMark from "../components/brand/PromoPilotMark";
@@ -8,9 +8,6 @@ import { PROMOPILOT_BRAND, PROMOPILOT_MODULES } from "../brand/promopilot";
 import "../styles/styles.css";
 
 export default function Login() {
-  const location = useLocation();
-  const nextParam = new URLSearchParams(location.search).get("next") || "";
-  const nextPath = nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : "/Homepage";
   const {
     user,
     loadingAuth,
@@ -41,7 +38,16 @@ export default function Login() {
   }
 
   if (user && !onboardingRequired && !passwordRecovery) {
-    return <Navigate to={nextPath} replace />;
+    const nextCandidate =
+      typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search).get("next")
+        : "";
+    const safeNext =
+      nextCandidate && nextCandidate.startsWith("/") && !nextCandidate.startsWith("//")
+        ? nextCandidate
+        : "/Homepage";
+
+    return <Navigate to={safeNext} replace />;
   }
 
   async function handleSubmit(e) {

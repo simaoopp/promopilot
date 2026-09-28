@@ -1,4 +1,5 @@
 import { hasSupabaseAdminConfig, supabaseAdminClient } from "../../lib/supabaseClients.js";
+import { buildCampaignHistoryExpiry } from "../../../src/shared/campaign-label/campaignDates.js";
 
 const TABLE = "automatic_campaigns";
 
@@ -12,56 +13,6 @@ function readBoolean(name, fallback = false) {
 
 function plusDaysIso(days = 2) {
   return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
-}
-
-function parseCampaignEndDate(value, fallbackYear) {
-  const raw = String(value || "").trim();
-  if (!raw) return null;
-
-  let match = raw.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
-  let year;
-  let month;
-  let day;
-
-  if (match) {
-    year = Number(match[1]);
-    month = Number(match[2]);
-    day = Number(match[3]);
-  } else {
-    match = raw.match(/^(\d{1,2})[-/.](\d{1,2})(?:[-/.](\d{4}))?$/);
-    if (!match) return null;
-    day = Number(match[1]);
-    month = Number(match[2]);
-    year = Number(match[3] || fallbackYear);
-  }
-
-  const date = new Date(Date.UTC(year, month - 1, day));
-  if (
-    date.getUTCFullYear() !== year ||
-    date.getUTCMonth() !== month - 1 ||
-    date.getUTCDate() !== day
-  ) {
-    return null;
-  }
-  return date;
-}
-
-function campaignRetentionExpiry(items = [], year, keepDays = 5) {
-  const retentionDays = Math.max(
-    30,
-    Number.parseInt(process.env.CAMPAIGN_END_RETENTION_DAYS || "45", 10) || 45,
-  );
-  const minimumExpiry = new Date(Date.now() + Math.max(keepDays, retentionDays) * 24 * 60 * 60 * 1000);
-  const endDates = (Array.isArray(items) ? items : [])
-    .map((item) => parseCampaignEndDate(item?.dataFim, year))
-    .filter(Boolean)
-    .sort((a, b) => a.getTime() - b.getTime());
-  const latestEnd = endDates.at(-1);
-
-  if (!latestEnd) return minimumExpiry.toISOString();
-
-  const afterCampaign = new Date(latestEnd.getTime() + retentionDays * 24 * 60 * 60 * 1000);
-  return new Date(Math.max(minimumExpiry.getTime(), afterCampaign.getTime())).toISOString();
 }
 
 function assertSupabaseAdmin() {
@@ -101,7 +52,12 @@ export function buildAutomaticCampaignRow({
     created_by: "Sistema automático",
     created_by_email: "",
     created_at: now,
-    expires_at: campaignRetentionExpiry(safeItems, new Date().getFullYear(), keepDays),
+    expires_at: buildCampaignHistoryExpiry({
+      items: safeItems,
+      fallbackYear: new Date().getFullYear(),
+      minimumDays: keepDays,
+      daysAfterEnd: 2,
+    }),
     total_artigos: safeItems.length,
     store: store?.store || store?.label || storeKey || "",
     user_id: null,
@@ -276,14 +232,16 @@ export async function findAutomaticCampaignByPdfPath({ path, store = "", organiz
   }) || null;
 }
 
-export async function listExpiredAutomaticCampaignRows({ maxAgeDays: _maxAgeDays = 5, limit = 100 } = {}) {
+function daysAgoIso(days = 5) {
+  return new Date(Date.now() - Math.max(1, Number(days) || 5) * 24 * 60 * 60 * 1000).toISOString();
+}
+
+export async function listExpiredAutomaticCampaignRows({ maxAgeDays = 5, limit = 100 } = {}) {
   assertSupabaseAdmin();
 
   const nowIso = new Date().toISOString();
   const safeLimit = Math.min(500, Math.max(1, Number(limit) || 100));
 
-  // expires_at é a fonte de verdade. Isto evita apagar uma campanha antes da
-  // data real de fim apenas por já ter alguns dias de criação.
   const { data, error } = await supabaseAdminClient
     .from(TABLE)
     .select("id,created_at,expires_at,pdf_url,pdfs,status,email_subject,store")
