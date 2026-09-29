@@ -7,10 +7,6 @@ function nowIso() {
   return new Date().toISOString();
 }
 
-function plusDaysIso(date, days) {
-  return new Date(date.getTime() + days * 24 * 60 * 60 * 1000).toISOString();
-}
-
 function safeArray(value) {
   return Array.isArray(value) ? value.filter(Boolean) : [];
 }
