@@ -1,15 +1,26 @@
 import "dotenv/config";
-import { runCampaignEndNotificationWorker } from "../services/campaign-lifecycle/campaignEndNotificationService.js";
+import {
+  getCampaignEndNotificationConfig,
+  runCampaignEndNotificationWorker,
+} from "../services/campaign-lifecycle/campaignEndNotificationService.js";
 
 const args = process.argv.slice(2);
 const dryRun = args.includes("--dry-run");
-const dateArg = args.find((value) => value.startsWith("--date="));
-const today = dateArg ? dateArg.slice("--date=".length) : "";
+const configOnly = args.includes("--config");
 
 try {
-  const result = await runCampaignEndNotificationWorker({ dryRun, today });
-  console.log(JSON.stringify(result, null, 2));
-  if (!result.ok && !dryRun) process.exitCode = 1;
+  if (configOnly) {
+    const config = getCampaignEndNotificationConfig();
+    console.log(JSON.stringify({
+      ...config,
+      // Nunca imprimir segredos neste diagnóstico.
+      resendConfigured: config.resendConfigured,
+    }, null, 2));
+  } else {
+    const result = await runCampaignEndNotificationWorker({ dryRun });
+    console.log(JSON.stringify(result, null, 2));
+    if (!result.ok && !dryRun) process.exitCode = 1;
+  }
 } catch (error) {
   console.error("[campaign-end] worker failed:", error?.stack || error?.message || error);
   process.exitCode = 1;

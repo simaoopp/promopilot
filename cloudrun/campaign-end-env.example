@@ -2,6 +2,8 @@ NODE_ENV=production
 
 # Feature flag / scope
 CAMPAIGN_END_EMAIL_ENABLED=1
+CAMPAIGN_END_RUN_IN_API=0
+CAMPAIGN_END_WORKER_ENABLED=0
 CAMPAIGN_END_STORE_NAME=Loja da Praia
 CAMPAIGN_END_WORKER_LIMIT=50
 CAMPAIGN_END_MAX_ATTEMPTS=24
@@ -14,7 +16,7 @@ RESEND_API_KEY=
 
 # Public links / email branding
 APP_PUBLIC_URL=https://www.promopilot.pt
-PROMOPILOT_EMAIL_LOGO_URL=https://www.promopilot.pt/logo192.png
+PROMOPILOT_EMAIL_LOGO_URL=https://www.promopilot.pt/promopilot-email-logo.png
 
 # Supabase service role (worker only)
 SUPABASE_URL=

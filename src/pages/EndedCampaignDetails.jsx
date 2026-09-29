@@ -7,10 +7,19 @@ function safeArray(value) {
   return Array.isArray(value) ? value.filter(Boolean) : [];
 }
 
+function clean(value = "") {
+  return String(value ?? "").trim();
+}
+
 function formatDate(value) {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
+  const raw = clean(value);
+  const dateOnly = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (dateOnly) return `${dateOnly[3]}/${dateOnly[2]}/${dateOnly[1]}`;
+
+  if (!raw) return "—";
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return raw;
+
   return new Intl.DateTimeFormat("pt-PT", {
     timeZone: "Atlantic/Azores",
     day: "2-digit",
@@ -20,21 +29,31 @@ function formatDate(value) {
 }
 
 function formatPrice(value) {
-  const raw = String(value ?? "").trim();
+  if (value === null || value === undefined || value === "") return "—";
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return new Intl.NumberFormat("pt-PT", { style: "currency", currency: "EUR" }).format(value);
+  }
+
+  const raw = clean(value);
   if (!raw || raw === "-") return "—";
-  return raw.includes("€") ? raw : `${raw} €`;
+  if (raw.includes("€")) return raw;
+
+  const normalized = Number(raw.replace(/\s/g, "").replace(/\./g, "").replace(",", "."));
+  return Number.isFinite(normalized)
+    ? new Intl.NumberFormat("pt-PT", { style: "currency", currency: "EUR" }).format(normalized)
+    : raw;
 }
 
-function normalizeItem(item = {}) {
+function normalizeItem(item = {}, index = 0) {
   return {
-    id: item.id || item.codigo || item.artigo || Math.random().toString(36),
-    code: item.codigo || item.artigo || "—",
-    description: item.descricao || "Sem descrição",
-    before: item.antes ?? item.pvp2Antes ?? item.pvp2AntesRaw ?? "",
-    current: item.atual ?? item.pvp2Atual ?? item.pvp2AtualRaw ?? "",
-    start: item.dataInicio || "",
-    end: item.dataFim || "",
-    info: item.info || item.informacao || "",
+    id: item.id || item.codigo || item.artigo || `row-${index}`,
+    code: clean(item.codigo || item.artigo || item.codigoArtigo || item.sku || "—"),
+    description: clean(item.descricao || item.description || item.titulo || "Sem descrição"),
+    before: item.antes ?? item.pvp2Antes ?? item.pvp2AntesRaw ?? item.pvp3 ?? item.pv3 ?? "",
+    current: item.atual ?? item.pvp2Atual ?? item.pvp2AtualRaw ?? item.pvp2 ?? "",
+    start: clean(item.dataInicio || item.data_inicio || ""),
+    end: clean(item.dataFim || item.data_fim || ""),
+    info: clean(item.info || item.informacao || item.informacaoPromo || ""),
   };
 }
 
@@ -44,6 +63,7 @@ export default function EndedCampaignDetails() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -58,7 +78,11 @@ export default function EndedCampaignDetails() {
     return () => { active = false; };
   }, [id]);
 
-  const items = useMemo(() => safeArray(campaign?.dados).map(normalizeItem), [campaign]);
+  const items = useMemo(
+    () => safeArray(campaign?.dados).map((item, index) => normalizeItem(item, index)),
+    [campaign],
+  );
+
   const visibleItems = useMemo(() => {
     const term = query.trim().toLowerCase();
     if (!term) return items;
@@ -66,6 +90,19 @@ export default function EndedCampaignDetails() {
       `${item.code} ${item.description} ${item.info}`.toLowerCase().includes(term),
     );
   }, [items, query]);
+
+  async function copyCodes() {
+    const codes = items.map((item) => item.code).filter((code) => code && code !== "—").join("|");
+    if (!codes) return;
+
+    try {
+      await navigator.clipboard.writeText(codes);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch {
+      setCopied(false);
+    }
+  }
 
   if (loading) {
     return <main className="campaign-end-page"><div className="campaign-end-state">A carregar campanha…</div></main>;
@@ -83,41 +120,51 @@ export default function EndedCampaignDetails() {
     );
   }
 
+  const automatic = campaign.source_table === "automatic_campaigns" || campaign.source_type === "automatic";
+
   return (
     <main className="campaign-end-page">
       <section className="campaign-end-hero">
         <div>
-          <div className="campaign-end-eyebrow">Campaign lifecycle · concluída</div>
+          <div className="campaign-end-eyebrow">Campaign lifecycle · Loja da Praia</div>
           <h1>{campaign.titulo || "Campanha"}</h1>
-          <p>Resumo operacional da campanha terminada para {campaign.store || "a loja"}.</p>
+          <p>
+            Campanha concluída em <strong>{formatDate(campaign.ends_at || campaign.campaign_end_date)}</strong>.
+            Este snapshot operacional fica disponível para consulta e fecho em loja.
+          </p>
         </div>
         <span className="campaign-end-status">Concluída</span>
       </section>
 
       <section className="campaign-end-kpis">
         <article><strong>{campaign.total_artigos ?? items.length}</strong><span>Artigos</span></article>
-        <article><strong>{formatDate(campaign.ends_at)}</strong><span>Fim da campanha</span></article>
-        <article><strong>{campaign.source_table === "automatic_campaigns" ? "Automática" : "Manual"}</strong><span>Origem</span></article>
-        <article><strong>{campaign.created_by || "PromoPilot"}</strong><span>Criada por</span></article>
+        <article><strong>{formatDate(campaign.ends_at || campaign.campaign_end_date)}</strong><span>Fim da campanha</span></article>
+        <article><strong>{automatic ? "Automática" : String(campaign.origem || "").toLowerCase().includes("excel") ? "Excel" : "Manual"}</strong><span>Origem</span></article>
+        <article><strong>{campaign.store || "Loja da Praia"}</strong><span>Loja</span></article>
       </section>
 
       <section className="campaign-end-action-card">
         <div>
           <span>Checklist pós-campanha</span>
           <h2>Fechar a campanha em loja</h2>
-          <p>Confirma a comunicação promocional, revê os preços e atualiza as etiquetas dos artigos quando aplicável.</p>
+          <p>Retira a comunicação promocional, confirma os preços atuais e valida a exposição dos artigos.</p>
         </div>
-        <Link to="/Homepage" className="campaign-end-secondary-link">Ir para o início</Link>
+        <div className="campaign-end-action-buttons">
+          <button type="button" className="campaign-end-secondary-link campaign-end-button" onClick={copyCodes}>
+            {copied ? "Códigos copiados" : "Copiar códigos"}
+          </button>
+          <Link to="/Homepage" className="campaign-end-primary-link">Ir para o início</Link>
+        </div>
       </section>
 
       <section className="campaign-end-list-card">
         <div className="campaign-end-list-header">
-          <div><span>Inventário da campanha</span><h2>Artigos</h2></div>
+          <div><span>Snapshot final</span><h2>Artigos da campanha</h2></div>
           <input
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Pesquisar código ou descrição"
+            placeholder="Pesquisar código, descrição ou informação"
             aria-label="Pesquisar artigos da campanha"
           />
         </div>
@@ -128,8 +175,8 @@ export default function EndedCampaignDetails() {
             <tbody>
               {visibleItems.map((item, index) => (
                 <tr key={`${item.id}-${index}`}>
-                  <td><strong>{item.code}</strong></td>
-                  <td>{item.description}</td>
+                  <td><strong>{item.code || "—"}</strong></td>
+                  <td>{item.description || "Sem descrição"}</td>
                   <td>{formatPrice(item.before)}</td>
                   <td><strong>{formatPrice(item.current)}</strong></td>
                   <td>{item.start || "—"} → {item.end || "—"}</td>

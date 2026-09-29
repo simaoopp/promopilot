@@ -16,17 +16,16 @@ async function tick() {
   running = true;
   try {
     const result = await runCampaignEndNotificationWorkerOnce();
-
-    if (result.scanned || result.sent) {
-      console.log("[campaign-end] ciclo concluído", {
-        scanned: result.scanned,
-        sent: result.sent,
-        send: result.send,
-        ok: result.ok,
-      });
-    }
+    console.log("[campaign-end] ciclo concluído", {
+      scanned: result.scanned || 0,
+      sent: result.sent || 0,
+      failed: result.failed || 0,
+      waitingRecipients: result.waitingRecipients || 0,
+      ok: result.ok,
+      skipped: result.skipped || false,
+    });
   } catch (error) {
-    console.error("[campaign-end] erro no ciclo automático:", error?.message || error);
+    console.error("[campaign-end] erro no ciclo automático:", error?.stack || error?.message || error);
   } finally {
     running = false;
   }
@@ -35,14 +34,19 @@ async function tick() {
 export function startCampaignEndNotificationWorker() {
   const config = getCampaignEndNotificationConfig();
 
-  if (!config.enabled) {
-    console.log("[campaign-end] worker desativado (CAMPAIGN_END_WORKER_ENABLED=0).");
+  if (!config.runInApi || !config.workerEnabled) {
+    console.log("[campaign-end] worker interno da API desativado; usar Cloud Run Job/Scheduler.");
+    return null;
+  }
+
+  if (!config.emailEnabled) {
+    console.log("[campaign-end] envio desativado (CAMPAIGN_END_EMAIL_ENABLED=0).");
     return null;
   }
 
   if (intervalHandle) return intervalHandle;
 
-  console.log("[campaign-end] worker ativo", {
+  console.log("[campaign-end] worker interno ativo", {
     intervalMs: config.intervalMs,
     batchSize: config.batchSize,
     store: config.storeName,
@@ -50,7 +54,6 @@ export function startCampaignEndNotificationWorker() {
     resendConfigured: config.resendConfigured,
   });
 
-  // Primeiro ciclo pouco depois do arranque, sem atrasar o boot da API.
   startupHandle = setTimeout(() => {
     startupHandle = null;
     tick();
