@@ -78,7 +78,7 @@ export default function EtiquetasPage() {
     useState(null);
   const [campanhaAntes, setCampanhaAntes] = useState("");
   const [campanhaAtual, setCampanhaAtual] = useState("");
-  const [campanhaValida30Dias, setCampanhaValida30Dias] = useState(true);
+  const [campanhaDuracao, setCampanhaDuracao] = useState("30");
   const [campanhaDataInicio, setCampanhaDataInicio] = useState("");
   const [campanhaDataFim, setCampanhaDataFim] = useState("");
   const [erroCampanha, setErroCampanha] = useState("");
@@ -343,7 +343,7 @@ export default function EtiquetasPage() {
     setCampanhaAntes("");
     setCampanhaAtual("");
     setErroCampanha("");
-    setCampanhaValida30Dias(true);
+    setCampanhaDuracao("30");
     setCampanhaDataInicio("");
     setCampanhaDataFim("");
   }
@@ -681,12 +681,12 @@ export default function EtiquetasPage() {
       return;
     }
 
-    if (!campanhaSemDatas && !campanhaValida30Dias && (!campanhaDataInicio || !campanhaDataFim)) {
+    if (!campanhaSemDatas && campanhaDuracao === "personalizada" && (!campanhaDataInicio || !campanhaDataFim)) {
       setErroCampanha("Preenche a data de início e a data de fim da campanha.");
       return;
     }
 
-    if (!campanhaSemDatas && !campanhaValida30Dias && campanhaDataInicio > campanhaDataFim) {
+    if (!campanhaSemDatas && campanhaDuracao === "personalizada" && campanhaDataInicio > campanhaDataFim) {
       setErroCampanha("A data de início não pode ser superior à data de fim.");
       return;
     }
@@ -700,9 +700,9 @@ export default function EtiquetasPage() {
     let dataFimFinal = "";
 
     if (!campanhaSemDatas) {
-      if (campanhaValida30Dias) {
+      if (campanhaDuracao !== "personalizada") {
         const hoje = new Date();
-        const fim = somarDias(hoje, 30);
+        const fim = somarDias(hoje, Number(campanhaDuracao));
         dataInicioFinal = formatarDataDiaMes(hoje);
         dataFimFinal = formatarDataDiaMes(fim);
       } else {
@@ -821,8 +821,8 @@ export default function EtiquetasPage() {
         setCampanhaAtual={setCampanhaAtual}
         erroCampanha={erroCampanha}
         campanhaSemDatas={campanhaSemDatas}
-        campanhaValida30Dias={campanhaValida30Dias}
-        setCampanhaValida30Dias={setCampanhaValida30Dias}
+        campanhaDuracao={campanhaDuracao}
+        setCampanhaDuracao={setCampanhaDuracao}
         campanhaDataInicio={campanhaDataInicio}
         setCampanhaDataInicio={setCampanhaDataInicio}
         campanhaDataFim={campanhaDataFim}

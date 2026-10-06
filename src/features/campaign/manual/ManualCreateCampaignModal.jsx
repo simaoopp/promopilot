@@ -19,8 +19,8 @@ export default function ManualCreateCampaignModal({
   setCampanhaAtual,
   erroCampanha,
   campanhaSemDatas,
-  campanhaValida30Dias,
-  setCampanhaValida30Dias,
+  campanhaDuracao,
+  setCampanhaDuracao,
   campanhaDataInicio,
   setCampanhaDataInicio,
   campanhaDataFim,
@@ -150,16 +150,20 @@ export default function ManualCreateCampaignModal({
                       <h3>Validade da campanha</h3>
                     </div>
 
-                    <label className="campanha-check-row">
-                      <input
-                        type="checkbox"
-                        checked={campanhaValida30Dias}
-                        onChange={(e) => setCampanhaValida30Dias(e.target.checked)}
-                      />
-                      <span>Campanha válida para 30 dias</span>
+                    <label className="input-group">
+                      <span>Duração da campanha</span>
+                      <select
+                        value={campanhaDuracao}
+                        onChange={(e) => setCampanhaDuracao(e.target.value)}
+                      >
+                        <option value="15">15 dias</option>
+                        <option value="30">30 dias</option>
+                        <option value="personalizada">Datas personalizadas</option>
+                      </select>
+                      <small>As opções de 15 e 30 dias começam hoje.</small>
                     </label>
 
-                    {!campanhaValida30Dias && (
+                    {campanhaDuracao === "personalizada" && (
                       <div className="campanha-datas-grid">
                         <label className="input-group">
                           <span>Data de início</span>
