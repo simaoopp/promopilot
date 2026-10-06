@@ -1,0 +1,13 @@
+{
+  "dependencies": {
+    "@babel/parser": "^8.0.6",
+    "@babel/traverse": "^8.0.6",
+    "@electric-sql/pglite": "^0.5.8"
+  },
+  "name": "promopilot-article-search-qa",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node test-js.mjs && node test-sql.mjs"
+  }
+}

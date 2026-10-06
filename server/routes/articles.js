@@ -102,6 +102,7 @@ export function registerArticleRoutes(app, { requireAuth }) {
         items: result.items,
         artigos: result.items,
         total: result.total,
+        totalIsExact: result.totalIsExact !== false,
         limit: result.limit,
         offset: result.offset,
         hasMore: result.hasMore,
@@ -112,22 +113,11 @@ export function registerArticleRoutes(app, { requireAuth }) {
       });
     } catch (error) {
       if (isSupabaseStatementTimeout(error)) {
-        console.warn("GET /api/artigos excedeu o timeout; devolvendo resultado vazio controlado.", {
-          q: req.query.q || "",
-          code: error.code,
-        });
-
-        return res.json({
-          ok: true,
-          items: [],
-          artigos: [],
-          total: 0,
-          limit: Math.min(parsePositiveInt(req.query.limit, 30), 50),
-          offset: parsePositiveInt(req.query.offset, 0),
-          hasMore: false,
-          q: normalizeSearchValue(req.query.q || ""),
-          searchTimedOut: true,
-          degraded: true,
+        console.warn("GET /api/artigos: statement timeout", { code: error.code });
+        return res.status(503).json({
+          ok: false,
+          error: "A pesquisa demorou demasiado. Refina o termo ou tenta pelo código/EAN.",
+          code: "ARTICLE_SEARCH_TIMEOUT",
         });
       }
 

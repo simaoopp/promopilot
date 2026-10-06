@@ -13,7 +13,6 @@ const API_BASE_URL =
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const SEARCH_REQUEST_TIMEOUT_MS = Number(process.env.REACT_APP_ARTICLES_SEARCH_TIMEOUT_MS || 15000);
-const SEARCH_SUGGESTIONS_TIMEOUT_MS = Number(process.env.REACT_APP_ARTICLES_SUGGESTIONS_TIMEOUT_MS || 18000);
 const PERSISTENT_CACHE_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 const BACKGROUND_REFRESH_DEBOUNCE_MS = 60 * 1000;
 const ALL_ARTIGOS_CACHE_KEY = "all-artigos";
@@ -44,6 +43,9 @@ function cacheSet(key, value) {
     updatedAt: Date.now(),
   });
 
+  while (artigosCache.size > 250) {
+    artigosCache.delete(artigosCache.keys().next().value);
+  }
   return value;
 }
 
@@ -177,6 +179,7 @@ export function normalizeArtigosApiResponse(data, fallbackLimit = 100, fallbackO
     limit: Number.isFinite(data?.limit) ? data.limit : fallbackLimit,
     offset: Number.isFinite(data?.offset) ? data.offset : fallbackOffset,
     hasMore: Boolean(data?.hasMore),
+    totalIsExact: data?.totalIsExact !== false,
     q: data?.q || "",
     searchTimedOut: Boolean(data?.searchTimedOut),
     degraded: Boolean(data?.degraded),
@@ -190,6 +193,7 @@ export async function fetchArtigosPage({
   signal,
   includeCount = false,
   timeoutMs = SEARCH_REQUEST_TIMEOUT_MS,
+  accessToken,
 } = {}) {
   const params = new URLSearchParams();
 
@@ -201,9 +205,10 @@ export async function fetchArtigosPage({
     params.set("includeCount", "0");
   }
 
-  const token = await getAccessToken();
+  const token = accessToken || await getAccessToken();
   const requestSignal = createAbortSignalWithTimeout(signal, timeoutMs);
   let response;
+  let data;
 
   try {
     response = await fetch(buildApiUrl(`/api/artigos?${params.toString()}`), {
@@ -212,7 +217,11 @@ export async function fetchArtigosPage({
       },
       signal: requestSignal.signal,
     });
+    data = await readJsonResponse(response);
   } catch (error) {
+    if (signal?.aborted) {
+      throw Object.assign(new Error("Pesquisa cancelada."), { name: "AbortError" });
+    }
     if (requestSignal.signal.aborted) {
       throw new Error("Pesquisa de artigos demorou demasiado. Tenta por código/EAN ou refina o termo.");
     }
@@ -221,10 +230,8 @@ export async function fetchArtigosPage({
     requestSignal.cleanup();
   }
 
-  const data = await readJsonResponse(response);
-
-  if (!response.ok || data?.ok === false) {
-    throw new Error(data?.error || "Erro ao carregar artigos.");
+  if (!response.ok || data?.ok === false || data?.searchTimedOut || data?.degraded) {
+    throw new Error(data?.error?.message || data?.error || "A pesquisa não foi concluída. Refina o termo ou tenta novamente.");
   }
 
   return normalizeArtigosApiResponse(data, limit, offset);
@@ -423,42 +430,50 @@ function buildSearchCacheKey({ q = "", limit = 20, offset = 0 } = {}) {
   return `search:${normalizedQ}:${limit}:${offset}`;
 }
 
+function waitForSearchInput(signal) {
+  return new Promise((resolve, reject) => {
+    let timer;
+    const cancel = () => {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", cancel);
+      reject(Object.assign(new Error("Pesquisa cancelada."), { name: "AbortError" }));
+    };
+    if (signal.aborted) return cancel();
+    signal.addEventListener("abort", cancel, { once: true });
+    timer = setTimeout(() => {
+      signal.removeEventListener("abort", cancel);
+      resolve();
+    }, 160);
+  });
+}
+
 export async function searchArtigos({ q = "", limit = 20, offset = 0, signal, timeoutMs } = {}) {
-  const cacheKey = buildSearchCacheKey({ q, limit, offset });
+  if (signal?.aborted) throw Object.assign(new Error("Pesquisa cancelada."), { name: "AbortError" });
+  const token = await getAccessToken();
+  // Session-scoped results cannot be reused by a different signed-in account.
+  const cacheKey = `${token}:${buildSearchCacheKey({ q, limit, offset })}`;
   const cached = cacheGet(cacheKey);
-
-  if (cached) {
-    return cached;
-  }
-
+  if (cached) return cached;
   const pending = !signal ? getPendingRequest(cacheKey) : null;
+  if (pending) return pending;
 
-  if (pending) {
-    return pending;
-  }
-
-  const normalizedQuery = String(q || "").trim();
-  const effectiveTimeoutMs = timeoutMs || (normalizedQuery.length < 5 ? SEARCH_SUGGESTIONS_TIMEOUT_MS : SEARCH_REQUEST_TIMEOUT_MS);
-
-  const request = fetchArtigosPage({
-    q,
-    limit,
-    offset,
-    signal,
-    includeCount: false,
-    timeoutMs: effectiveTimeoutMs,
-  }).then((result) => cacheSet(cacheKey, result));
-
-  if (!signal) {
-    setPendingRequest(cacheKey, request);
-  }
-
+  const request = (async () => {
+    // Cancelled keystrokes never reach the API; cached results remain immediate.
+    if (signal) await waitForSearchInput(signal);
+    const result = await fetchArtigosPage({
+      q, limit, offset, signal, includeCount: false, accessToken: token,
+      timeoutMs: timeoutMs || SEARCH_REQUEST_TIMEOUT_MS,
+    });
+    if (result.searchTimedOut || result.degraded) {
+      throw new Error("A pesquisa não foi concluída. Tenta novamente.");
+    }
+    return cacheSet(cacheKey, result);
+  })();
+  if (!signal) setPendingRequest(cacheKey, request);
   try {
     return await request;
   } finally {
-    if (!signal) {
-      clearPendingRequest(cacheKey, request);
-    }
+    if (!signal) clearPendingRequest(cacheKey, request);
   }
 }
 

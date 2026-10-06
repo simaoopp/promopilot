@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { createSupabaseUserClient, supabaseAdminClient } from "../lib/supabaseClients.js";
 
 export const ARTICLES_TABLE = process.env.ARTICLES_TABLE || "articles";
@@ -20,6 +21,7 @@ const ARTICLE_SEARCH_CACHE_TTL_MS = Math.max(0, Number(process.env.ARTICLES_SEAR
 const ARTICLE_SEARCH_CACHE_MAX_ITEMS = Math.max(20, Number(process.env.ARTICLES_SEARCH_CACHE_MAX_ITEMS || 250));
 
 const articleSearchCache = new Map();
+const articleSearchPending = new Map();
 
 const allArticlesCache = {
   value: null,
@@ -75,8 +77,8 @@ function getUserClient(accessToken = "") {
   return client;
 }
 
-function getArticleSearchCacheKey({ q = "", limit = 0, offset = 0, organizationId = "" } = {}) {
-  return [String(organizationId || "default"), String(q || "").trim().toLowerCase(), limit, offset].join("::");
+function getArticleSearchCacheKey({ q = "", limit = 0, offset = 0, organizationId = "", accessToken = "" } = {}) {
+  return [createHash("sha256").update(accessToken).digest("hex"), String(organizationId || "default"), String(q || "").trim().toLowerCase(), limit, offset].join("::");
 }
 
 function getArticleSearchCache(key) {
@@ -301,6 +303,7 @@ export async function listArticles({
       limit: normalizedLimit,
       offset: normalizedOffset,
       organizationId,
+      accessToken,
     });
     const cached = getArticleSearchCache(cacheKey);
 
@@ -308,31 +311,33 @@ export async function listArticles({
       return cached;
     }
 
-    const startedAt = Date.now();
-    const client = getUserClient(accessToken);
-    const { data, error } = await client.rpc("search_articles_for_labels", {
-      p_query: q,
-      p_limit: normalizedLimit,
-      p_offset: normalizedOffset,
-      p_organization_id: organizationId || null,
-    });
-
-    if (error) {
-      throw error;
+    if (articleSearchPending.has(cacheKey)) return articleSearchPending.get(cacheKey);
+    const request = (async () => {
+      const startedAt = Date.now();
+      const client = getUserClient(accessToken);
+      const { data, error } = await client.rpc("search_articles_fast", {
+        p_query: q,
+        p_limit: normalizedLimit,
+        p_offset: normalizedOffset,
+        p_organization_id: organizationId || null,
+      });
+      if (error) throw error;
+      const rows = Array.isArray(data) ? data : [];
+      const total = Number(rows[0]?.total_count || 0);
+      const hasMore = normalizedOffset + rows.length < total;
+      return setArticleSearchCache(cacheKey, {
+        items: rows.map(mapRowToArticle), total,
+        totalIsExact: rows.length > 0 && !hasMore,
+        limit: normalizedLimit, offset: normalizedOffset, hasMore,
+        searchMs: Date.now() - startedAt,
+      });
+    })();
+    articleSearchPending.set(cacheKey, request);
+    try {
+      return await request;
+    } finally {
+      if (articleSearchPending.get(cacheKey) === request) articleSearchPending.delete(cacheKey);
     }
-
-    const rows = Array.isArray(data) ? data : [];
-    const total = Number(rows[0]?.total_count || rows.length || 0);
-    const result = {
-      items: rows.map(mapRowToArticle),
-      total,
-      limit: normalizedLimit,
-      offset: normalizedOffset,
-      hasMore: normalizedOffset + rows.length < total,
-      searchMs: Date.now() - startedAt,
-    };
-
-    return setArticleSearchCache(cacheKey, result);
   }
 
   const client = requireAdminClient("Pesquisa administrativa de artigos");
@@ -645,6 +650,7 @@ export async function upsertArticle(article = {}) {
     throw error;
   }
 
+  articleSearchCache.clear();
   return mapRowToArticle(data);
 }
 
