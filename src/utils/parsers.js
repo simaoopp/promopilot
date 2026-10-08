@@ -65,7 +65,7 @@ export function parseTabelaColada(texto) {
       dataInicio: partes[14] || "",
       dataFim: partes[15] || "",
       alterado: partes[16] || "",
-      info: partes[17] || "",
+      info: partes.slice(17).join(" ").trim(),
       selecionado: false,
     });
   }

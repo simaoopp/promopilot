@@ -1,3 +1,4 @@
+import { isPvpUpdatePromotionInfo } from "../../../shared/campaign-label/promotionInfoRules";
 import { supabase } from "../../../lib/supabase";
 import { parseNumero } from "../../../utils/formatters";
 
@@ -6,7 +7,7 @@ export async function pesquisarCodigosCampanha(texto, { existentes = [], signal 
   const entradas = String(texto || "").split(/[\s,;]+/).filter(Boolean);
   const codigos = [...new Set(entradas)];
   const resultado = {
-    artigos: [], naoEncontrados: [], falhas: [], precosInvalidos: [], codigosCurtos: [],
+    artigos: [], manutencaoPvp: [], naoEncontrados: [], falhas: [], precosInvalidos: [], codigosCurtos: [],
     duplicados: entradas.length - codigos.length,
   };
   const vistos = new Set(existentes.map((codigo) => String(codigo).trim()));
@@ -42,6 +43,10 @@ export async function pesquisarCodigosCampanha(texto, { existentes = [], signal 
         resultado.naoEncontrados.push(codigo);
       } else {
         vistos.add(String(artigo.artigo).trim());
+        if (isPvpUpdatePromotionInfo(artigo)) {
+          resultado.manutencaoPvp.push(artigo.artigo);
+          continue;
+        }
         const antes = parseNumero(artigo.pvp3 || artigo.pvp2);
         const atual = parseNumero(artigo.pvp2);
         if (!Number.isFinite(antes) || !Number.isFinite(atual) || antes <= 0 || atual <= 0 || atual > antes) {

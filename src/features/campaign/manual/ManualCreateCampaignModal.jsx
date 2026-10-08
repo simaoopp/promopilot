@@ -183,6 +183,9 @@ export default function ManualCreateCampaignModal({
                     {resultadoLista.falhas.length > 0 && <p className="campanha-erro">
                       Não foi possível consultar estes códigos (tenta novamente): {resultadoLista.falhas.join(", ")}
                     </p>}
+                    {resultadoLista.manutencaoPvp.length > 0 && <p className="campanha-erro">
+                      Bloqueados — Atualização/Reposição de PVP: {resultadoLista.manutencaoPvp.join(", ")}
+                    </p>}
                     {resultadoLista.precosInvalidos.length > 0 && <p className="campanha-erro">
                       Artigos com preços inválidos (usa a pesquisa rápida para corrigir): {resultadoLista.precosInvalidos.join(", ")}
                     </p>}

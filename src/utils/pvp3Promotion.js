@@ -25,6 +25,7 @@ export function criarIdsComparacaoPvp3(artigos, idsSelecionados) {
 }
 
 export function aplicarComparacaoPvp3NoArtigo(item) {
+  if (isPvpUpdatePromotionInfo(item)) return { ...item, selecionado: false };
   return {
     ...item,
     antes: parsePrecoComparacao(item.pv3),

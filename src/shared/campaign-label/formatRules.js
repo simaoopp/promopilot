@@ -1,3 +1,4 @@
+import { isPvpUpdatePromotionInfo } from "./promotionInfoRules.js";
 import { normalizarTexto } from "./formatters.js";
 
 export const CAMPAIGN_A5_KEYWORDS = [
@@ -120,7 +121,8 @@ export function applyAutomaticFormatRulesToItems(items = [], format = "automatic
 
 export function buildAutomaticPrintPages(items = [], format = "automatico") {
   const normalizedFormat = normalizeCampaignFormat(format);
-  const formattedItems = applyAutomaticFormatRulesToItems(items, normalizedFormat);
+  const formattedItems = applyAutomaticFormatRulesToItems(items, normalizedFormat)
+    .filter((item) => !isPvpUpdatePromotionInfo(item));
 
   if (!isAutomaticFormatMode(normalizedFormat)) {
     const etiquetasPorPagina = normalizedFormat === "a5" ? 2 : 4;
@@ -149,6 +151,7 @@ export function buildAutomaticPrintPages(items = [], format = "automatico") {
 }
 
 export function buildManualCampaignPrintPages(items = [], modoAutomatico = true, formatoManual = "a6") {
+  items = items.filter((item) => !isPvpUpdatePromotionInfo(item));
   if (!modoAutomatico) {
     const etiquetasPorPagina = formatoManual === "a5" ? 2 : 4;
     return dividirEmPaginas(items, etiquetasPorPagina).map((pageItems) => ({

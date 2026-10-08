@@ -26,7 +26,7 @@ import {
 import { aplicarFiltroTexto, compararNumero } from "../utils/filters";
 import { formatarEuro, parseNumero } from "../utils/formatters";
 import { PROMOTION_PRICE_SOURCES } from "../utils/promotionPricing";
-import { isPvpUpdatePromotionInfo } from "../shared/campaign-label/promotionInfoRules";
+import { getPromotionInfoText, isPvpUpdatePromotionInfo } from "../shared/campaign-label/promotionInfoRules";
 import { parseTabelaColada } from "../utils/parsers";
 import ManualCampaignToolbar from "../features/campaign/manual/ManualCampaignToolbar";
 import ManualCampaignTable from "../features/campaign/manual/ManualCampaignTable";
@@ -457,9 +457,10 @@ export default function EtiquetasPage() {
   }
 
   async function guardarCampanhaNoHistorico(origem = "manual", itensOverride = null) {
-    const itensSelecionados = Array.isArray(itensOverride)
+    const itensSelecionados = (Array.isArray(itensOverride)
       ? itensOverride
-      : dados.filter((item) => item.selecionado);
+      : dados.filter((item) => item.selecionado))
+      .filter((item) => !isPvpUpdatePromotionInfo(item));
     if (!itensSelecionados.length) return false;
 
     const store = String(profile?.store || "").trim();
@@ -669,6 +670,12 @@ export default function EtiquetasPage() {
       return;
     }
 
+    const candidatos = emLista ? artigosLista : [artigoCampanhaSelecionado];
+    if (candidatos.some(isPvpUpdatePromotionInfo)) {
+      setErroCampanha("Atualização de PVP e Reposição de PVP não podem entrar numa campanha, mesmo com desconto face ao PVP3.");
+      return;
+    }
+
     const antes = converterPreco(campanhaAntes);
     const atual = converterPreco(campanhaAtual);
 
@@ -738,7 +745,7 @@ export default function EtiquetasPage() {
         dataInicio: dataInicioFinal,
         dataFim: dataFimFinal,
         alterado: "CAMPANHA",
-        info: `Desconto ${formatarEuro(precoAntes - precoAtual)}€`,
+        info: [getPromotionInfoText(artigo), `Desconto ${formatarEuro(precoAntes - precoAtual)}€`].filter(Boolean).join(" | "),
         selecionado: true,
         formato_auto: obterFormatoAutomaticoEtiqueta(artigo.descricao || ""),
       };

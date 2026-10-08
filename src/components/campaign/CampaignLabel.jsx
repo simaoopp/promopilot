@@ -1,3 +1,4 @@
+import { isPvpUpdatePromotionInfo } from "../../shared/campaign-label/promotionInfoRules";
 import React from "react";
 import Barcode from "../Barcode";
 import expertLabelLogo from "../../assets/expert-label-logo.png";
@@ -135,6 +136,7 @@ function CampaignLabelContent({
 }
 
 export function CampaignLabel(props) {
+  if (isPvpUpdatePromotionInfo(props.item)) return null;
   const { formatoAtual } = props;
   const etiquetaClassName = `label ${formatoAtual === "a5" ? "label-a5" : "label-a6"}`;
 
