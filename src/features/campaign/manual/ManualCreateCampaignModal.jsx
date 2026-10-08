@@ -1,3 +1,4 @@
+import CampaignReview from "../common/CampaignReview";
 import { useEffect, useRef, useState } from "react";
 import { pesquisarCodigosCampanha } from "./manualCampaignCodes";
 import { formatarEuro } from "../../../utils/formatters";
@@ -9,6 +10,7 @@ export default function ManualCreateCampaignModal({
   codigosExistentes,
   adicionarListaCampanha,
   artigoCampanhaSelecionado,
+  validacaoArtigoCampanha,
   fecharPopupCriarCampanha,
   descontoCampanha,
   pesquisaCampanha,
@@ -36,6 +38,7 @@ export default function ManualCreateCampaignModal({
   const [resultadoLista, setResultadoLista] = useState(null);
   const [listaLoading, setListaLoading] = useState(false);
   const [mensagemLista, setMensagemLista] = useState("");
+  const [listaAdicionada, setListaAdicionada] = useState(false);
   const pedidoLista = useRef(null);
 
   useEffect(() => () => pedidoLista.current?.abort(), []);
@@ -46,6 +49,7 @@ export default function ManualCreateCampaignModal({
     pedidoLista.current = controller;
     setListaLoading(true);
     setResultadoLista(null);
+    setListaAdicionada(false);
     setMensagemLista("");
     try {
       const resultado = await pesquisarCodigosCampanha(listaCodigos, {
@@ -64,7 +68,7 @@ export default function ManualCreateCampaignModal({
     const adicionados = adicionarListaCampanha(resultadoLista.artigos);
     if (adicionados == null) return;
     setMensagemLista(`${adicionados} artigo(s) adicionado(s) à campanha.`);
-    setResultadoLista((prev) => ({ ...prev, artigos: [] }));
+    setListaAdicionada(true);
   }
 
   if (!aberto) return null;
@@ -158,6 +162,7 @@ export default function ManualCreateCampaignModal({
                     onChange={(event) => {
                       setListaCodigos(event.target.value);
                       setResultadoLista(null);
+                      setListaAdicionada(false);
                       setMensagemLista("");
                     }}
                     placeholder={"001234\n5601234567890"}
@@ -171,31 +176,7 @@ export default function ManualCreateCampaignModal({
                 </button>
                 <div role="status" aria-live="polite">
                   {mensagemLista && <p>{mensagemLista}</p>}
-                  {resultadoLista && <>
-                    <p>{resultadoLista.artigos.length} artigo(s) pronto(s) para adicionar.
-                      {" "}{resultadoLista.duplicados} duplicado(s) ignorado(s).</p>
-                    {resultadoLista.naoEncontrados.length > 0 && <p className="campanha-erro">
-                      Códigos não encontrados: {resultadoLista.naoEncontrados.join(", ")}
-                    </p>}
-                    {resultadoLista.codigosCurtos.length > 0 && <p className="campanha-erro">
-                      O catálogo exige pelo menos 3 caracteres por código: {resultadoLista.codigosCurtos.join(", ")}
-                    </p>}
-                    {resultadoLista.falhas.length > 0 && <p className="campanha-erro">
-                      Não foi possível consultar estes códigos (tenta novamente): {resultadoLista.falhas.join(", ")}
-                    </p>}
-                    {resultadoLista.manutencaoPvp.length > 0 && <p className="campanha-erro">
-                      Bloqueados — Atualização/Reposição de PVP: {resultadoLista.manutencaoPvp.join(", ")}
-                    </p>}
-                    {resultadoLista.precosInvalidos.length > 0 && <p className="campanha-erro">
-                      Artigos com preços inválidos (usa a pesquisa rápida para corrigir): {resultadoLista.precosInvalidos.join(", ")}
-                    </p>}
-                    {resultadoLista.artigos.length > 0 && <>
-                      <p>{resultadoLista.artigos.map((item) => item.artigo).join(", ")}</p>
-                      <button type="button" className="btn btn-primary" onClick={adicionarLista}>
-                        Adicionar lista à campanha
-                      </button>
-                    </>}
-                  </>}
+                  <CampaignReview resultado={resultadoLista?.revisao} onConfirm={adicionarLista} concluido={listaAdicionada} />
                 </div>
               </details>
 
@@ -327,9 +308,13 @@ export default function ManualCreateCampaignModal({
                       </div>
                     </div>
 
+                    <details>
+                      <summary>Informação original do catálogo</summary>
+                      <p>{artigoCampanhaSelecionado.origemDados?.informacao || "O catálogo não fornece informação sobre atualização/reposição de PVP para este artigo."}</p>
+                    </details>
                     <div className="campanha-highlight-box">
                       <span>Validação</span>
-                      <strong>{estadoValidacaoCampanha}</strong>
+                      <strong>{validacaoArtigoCampanha?.motivo || estadoValidacaoCampanha}</strong>
                     </div>
                   </>
                 ) : (
@@ -347,7 +332,7 @@ export default function ManualCreateCampaignModal({
             type="button"
             className="btn btn-primary"
             onClick={adicionarArtigoCampanha}
-            disabled={!artigoCampanhaSelecionado || !!erroCampanha}
+            disabled={!artigoCampanhaSelecionado || !!erroCampanha || validacaoArtigoCampanha?.estado !== "valido"}
           >
             Adicionar à campanha
           </button>

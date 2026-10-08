@@ -1,3 +1,5 @@
+import CampaignReview from "../features/campaign/common/CampaignReview";
+import { validarItensCampanha } from "../shared/campaign-label/campaignValidation";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { printDocument } from "../utils/print";
@@ -51,6 +53,7 @@ export default function EtiquetasExcelPage() {
   const [dados, setDados] = useState([]);
   const [loading, setLoading] = useState(false);
   const [nomeFicheiro, setNomeFicheiro] = useState("");
+  const [importacaoPendente, setImportacaoPendente] = useState(null);
   const [formatoEtiqueta, setFormatoEtiqueta] = useState("a6");
   const [formatoAutomaticoAtivo, setFormatoAutomaticoAtivo] = useState(false);
   const [promocaoFontePreco, setPromocaoFontePreco] = useState(PROMOTION_PRICE_SOURCES.PVP2);
@@ -274,7 +277,7 @@ export default function EtiquetasExcelPage() {
       if (!file) return;
 
       setLoading(true);
-      setNomeFicheiro(file.name);
+
 
       const buffer = await file.arrayBuffer();
       const workbook = XLSX.read(buffer);
@@ -289,42 +292,23 @@ export default function EtiquetasExcelPage() {
       const formatoExcel = detetarFormatoExcel(rows);
 
       const linhas = rows
-        .map((row, index) => mapearLinhaExcel(row, index, formatoExcel))
+        .map((row, index) => {
+          const item = mapearLinhaExcel(row, index, formatoExcel);
+          return { ...item, origemDados: { ...item.origemDados, ficheiro: file.name, folha: nomeSheet } };
+        })
         .filter((item) => item.codigo || item.descricao || item.ean);
 
       if (!linhas.length) {
         throw new Error("Sem linhas válidas");
       }
 
-      const linhasNormalizadas = campanhaSemDatas
-        ? linhas.map(limparDatasCampanhaItem)
-        : linhas;
-      const dataInicioCapturada =
-        !campanhaSemDatas && isFormatoCampanhaComDatas(formatoExcel)
-          ? extrairPrimeiraDataCampanha(linhasNormalizadas, "dataInicio")
-          : "";
-      const dataFimCapturada =
-        !campanhaSemDatas && isFormatoCampanhaComDatas(formatoExcel)
-          ? extrairPrimeiraDataCampanha(linhasNormalizadas, "dataFim")
-          : "";
-      const dataInicioBase = dataInicioCapturada || dataInicioCampanhaGeral;
-      const dataFimBase = dataFimCapturada || dataFimCampanhaGeral;
-
-      setModeloImportado(formatoExcel);
-      setDataInicioShopping("");
-      setDataFimShopping("");
-      setDataInicioCampanhaGeral(campanhaSemDatas ? "" : dataInicioBase);
-      setDataFimCampanhaGeral(campanhaSemDatas ? "" : dataFimBase);
-      setMostrarTabelaCompleta(false);
-      setOrdenacao({ coluna: "", direcao: "" });
-      setFiltroAberto(null);
-      setDados(
-        !campanhaSemDatas && isFormatoCampanhaComDatas(formatoExcel)
-          ? aplicarDatasGeraisCampanha(linhasNormalizadas, dataInicioBase, dataFimBase)
-          : linhasNormalizadas,
-      );
-
-      toast.success(`${obterDescricaoFormatoExcel(formatoExcel)} importado com sucesso.`);
+      setImportacaoPendente({
+        nome: file.name, formatoExcel,
+        revisao: validarItensCampanha(linhas, {
+          permitirComparacaoPvp3: true,
+          validarPrecos: formatoExcel !== EXCEL_FORMATS.SHOPPING,
+        }),
+      });
     } catch (error) {
       console.error("Erro ao ler Excel:", error);
       toast.error("Não foi possível ler o ficheiro Excel.");
@@ -332,6 +316,43 @@ export default function EtiquetasExcelPage() {
       setLoading(false);
       event.target.value = "";
     }
+  }
+
+  function confirmarImportacaoExcel() {
+    if (!importacaoPendente?.revisao.validos.length) return;
+    const { formatoExcel, nome } = importacaoPendente;
+    const linhas = importacaoPendente.revisao.validos;
+    setNomeFicheiro(nome);
+    const linhasNormalizadas = campanhaSemDatas
+      ? linhas.map(limparDatasCampanhaItem)
+      : linhas;
+    const dataInicioCapturada =
+      !campanhaSemDatas && isFormatoCampanhaComDatas(formatoExcel)
+        ? extrairPrimeiraDataCampanha(linhasNormalizadas, "dataInicio")
+        : "";
+    const dataFimCapturada =
+      !campanhaSemDatas && isFormatoCampanhaComDatas(formatoExcel)
+        ? extrairPrimeiraDataCampanha(linhasNormalizadas, "dataFim")
+        : "";
+    const dataInicioBase = dataInicioCapturada || dataInicioCampanhaGeral;
+    const dataFimBase = dataFimCapturada || dataFimCampanhaGeral;
+
+    setModeloImportado(formatoExcel);
+    setDataInicioShopping("");
+    setDataFimShopping("");
+    setDataInicioCampanhaGeral(campanhaSemDatas ? "" : dataInicioBase);
+    setDataFimCampanhaGeral(campanhaSemDatas ? "" : dataFimBase);
+    setMostrarTabelaCompleta(false);
+    setOrdenacao({ coluna: "", direcao: "" });
+    setFiltroAberto(null);
+    setDados(
+      !campanhaSemDatas && isFormatoCampanhaComDatas(formatoExcel)
+        ? aplicarDatasGeraisCampanha(linhasNormalizadas, dataInicioBase, dataFimBase)
+        : linhasNormalizadas,
+    );
+
+    toast.success(`${obterDescricaoFormatoExcel(formatoExcel)} importado com sucesso.`);
+    setImportacaoPendente(null);
   }
 
   const dadosFiltrados = useMemo(() => {
@@ -693,6 +714,8 @@ export default function EtiquetasExcelPage() {
 
   return (
     <>
+      <CampaignReview resultado={importacaoPendente?.revisao} modal substituiTabela
+        onConfirm={confirmarImportacaoExcel} onCancel={() => setImportacaoPendente(null)} />
       <div className="page-content no-print">
         <div className="page-header">
           <div>

@@ -1,3 +1,5 @@
+import CampaignReview from "../features/campaign/common/CampaignReview";
+import { validarItensCampanha, resumirRevisaoCampanha } from "../shared/campaign-label/campaignValidation";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -26,7 +28,7 @@ import {
 import { aplicarFiltroTexto, compararNumero } from "../utils/filters";
 import { formatarEuro, parseNumero } from "../utils/formatters";
 import { PROMOTION_PRICE_SOURCES } from "../utils/promotionPricing";
-import { getPromotionInfoText, isPvpUpdatePromotionInfo } from "../shared/campaign-label/promotionInfoRules";
+import { preservarOrigemCampanha, getPromotionInfoText, isPvpUpdatePromotionInfo } from "../shared/campaign-label/promotionInfoRules";
 import { parseTabelaColada } from "../utils/parsers";
 import ManualCampaignToolbar from "../features/campaign/manual/ManualCampaignToolbar";
 import ManualCampaignTable from "../features/campaign/manual/ManualCampaignTable";
@@ -56,6 +58,7 @@ export default function EtiquetasPage() {
 
   const [titulo, setTitulo] = useState(CAMPANHA_TITULO_DEFAULT);
   const [textoColado, setTextoColado] = useState("");
+  const [revisaoTabela, setRevisaoTabela] = useState(null);
   const [anoValidade, setAnoValidade] = useState(new Date().getFullYear());
   const [dataInicioGeral, setDataInicioGeral] = useState("");
   const [dataFimGeral, setDataFimGeral] = useState("");
@@ -337,6 +340,13 @@ export default function EtiquetasPage() {
     return "Pronto para adicionar";
   }, [campanhaAtual, erroCampanha, pvpBaseCampanha]);
 
+  const validacaoArtigoCampanha = useMemo(() => {
+    if (!artigoCampanhaSelecionado) return null;
+    return validarItensCampanha([{
+      ...artigoCampanhaSelecionado, antes: campanhaAntes, atual: campanhaAtual,
+    }], { existentes: dados }).linhas[0];
+  }, [artigoCampanhaSelecionado, campanhaAntes, campanhaAtual, dados]);
+
   function resetFormularioCampanha() {
     setPesquisaCampanha("");
     setArtigoCampanhaSelecionado(null);
@@ -426,34 +436,43 @@ export default function EtiquetasPage() {
         ? linhas.map(limparDatasCampanhaItem)
         : linhas;
 
-      if (linhasNormalizadas.some(itemTabelaInvalido)) {
-        throw new Error("Dados inválidos");
-      }
-
-      if (campanhaSemDatas) {
-        setDataInicioGeral("");
-        setDataFimGeral("");
-        setDados(linhasNormalizadas);
-        return;
-      }
-
-      const dataInicioCapturada = extrairPrimeiraDataCampanha(linhasNormalizadas, "dataInicio");
-      const dataFimCapturada = extrairPrimeiraDataCampanha(linhasNormalizadas, "dataFim");
-      const dataInicioBase = dataInicioGeral || dataInicioCapturada;
-      const dataFimBase = dataFimGeral || dataFimCapturada;
-
-      if (!dataInicioGeral && dataInicioCapturada) {
-        setDataInicioGeral(dataInicioCapturada);
-      }
-
-      if (!dataFimGeral && dataFimCapturada) {
-        setDataFimGeral(dataFimCapturada);
-      }
-
-      setDados(aplicarDatasGeraisEmLinhas(linhasNormalizadas, dataInicioBase, dataFimBase));
+      const revisao = validarItensCampanha(linhasNormalizadas, { permitirComparacaoPvp3: true });
+      setRevisaoTabela(resumirRevisaoCampanha(revisao.linhas.map((linha) =>
+        linha.estado === "valido" && itemTabelaInvalido(linha.item)
+          ? { ...linha, estado: "bloqueado", motivo: "Verifica descrição, EAN, preços e formato das datas da linha." }
+          : linha,
+      )));
     } catch {
       toast.error("Verifica se os dados inseridos estão corretos.");
     }
+  }
+
+  function confirmarTabelaColada() {
+    const linhasNormalizadas = revisaoTabela?.validos || [];
+    if (!linhasNormalizadas.length) return;
+    if (campanhaSemDatas) {
+      setDataInicioGeral("");
+      setDataFimGeral("");
+      setDados(linhasNormalizadas);
+      setRevisaoTabela(null);
+      return;
+    }
+
+    const dataInicioCapturada = extrairPrimeiraDataCampanha(linhasNormalizadas, "dataInicio");
+    const dataFimCapturada = extrairPrimeiraDataCampanha(linhasNormalizadas, "dataFim");
+    const dataInicioBase = dataInicioGeral || dataInicioCapturada;
+    const dataFimBase = dataFimGeral || dataFimCapturada;
+
+    if (!dataInicioGeral && dataInicioCapturada) {
+      setDataInicioGeral(dataInicioCapturada);
+    }
+
+    if (!dataFimGeral && dataFimCapturada) {
+      setDataFimGeral(dataFimCapturada);
+    }
+
+    setDados(aplicarDatasGeraisEmLinhas(linhasNormalizadas, dataInicioBase, dataFimBase));
+    setRevisaoTabela(null);
   }
 
   async function guardarCampanhaNoHistorico(origem = "manual", itensOverride = null) {
@@ -670,9 +689,13 @@ export default function EtiquetasPage() {
       return;
     }
 
-    const candidatos = emLista ? artigosLista : [artigoCampanhaSelecionado];
-    if (candidatos.some(isPvpUpdatePromotionInfo)) {
-      setErroCampanha("Atualização de PVP e Reposição de PVP não podem entrar numa campanha, mesmo com desconto face ao PVP3.");
+    const candidatos = emLista ? artigosLista : [{
+      ...artigoCampanhaSelecionado, antes: campanhaAntes, atual: campanhaAtual,
+    }];
+    const revisao = validarItensCampanha(candidatos, { existentes: dados });
+    const problema = revisao.linhas.find((linha) => linha.estado !== "valido");
+    if (problema) {
+      setErroCampanha(`${problema.codigo}: ${problema.motivo}`);
       return;
     }
 
@@ -729,6 +752,7 @@ export default function EtiquetasPage() {
       return {
         id: `${artigo.artigo}-${Date.now()}-${index}`,
         codigo: artigo.artigo || "",
+        origemDados: preservarOrigemCampanha(artigo, { tipo: "catalogo" }).origemDados,
         descricao: artigo.descricao || "",
         pn: "",
         ean: artigo.codigoBarras || "",
@@ -760,7 +784,7 @@ export default function EtiquetasPage() {
     const pvp3Antes = item.pvp3 || item.pvp2 || "";
     const pvp2Atual = item.pvp2 || "";
 
-    setArtigoCampanhaSelecionado(item);
+    setArtigoCampanhaSelecionado(preservarOrigemCampanha(item, { tipo: "catalogo" }));
     setCampanhaAntes(pvp3Antes);
     setCampanhaAtual(pvp2Atual);
   }
@@ -821,11 +845,15 @@ export default function EtiquetasPage() {
         />
       </div>
 
+      <CampaignReview resultado={revisaoTabela} modal substituiTabela
+        onConfirm={confirmarTabelaColada} onCancel={() => setRevisaoTabela(null)} />
+
       {popupCriarCampanhaAberto && <ManualCreateCampaignModal
         aberto={popupCriarCampanhaAberto}
         codigosExistentes={dados.map((item) => item.codigo)}
         adicionarListaCampanha={adicionarArtigoCampanha}
         artigoCampanhaSelecionado={artigoCampanhaSelecionado}
+        validacaoArtigoCampanha={validacaoArtigoCampanha}
         fecharPopupCriarCampanha={fecharPopupCriarCampanha}
         descontoCampanha={descontoCampanha}
         pesquisaCampanha={pesquisaCampanha}

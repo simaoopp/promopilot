@@ -11,9 +11,9 @@ function normalizePromotionInfo(value = "") {
 
 // Read operational metadata, never product descriptions: mentioning a PVP in a
 // product name does not classify that product as price maintenance.
-export function getPromotionInfoText(itemOrText = "") {
+export function getPromotionInfoFields(itemOrText = "") {
   if (typeof itemOrText === "string" || typeof itemOrText === "number") {
-    return String(itemOrText ?? "");
+    return { info: String(itemOrText ?? "") };
   }
 
   const item = itemOrText && typeof itemOrText === "object" ? itemOrText : {};
@@ -21,12 +21,33 @@ export function getPromotionInfoText(itemOrText = "") {
     "INFO", "INFORMACAO", "INFORMACOES", "INFORMACAOPROMO", "INFORMACOESPROMO",
     "INFORMACAOPROMOCAO", "INFORMACOESPROMOCAO", "ALTERADO", "ESTADO",
     "TIPOALTERACAO", "TIPOMOVIMENTO", "MOTIVO", "OBSERVACAO", "OBSERVACOES",
+    "ALTERADOPRIMAVERA", "INFOORIGINAL", "INFORMACAOORIGINAL",
   ]);
-  return Object.entries(item)
+  return Object.fromEntries(Object.entries(item)
     .filter(([key, value]) => fields.has(normalizePromotionInfo(key).replace(/ /g, ""))
-      && (typeof value === "string" || typeof value === "number"))
-    .map(([, value]) => String(value))
+      && (typeof value === "string" || typeof value === "number")));
+}
+
+export function getPromotionInfoText(itemOrText = "") {
+  return [
+    ...Object.values(getPromotionInfoFields(itemOrText)),
+    itemOrText?.origemDados?.informacao,
+  ].filter((value) => value !== undefined && value !== null && String(value).trim())
     .join(" | ");
+}
+
+// Preserve the first source before prices or campaign labels are transformed.
+// This JSON travels with each item, including campaign history and duplicates.
+export function preservarOrigemCampanha(item, origem = {}, original = item) {
+  if (item.origemDados) return item;
+  return {
+    ...item,
+    origemDados: {
+      ...origem,
+      informacao: getPromotionInfoText(original),
+      campos: { ...getPromotionInfoFields(original) },
+    },
+  };
 }
 
 export function isPvpUpdatePromotionInfo(itemOrText = "") {

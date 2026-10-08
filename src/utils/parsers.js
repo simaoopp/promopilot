@@ -1,3 +1,4 @@
+import { preservarOrigemCampanha } from "../shared/campaign-label/promotionInfoRules";
 import { parseNumero } from "./formatters";
 
 function normalizarTexto(texto) {
@@ -27,8 +28,8 @@ function dividirLinha(linha) {
 export function parseTabelaColada(texto) {
   const linhas = String(texto || "")
     .split("\n")
-    .map((l) => l.trim())
-    .filter(Boolean);
+    .map((l) => l.replace(/\r$/, ""))
+    .filter((l) => l.trim());
 
   if (linhas.length === 0) return [];
 
@@ -44,9 +45,7 @@ export function parseTabelaColada(texto) {
     const linha = linhasDados[i];
     const partes = dividirLinha(linha);
 
-    if (partes.length < 4) continue;
-
-    resultado.push({
+    const item = {
       id: `row-${i}-${partes[0] || "sem-codigo"}`,
       codigo: partes[0] || "",
       descricao: partes[1] || "",
@@ -67,7 +66,10 @@ export function parseTabelaColada(texto) {
       alterado: partes[16] || "",
       info: partes.slice(17).join(" ").trim(),
       selecionado: false,
-    });
+    };
+    resultado.push(preservarOrigemCampanha(item, {
+      tipo: "email", linha: i + (temCabecalho ? 2 : 1),
+    }));
   }
 
   return resultado;
