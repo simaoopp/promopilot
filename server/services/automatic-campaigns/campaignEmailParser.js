@@ -1,3 +1,4 @@
+import { preservarOrigemCampanha } from "../../../src/shared/campaign-label/promotionInfoRules.js";
 import * as cheerio from "cheerio";
 import { applyAutomaticCampaignPriceRules, isProtectedCampaignPrice } from "./priceRulesService.js";
 import { parseNumero, parseInteiro } from "./numberUtils.js";
@@ -164,7 +165,7 @@ function buildProtectedRow({ cells = [], index = 0, source = "email" } = {}) {
     parserSource: source,
   };
 
-  const pricedItem = applyAutomaticCampaignPriceRules(rawItem);
+  const pricedItem = applyAutomaticCampaignPriceRules(preservarOrigemCampanha(rawItem, { tipo: "email", linha: index + 1 }));
 
   if (!pricedItem.precoValido) return null;
   if (!isProtectedCampaignPrice(pvp2Antes) || !isProtectedCampaignPrice(pvp2Atual) || !isProtectedCampaignPrice(pv3)) return null;
