@@ -662,8 +662,9 @@ export default function EtiquetasPage() {
     await printDocument();
   }
 
-  function adicionarArtigoCampanha() {
-    if (!artigoCampanhaSelecionado) {
+  function adicionarArtigoCampanha(artigosLista = null) {
+    const emLista = Array.isArray(artigosLista);
+    if (!emLista && !artigoCampanhaSelecionado) {
       toast.warning("Seleciona um artigo.");
       return;
     }
@@ -671,12 +672,12 @@ export default function EtiquetasPage() {
     const antes = converterPreco(campanhaAntes);
     const atual = converterPreco(campanhaAtual);
 
-    if (antes <= 0 || atual <= 0) {
+    if (!emLista && (antes <= 0 || atual <= 0)) {
       setErroCampanha("Preenche os valores de PVP3 antes e PVP2 atual.");
       return;
     }
 
-    if (atual > antes) {
+    if (!emLista && atual > antes) {
       setErroCampanha("Valor maior que PVP3 antes.");
       return;
     }
@@ -693,9 +694,6 @@ export default function EtiquetasPage() {
 
     setErroCampanha("");
 
-    const descricao = artigoCampanhaSelecionado.descricao || "";
-    const formatoAuto = obterFormatoAutomaticoEtiqueta(descricao);
-
     let dataInicioFinal = "";
     let dataFimFinal = "";
 
@@ -711,32 +709,44 @@ export default function EtiquetasPage() {
       }
     }
 
-    const novoItem = {
-      id: `${artigoCampanhaSelecionado.artigo}-${Date.now()}`,
-      codigo: artigoCampanhaSelecionado.artigo || "",
-      descricao,
-      pn: "",
-      ean: artigoCampanhaSelecionado.codigoBarras || "",
-      antes,
-      atual,
-      pv3: artigoCampanhaSelecionado.pvp3 || campanhaAntes || "",
-      estado: "",
-      ae: artigoCampanhaSelecionado.stock || "",
-      aea: "",
-      aev: "",
-      a10: "",
-      a1e: "",
-      data: "",
-      dataInicio: dataInicioFinal,
-      dataFim: dataFimFinal,
-      alterado: "CAMPANHA",
-      info: `Desconto ${formatarEuro(descontoCampanha)}€`,
-      selecionado: true,
-      formato_auto: formatoAuto,
-    };
+    const existentes = new Set(dados.map((item) => String(item.codigo).trim()));
+    const artigos = emLista ? artigosLista.filter((item) => {
+      const codigo = String(item.artigo).trim();
+      if (existentes.has(codigo)) return false;
+      existentes.add(codigo);
+      return true;
+    }) : [artigoCampanhaSelecionado];
+    const novosItens = artigos.map((artigo, index) => {
+      const precoAntes = emLista ? converterPreco(artigo.pvp3 || artigo.pvp2) : antes;
+      const precoAtual = emLista ? converterPreco(artigo.pvp2) : atual;
+      return {
+        id: `${artigo.artigo}-${Date.now()}-${index}`,
+        codigo: artigo.artigo || "",
+        descricao: artigo.descricao || "",
+        pn: "",
+        ean: artigo.codigoBarras || "",
+        antes: precoAntes,
+        atual: precoAtual,
+        pv3: artigo.pvp3 || (emLista ? precoAntes : campanhaAntes) || "",
+        estado: "",
+        ae: artigo.stock || "",
+        aea: "",
+        aev: "",
+        a10: "",
+        a1e: "",
+        data: "",
+        dataInicio: dataInicioFinal,
+        dataFim: dataFimFinal,
+        alterado: "CAMPANHA",
+        info: `Desconto ${formatarEuro(precoAntes - precoAtual)}€`,
+        selecionado: true,
+        formato_auto: obterFormatoAutomaticoEtiqueta(artigo.descricao || ""),
+      };
+    });
 
-    setDados((prev) => [novoItem, ...prev]);
-    fecharPopupCriarCampanha();
+    setDados((prev) => [...novosItens, ...prev]);
+    if (!emLista) fecharPopupCriarCampanha();
+    return novosItens.length;
   }
 
   function selecionarSugestaoCampanha(item) {
@@ -804,8 +814,10 @@ export default function EtiquetasPage() {
         />
       </div>
 
-      <ManualCreateCampaignModal
+      {popupCriarCampanhaAberto && <ManualCreateCampaignModal
         aberto={popupCriarCampanhaAberto}
+        codigosExistentes={dados.map((item) => item.codigo)}
+        adicionarListaCampanha={adicionarArtigoCampanha}
         artigoCampanhaSelecionado={artigoCampanhaSelecionado}
         fecharPopupCriarCampanha={fecharPopupCriarCampanha}
         descontoCampanha={descontoCampanha}
@@ -828,8 +840,8 @@ export default function EtiquetasPage() {
         campanhaDataFim={campanhaDataFim}
         setCampanhaDataFim={setCampanhaDataFim}
         estadoValidacaoCampanha={estadoValidacaoCampanha}
-        adicionarArtigoCampanha={adicionarArtigoCampanha}
-      />
+        adicionarArtigoCampanha={() => adicionarArtigoCampanha()}
+      />}
 
       <InvalidCampaignItemsModal
         aberto={popupArtigosInvalidosAberto}

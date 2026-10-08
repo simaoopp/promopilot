@@ -1,9 +1,13 @@
+import { useEffect, useRef, useState } from "react";
+import { pesquisarCodigosCampanha } from "./manualCampaignCodes";
 import { formatarEuro } from "../../../utils/formatters";
 import { formatarPvpTriplo, normalizarValorPvp } from "../../../utils/articlePrices";
 import { obterFormatoAutomaticoEtiqueta } from "./manualCampaignUtils";
 
 export default function ManualCreateCampaignModal({
   aberto,
+  codigosExistentes,
+  adicionarListaCampanha,
   artigoCampanhaSelecionado,
   fecharPopupCriarCampanha,
   descontoCampanha,
@@ -28,6 +32,41 @@ export default function ManualCreateCampaignModal({
   estadoValidacaoCampanha,
   adicionarArtigoCampanha,
 }) {
+  const [listaCodigos, setListaCodigos] = useState("");
+  const [resultadoLista, setResultadoLista] = useState(null);
+  const [listaLoading, setListaLoading] = useState(false);
+  const [mensagemLista, setMensagemLista] = useState("");
+  const pedidoLista = useRef(null);
+
+  useEffect(() => () => pedidoLista.current?.abort(), []);
+
+  async function pesquisarLista() {
+    pedidoLista.current?.abort();
+    const controller = new AbortController();
+    pedidoLista.current = controller;
+    setListaLoading(true);
+    setResultadoLista(null);
+    setMensagemLista("");
+    try {
+      const resultado = await pesquisarCodigosCampanha(listaCodigos, {
+        existentes: codigosExistentes,
+        signal: controller.signal,
+      });
+      if (!controller.signal.aborted) setResultadoLista(resultado);
+    } catch (error) {
+      if (!controller.signal.aborted) setMensagemLista(error.message);
+    } finally {
+      if (!controller.signal.aborted) setListaLoading(false);
+    }
+  }
+
+  function adicionarLista() {
+    const adicionados = adicionarListaCampanha(resultadoLista.artigos);
+    if (adicionados == null) return;
+    setMensagemLista(`${adicionados} artigo(s) adicionado(s) à campanha.`);
+    setResultadoLista((prev) => ({ ...prev, artigos: [] }));
+  }
+
   if (!aberto) return null;
 
   return (
@@ -107,6 +146,55 @@ export default function ManualCreateCampaignModal({
                   </p>
                 )}
               </div>
+
+              <details className="ai-card-panel">
+                <summary>Colar lista de códigos</summary>
+                <label className="input-group">
+                  <span>Códigos internos ou EAN, separados por linhas, espaços, vírgulas ou ponto e vírgula</span>
+                  <textarea
+                    rows={6}
+                    value={listaCodigos}
+                    disabled={listaLoading}
+                    onChange={(event) => {
+                      setListaCodigos(event.target.value);
+                      setResultadoLista(null);
+                      setMensagemLista("");
+                    }}
+                    placeholder={"001234\n5601234567890"}
+                  />
+                </label>
+                <p>A pesquisa é exata. Os duplicados e os artigos já na campanha são ignorados.
+                  Cada artigo usa o seu PVP3 antes e PVP2 atual, com a validade escolhida abaixo.</p>
+                <button type="button" className="btn btn-secondary"
+                  disabled={listaLoading || !listaCodigos.trim()} onClick={pesquisarLista}>
+                  {listaLoading ? "A pesquisar códigos..." : "Pesquisar lista"}
+                </button>
+                <div role="status" aria-live="polite">
+                  {mensagemLista && <p>{mensagemLista}</p>}
+                  {resultadoLista && <>
+                    <p>{resultadoLista.artigos.length} artigo(s) pronto(s) para adicionar.
+                      {" "}{resultadoLista.duplicados} duplicado(s) ignorado(s).</p>
+                    {resultadoLista.naoEncontrados.length > 0 && <p className="campanha-erro">
+                      Códigos não encontrados: {resultadoLista.naoEncontrados.join(", ")}
+                    </p>}
+                    {resultadoLista.codigosCurtos.length > 0 && <p className="campanha-erro">
+                      O catálogo exige pelo menos 3 caracteres por código: {resultadoLista.codigosCurtos.join(", ")}
+                    </p>}
+                    {resultadoLista.falhas.length > 0 && <p className="campanha-erro">
+                      Não foi possível consultar estes códigos (tenta novamente): {resultadoLista.falhas.join(", ")}
+                    </p>}
+                    {resultadoLista.precosInvalidos.length > 0 && <p className="campanha-erro">
+                      Artigos com preços inválidos (usa a pesquisa rápida para corrigir): {resultadoLista.precosInvalidos.join(", ")}
+                    </p>}
+                    {resultadoLista.artigos.length > 0 && <>
+                      <p>{resultadoLista.artigos.map((item) => item.artigo).join(", ")}</p>
+                      <button type="button" className="btn btn-primary" onClick={adicionarLista}>
+                        Adicionar lista à campanha
+                      </button>
+                    </>}
+                  </>}
+                </div>
+              </details>
 
               <div className="campanha-stack">
                 <div className="ai-card-panel">
