@@ -5,6 +5,11 @@ import { parseTabelaColada } from "./parsers";
 
 test.each([
   "Atualização PVP", "ATUALIZAÇÃO DE PVP", "Actualização do P.V.P.",
+  "Atualizações de PVPs", "ACTUALIZAÇÕES DOS PVPS", "ACTULIZAÇOES PVP",
+  "ACTULIZAÇÕES DE PVPS", "Actulização PVP", "Atulizações PVPs",
+  "Reposições de PVPs", "REPOSICOES DOS P.V.P.S", "PVPs: Actualizações",
+  "Atualizações dos P V P S", "ATUALIZACOESPVPS", "Reposições PVP2s",
+  "Atualização PVPs", "Reposição PVPS", "ATUAL. PVPS",
   "ATULIZAÇÃO PVP", "Reposição de PVP", "REPOSIÇÃO DO PVP2",
   "REPOS. PVP", "ATUAL. PVP", "PVP: Reposição", "PVP - Atualização",
   "ATUALIZACAOPVP", "Reposição\n de\tP V P 3",
@@ -16,6 +21,7 @@ test.each([
   "Campanha", "Comparação PVP atual/PVP3", "Desconto 20€",
   "REPOSIÇÃO DE STOCK", "PVP atual 299,99", "Preço atual PVP2",
   "Atualização de descrição", "REPOR STOCK",
+  "Atualizações de descrições", "Reposições de stock", "PVPs atuais", "PVPS",
 ])("preserva informação sem manutenção de PVP: %s", (info) => {
   expect(isPvpUpdatePromotionInfo({ info })).toBe(false);
 });

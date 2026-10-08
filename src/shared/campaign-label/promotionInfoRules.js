@@ -31,13 +31,13 @@ export function getPromotionInfoText(itemOrText = "") {
 
 export function isPvpUpdatePromotionInfo(itemOrText = "") {
   const normalized = normalizePromotionInfo(getPromotionInfoText(itemOrText))
-    // P.V.P., P V P, PVP2 and PVP 3 are the same price marker here.
-    .replace(/\bP\s*V\s*P(?:\s*[123])?\b/g, "PVP");
+    // P.V.P., P V P, PVP2, PVP 3 and their plurals share the same marker.
+    .replace(/\bP\s*V\s*P(?:\s*[123])?(?:\s*S)?\b/g, "PVP");
   if (!normalized) return false;
 
-  const maintenance = "(?:ACTUALIZACAO|ATUALIZACAO|ATULIZACAO|ACTUALIZAR|ATUALIZAR|REPOSICAO|REPOR|REPOS)";
+  const maintenance = "(?:(?:ACTUAL|ATUAL|ACTUL|ATUL)IZ(?:ACAO|ACOES|AR)|REPOSI(?:CAO|COES)|REPOR|REPOS)";
   const connector = "(?:D[EO](?:S)?\\s+)?";
-  return new RegExp(`\\b${maintenance}\\s*${connector}PVP(?:[123])?\\b`).test(normalized)
+  return new RegExp(`\\b${maintenance}\\s*${connector}PVP(?:[123])?S?\\b`).test(normalized)
     || new RegExp(`\\bPVP\\s+${connector}${maintenance}\\b`).test(normalized);
 }
 
