@@ -20,13 +20,16 @@ export default function CampaignReview({
     {substituiTabela && <p>A importação confirmada substitui a tabela atual. Cancelar mantém os dados existentes.</p>}
     <div style={{ overflow: "auto", maxHeight: "45vh" }}>
       <table className="campaign-review-table" style={{ width: "100%", textAlign: "left" }}>
-        <thead><tr><th>Código</th><th>Estado</th><th>Motivo e origem</th></tr></thead>
+        <thead><tr><th>Código</th><th>EAN</th><th>Estado</th><th>Motivo e origem</th></tr></thead>
         <tbody>{resultado.linhas.map((linha, index) => {
           const origem = linha.item?.origemDados;
+          const ean = [linha.item?.codigoBarras, linha.item?.codigo_barras, linha.item?.ean]
+            .map((value) => String(value ?? "").trim()).find(Boolean) || "—";
           return <tr key={`${linha.codigo}-${index}`}>
             <td style={{ padding: "8px", verticalAlign: "top" }}>
               <strong>{linha.codigo || "Sem código"}</strong><br />{linha.item?.descricao}
             </td>
+            <td style={{ padding: "8px", verticalAlign: "top", whiteSpace: "nowrap" }}>{ean}</td>
             <td style={{ padding: "8px", verticalAlign: "top" }}>{ESTADOS[linha.estado]}</td>
             <td style={{ padding: "8px", verticalAlign: "top" }}>
               {linha.motivo}
