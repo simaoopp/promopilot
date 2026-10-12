@@ -1,0 +1,183 @@
+/* Visual layer for the application only; printed labels retain their layout. */
+@media screen {
+  :root {
+    --pp-ink: #18332e;
+    --pp-ink-muted: #596e68;
+    --pp-ink-soft: #657a73;
+    --pp-green: #166b55;
+    --pp-blue: #236b77;
+    --pp-radius: 18px;
+    --pp-shadow-soft: 0 4px 20px rgba(24, 51, 46, .045);
+    --color-primary: #166b55;
+    --color-primary-dark: #105541;
+    --color-primary-action: #166b55;
+    --color-primary-action-dark: #105541;
+    --color-text: #18332e;
+    --color-text-strong: #18332e;
+    --color-text-muted: #596e68;
+    --color-border: #dfe8e3;
+    --color-input-border: #cbdad2;
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #f3f6f3;
+    color: var(--pp-ink);
+    -webkit-font-smoothing: antialiased;
+  }
+  .page-content { margin-top: 0; padding: 30px 28px 48px; }
+  .page-title { letter-spacing: -.035em; }
+  .page-subtitle { line-height: 1.65; }
+  .topbar-site {
+    background: #fff;
+    box-shadow: 0 1px 0 #dfe8e3;
+    padding-inline: 28px;
+  }
+  .menu-button, .topbar-account-button {
+    background: #f6f8f6;
+    border-color: #e1e9e3;
+    border-radius: 12px;
+  }
+  .topbar-account-button:hover, .menu-button:hover { background: #eaf2ed; }
+  .topbar-avatar { background: #166b55; }
+  .sidebar { height: 100dvh; }
+  .sidebar-body { overflow-y: auto; }
+  .sidebar-header { background: #f6f8f6; }
+  .sidebar-link { background: #fff; border-color: transparent; }
+  .sidebar-link.active, .sidebar-sublink.active {
+    background: #e7f2eb;
+    border-color: #c6dfd1;
+    color: #105541;
+  }
+  .sidebar-link:hover, .sidebar-sublink:hover { background: #f0f5f1; }
+  .sidebar-section-label { color: #596e68; }
+  .pp-home-hero {
+    padding: clamp(24px, 3vw, 42px);
+    background: #fff;
+    border: 1px solid #dfe8e3;
+    border-radius: 24px;
+    box-shadow: var(--pp-shadow-soft);
+    gap: 36px;
+    align-items: center;
+  }
+  .pp-home-hero::after { display: none; }
+  .pp-home-hero .page-title {
+    font-size: clamp(36px, 4vw, 56px);
+    line-height: 1.08;
+    letter-spacing: -.055em;
+  }
+  .pp-kicker { color: #17664f; font-size: 11px; letter-spacing: .09em; }
+  .pp-home-hero .page-subtitle { max-width: 58ch; font-size: 15px; }
+  .pp-hero-metrics { gap: 8px; margin-top: 24px; }
+  .pp-hero-metrics span {
+    border-radius: 8px;
+    background: #f3f7f3;
+    border: 0;
+    box-shadow: none;
+    padding: 8px 10px;
+    font-weight: 500;
+    line-height: 1.5;
+  }
+  .pp-home-command-card {
+    background: #183f35;
+    border: 1px solid #285246;
+    border-radius: 18px;
+    padding: 26px;
+    box-shadow: 0 12px 28px rgba(24, 63, 53, .12);
+    min-width: 0;
+  }
+  .pp-command-header span { font-size: 18px; font-weight: 650; }
+  .pp-command-input {
+    min-width: 0;
+    background: #fff;
+    color: #18332e;
+    border-color: #fff;
+    border-radius: 10px;
+  }
+  .pp-command-input::placeholder { color: #61726c; }
+  .pp-command-input:focus { background: #fff; border-color: #a7dabb; box-shadow: 0 0 0 4px rgba(167, 218, 187, .25); }
+  .pp-command-hint, .pp-command-header small { color: #d5e6de; }
+  .pp-section-heading { margin: 30px 0 16px; gap: 6px; }
+  .pp-section-heading h2 { font-size: 24px; letter-spacing: -.025em; }
+  .pp-action-grid { gap: 14px; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .pp-action-card {
+    min-width: 0;
+    min-height: 206px;
+    padding: 22px;
+    border-radius: 16px;
+    border: 1px solid #dfe8e3;
+    box-shadow: 0 2px 6px rgba(24, 51, 46, .025);
+    gap: 18px;
+  }
+  .pp-action-card::after { display: none; }
+  .pp-action-icon { width: 44px; height: 44px; border-radius: 12px; background: #eef4f0; }
+  .pp-action-icon svg { width: 23px; height: 23px; }
+  .pp-action-primary { color: #166b55; background: #edf6ee; border-color: #c5dfce; }
+  .pp-action-primary .pp-action-icon { background: #166b55; color: #fff; }
+  .pp-action-blue { color: #266c93; }
+  .pp-action-blue .pp-action-icon { background: #ecf4fa; }
+  .pp-action-green { color: #166b55; }
+  .pp-action-violet { color: #74548e; }
+  .pp-action-violet .pp-action-icon { background: #f4eef8; }
+  .pp-action-slate { color: #52687a; }
+  .pp-action-copy strong { font-size: 16px; line-height: 1.35; font-weight: 700; }
+  .pp-action-copy small { line-height: 1.6; font-weight: 400; }
+  .pp-action-arrow { font-size: 20px; font-weight: 400; }
+  .pp-action-card:hover:not(:disabled) { border-color: #8db7a4; transform: translateY(-3px); box-shadow: 0 10px 22px rgba(24, 51, 46, .08); }
+  .home-section, .control-card, .table-card, .toolbar, .table-panel { border-color: #dfe8e3; box-shadow: var(--pp-shadow-soft); }
+  .pp-card-header { padding: 22px 24px; border-bottom-color: #e7ede8; }
+  .pp-card-header h2 { font-size: 21px; }
+  .pp-summary-card { background: #f7f9f6; border-color: #e5ece5; border-radius: 12px; }
+  .pp-summary-card p { font-size: 14px; font-weight: 400; }
+  .pp-history-card { background: #fff; border-radius: 14px; box-shadow: none; }
+  .home-history-meta span { background: #eff4f0; color: #465e54; }
+  .home-history-empty { background: #f8faf7; padding: 28px; font-weight: 400; }
+  .btn, .toolbar-actions button { border-radius: 10px; font-weight: 650; min-height: 42px; }
+  .btn-primary, .pp-login-submit { background: #166b55; color: #fff; box-shadow: 0 3px 8px rgba(22, 107, 85, .12); }
+  .btn-primary:hover, .pp-login-submit:hover { background: #105541; }
+  .btn-success { background: #167044; color: #fff; }
+  .btn-success:hover { background: #105a36; }
+  .btn-secondary { background: #fff; color: #284a3e; border: 1px solid #cbdad2; }
+  .btn-secondary:hover { background: #eef4ef; }
+  button:disabled { cursor: not-allowed; }
+  .pp-action-card:disabled { opacity: .55; transform: none; box-shadow: none; }
+  .input-group input, .input-group select, .paste-box { border-radius: 10px; }
+  :is(button, a, input, select, textarea, summary):focus-visible { outline: 3px solid #368264; outline-offset: 3px; }
+  .popup-overlay { background: rgba(15, 35, 28, .48); }
+  .popup-header-pro { background: #f8faf7; border-bottom: 1px solid #e1e9e3; }
+  .popup-close { border-radius: 10px; }
+  .popup-chip { border-radius: 8px; }
+  .campaign-code-list { border-color: #cddfd3 !important; background: #f8fbf8 !important; }
+  .campaign-code-list > summary { color: #165c46; padding-block: 4px; }
+  .campaign-review-table thead { background: #eef4ef; color: #36584a; }
+  .campaign-review-table th { font-size: 12px; letter-spacing: .025em; }
+  .campaign-review-table td { border-bottom: 1px solid #e2eae4; line-height: 1.55; }
+  .campaign-review-table tbody tr:nth-child(even) { background: #f8faf8; }
+  .campaign-review-table tbody tr:hover { background: #eff6f1; }
+  .pp-login-page { background: #eef4ef; }
+  .pp-login-bg-grid, .pp-login-orb { display: none; }
+  .pp-login-card { border: 1px solid #dbe6dd; border-radius: 24px; box-shadow: 0 20px 60px rgba(24, 51, 46, .10); }
+  @media (max-width: 1120px) {
+    .pp-action-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  }
+  @media (max-width: 720px) {
+    .page-content { padding: 18px 14px 32px; }
+    .topbar-site { padding-inline: 12px; }
+    .pp-home-hero { padding: 22px; gap: 24px; border-radius: 18px; }
+    .pp-home-command-card { padding: 20px; }
+    .pp-action-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .pp-action-card { padding: 18px; min-height: 200px; }
+    .pp-summary-grid { grid-template-columns: 1fr; }
+    .pp-history-grid { grid-template-columns: minmax(0, 1fr); }
+    .pp-card-header { padding: 18px; }
+  }
+  @media (max-width: 420px) {
+    .pp-action-grid { grid-template-columns: minmax(0, 1fr); }
+    .pp-action-card { min-height: 0; flex-direction: row; align-items: center; padding-right: 38px; }
+    .pp-action-icon { flex-shrink: 0; }
+    .pp-action-arrow { right: 14px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pp-action-card, .home-history-card, .sidebar, .sidebar-overlay, .btn { transition: none; }
+    .pp-action-card:hover:not(:disabled), .home-history-card:hover { transform: none; }
+  }
+}
