@@ -80,7 +80,7 @@ export default function ManualCreateCampaignModal({
   if (!aberto) return null;
 
   return (
-    <div className="popup-overlay">
+    <div className="popup-overlay manual-campaign-fullscreen">
       <div className="popup-card popup-card-campanha popup-card-campanha-pro">
         <div className="popup-header popup-header-campanha">
           <div>
@@ -105,6 +105,35 @@ export default function ManualCreateCampaignModal({
               Desconto: {formatarEuro(descontoCampanha)}€
             </span>
           </div>
+
+              <details className="ai-card-panel campaign-code-list">
+                <summary>Colar lista de códigos</summary>
+                <label className="input-group">
+                  <span>Códigos internos ou EAN, separados por linhas, espaços, vírgulas ou ponto e vírgula</span>
+                  <textarea
+                    rows={6}
+                    value={listaCodigos}
+                    disabled={listaLoading}
+                    onChange={(event) => {
+                      setListaCodigos(event.target.value);
+                      setResultadoLista(null);
+                      setListaAdicionada(false);
+                      setMensagemLista("");
+                    }}
+                    placeholder={"001234\n5601234567890"}
+                  />
+                </label>
+                <p>A pesquisa é exata. Os duplicados e os artigos já na campanha são ignorados.
+                  Cada artigo usa o seu PVP3 antes e PVP2 atual, com a validade escolhida abaixo.</p>
+                <button type="button" className="btn btn-secondary"
+                  disabled={listaLoading || !listaCodigos.trim()} onClick={pesquisarLista}>
+                  {listaLoading ? "A pesquisar códigos..." : "Pesquisar lista"}
+                </button>
+                <div role="status" aria-live="polite">
+                  {mensagemLista && <p>{mensagemLista}</p>}
+                  <CampaignReview resultado={resultadoLista?.revisao} onConfirm={adicionarLista} onPriceChange={alterarPrecoLista} concluido={listaAdicionada} />
+                </div>
+              </details>
 
           <div className="campanha-layout">
             <div className="campanha-col-main">
@@ -157,34 +186,6 @@ export default function ManualCreateCampaignModal({
                 )}
               </div>
 
-              <details className="ai-card-panel">
-                <summary>Colar lista de códigos</summary>
-                <label className="input-group">
-                  <span>Códigos internos ou EAN, separados por linhas, espaços, vírgulas ou ponto e vírgula</span>
-                  <textarea
-                    rows={6}
-                    value={listaCodigos}
-                    disabled={listaLoading}
-                    onChange={(event) => {
-                      setListaCodigos(event.target.value);
-                      setResultadoLista(null);
-                      setListaAdicionada(false);
-                      setMensagemLista("");
-                    }}
-                    placeholder={"001234\n5601234567890"}
-                  />
-                </label>
-                <p>A pesquisa é exata. Os duplicados e os artigos já na campanha são ignorados.
-                  Cada artigo usa o seu PVP3 antes e PVP2 atual, com a validade escolhida abaixo.</p>
-                <button type="button" className="btn btn-secondary"
-                  disabled={listaLoading || !listaCodigos.trim()} onClick={pesquisarLista}>
-                  {listaLoading ? "A pesquisar códigos..." : "Pesquisar lista"}
-                </button>
-                <div role="status" aria-live="polite">
-                  {mensagemLista && <p>{mensagemLista}</p>}
-                  <CampaignReview resultado={resultadoLista?.revisao} onConfirm={adicionarLista} onPriceChange={alterarPrecoLista} concluido={listaAdicionada} />
-                </div>
-              </details>
 
               <div className="campanha-stack">
                 <div className="ai-card-panel">

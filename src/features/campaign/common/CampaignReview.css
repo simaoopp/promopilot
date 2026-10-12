@@ -1,0 +1,95 @@
+/* Scope the full-screen layout to campaign creation/review dialogs. */
+.popup-overlay.manual-campaign-fullscreen,
+.popup-overlay.campaign-review-fullscreen {
+  padding: 0;
+}
+.manual-campaign-fullscreen > .popup-card,
+.campaign-review-fullscreen > .popup-card {
+  width: 100%;
+  max-width: none;
+  height: 100vh;
+  height: 100dvh;
+  max-height: none;
+  border-radius: 0;
+  box-sizing: border-box;
+}
+.campaign-review-fullscreen > .popup-card {
+  padding: 20px;
+  overflow-y: auto;
+}
+.manual-campaign-fullscreen .popup-campanha-scroll {
+  overflow-x: hidden;
+}
+.manual-campaign-fullscreen .campaign-code-list {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  margin-bottom: 18px;
+}
+.campaign-review-panel,
+.campaign-review-table-wrap {
+  min-width: 0;
+  max-width: 100%;
+}
+.campaign-review-table-wrap {
+  overflow: visible;
+}
+.campaign-review-panel .campaign-review-table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+  text-align: left;
+  border-collapse: collapse;
+}
+.campaign-review-table .review-code-col { width: 26%; }
+.campaign-review-table .review-ean-col { width: 18%; }
+.campaign-review-table .review-state-col { width: 14%; }
+.campaign-review-table .review-reason-col { width: 42%; }
+.campaign-review-panel .campaign-review-table th,
+.campaign-review-panel .campaign-review-table td {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  vertical-align: top;
+  padding: 8px;
+}
+.campaign-review-table fieldset,
+.campaign-review-table .input-group,
+.campaign-review-table input {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.campaign-review-table input { width: 100%; }
+.campaign-review-panel .popup-status-row,
+.campaign-review-panel .popup-actions { flex-wrap: wrap; }
+
+@media (max-width: 640px) {
+  .campaign-review-fullscreen > .popup-card { padding: 12px; }
+  .campaign-review-table colgroup { display: none; }
+  .campaign-review-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .campaign-review-panel .campaign-review-table,
+  .campaign-review-table tbody,
+  .campaign-review-table tr,
+  .campaign-review-panel .campaign-review-table td {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .campaign-review-table tr {
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    margin-bottom: 12px;
+  }
+  .campaign-review-table td::before {
+    content: attr(data-label);
+    display: block;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+}

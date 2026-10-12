@@ -1,3 +1,4 @@
+import "./CampaignReview.css";
 const ESTADOS = {
   valido: "Válido", bloqueado: "Bloqueado", duplicado: "Duplicado",
   naoEncontrado: "Não encontrado", erro: "Não foi possível validar",
@@ -18,20 +19,21 @@ export default function CampaignReview({
     </div>
     <p>Confirma os motivos antes de continuar. Só os artigos válidos serão adicionados.</p>
     {substituiTabela && <p>A importação confirmada substitui a tabela atual. Cancelar mantém os dados existentes.</p>}
-    <div style={{ overflow: "auto", maxHeight: "45vh" }}>
-      <table className="campaign-review-table" style={{ width: "100%", textAlign: "left" }}>
+    <div className="campaign-review-table-wrap">
+      <table className="campaign-review-table">
+        <colgroup><col className="review-code-col" /><col className="review-ean-col" /><col className="review-state-col" /><col className="review-reason-col" /></colgroup>
         <thead><tr><th>Código</th><th>EAN</th><th>Estado</th><th>Motivo e origem</th></tr></thead>
         <tbody>{resultado.linhas.map((linha, index) => {
           const origem = linha.item?.origemDados;
           const ean = [linha.item?.codigoBarras, linha.item?.codigo_barras, linha.item?.ean]
             .map((value) => String(value ?? "").trim()).find(Boolean) || "—";
           return <tr key={`${linha.codigo}-${index}`}>
-            <td style={{ padding: "8px", verticalAlign: "top" }}>
+            <td data-label="Código" style={{ padding: "8px", verticalAlign: "top" }}>
               <strong>{linha.codigo || "Sem código"}</strong><br />{linha.item?.descricao}
             </td>
-            <td style={{ padding: "8px", verticalAlign: "top", whiteSpace: "nowrap" }}>{ean}</td>
-            <td style={{ padding: "8px", verticalAlign: "top" }}>{ESTADOS[linha.estado]}</td>
-            <td style={{ padding: "8px", verticalAlign: "top" }}>
+            <td data-label="EAN" style={{ padding: "8px", verticalAlign: "top" }}>{ean}</td>
+            <td data-label="Estado" style={{ padding: "8px", verticalAlign: "top" }}>{ESTADOS[linha.estado]}</td>
+            <td data-label="Motivo e origem" style={{ padding: "8px", verticalAlign: "top" }}>
               {linha.motivo}
               {onPriceChange && !concluido && (linha.precoEditavel || (linha.estado === "valido" && linha.item?.precosEditados)) && (
                 <fieldset style={{ marginTop: "8px" }}>
@@ -73,9 +75,9 @@ export default function CampaignReview({
       {onCancel && <button type="button" className="btn btn-secondary" onClick={onCancel}>Cancelar</button>}
     </div>
   </>;
-  return modal ? <div className="popup-overlay">
-    <section className="popup-card popup-card-campanha" role="dialog" aria-modal="true" aria-label={titulo}>
+  return modal ? <div className="popup-overlay campaign-review-fullscreen">
+    <section className="popup-card popup-card-campanha campaign-review-panel" role="dialog" aria-modal="true" aria-label={titulo}>
       {content}
     </section>
-  </div> : <section aria-label={titulo}>{content}</section>;
+  </div> : <section className="campaign-review-panel" aria-label={titulo}>{content}</section>;
 }
