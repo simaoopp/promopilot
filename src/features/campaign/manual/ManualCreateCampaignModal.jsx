@@ -1,6 +1,6 @@
 import CampaignReview from "../common/CampaignReview";
 import { useEffect, useRef, useState } from "react";
-import { pesquisarCodigosCampanha } from "./manualCampaignCodes";
+import { alterarPrecoListaCampanha, pesquisarCodigosCampanha } from "./manualCampaignCodes";
 import { formatarEuro } from "../../../utils/formatters";
 import { formatarPvpTriplo, normalizarValorPvp } from "../../../utils/articlePrices";
 import { obterFormatoAutomaticoEtiqueta } from "./manualCampaignUtils";
@@ -62,6 +62,12 @@ export default function ManualCreateCampaignModal({
     } finally {
       if (!controller.signal.aborted) setListaLoading(false);
     }
+  }
+
+  function alterarPrecoLista(index, campo, valor) {
+    if (listaAdicionada || listaLoading) return;
+    setResultadoLista((prev) => alterarPrecoListaCampanha(prev, index, campo, valor, codigosExistentes));
+    setMensagemLista("");
   }
 
   function adicionarLista() {
@@ -176,7 +182,7 @@ export default function ManualCreateCampaignModal({
                 </button>
                 <div role="status" aria-live="polite">
                   {mensagemLista && <p>{mensagemLista}</p>}
-                  <CampaignReview resultado={resultadoLista?.revisao} onConfirm={adicionarLista} concluido={listaAdicionada} />
+                  <CampaignReview resultado={resultadoLista?.revisao} onConfirm={adicionarLista} onPriceChange={alterarPrecoLista} concluido={listaAdicionada} />
                 </div>
               </details>
 

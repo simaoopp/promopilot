@@ -47,3 +47,22 @@ export async function pesquisarCodigosCampanha(texto, { existentes = [], signal 
     precosInvalidos: revisao.linhas.filter((linha) => linha.estado === "bloqueado" && !isPvpUpdatePromotionInfo(linha.item)).map((linha) => linha.codigo),
   };
 }
+
+// Edits campaign prices only; catalog prices and original maintenance markers stay intact.
+export function alterarPrecoListaCampanha(resultado, index, campo, valor, existentes = []) {
+  const linha = resultado?.revisao?.linhas[index];
+  const editavel = linha?.precoEditavel || (linha?.estado === "valido" && linha.item?.precosEditados);
+  if (!editavel || !["antes", "atual"].includes(campo) || isPvpUpdatePromotionInfo(linha.item)) return resultado;
+  const linhas = resultado.revisao.linhas.map((row, i) => i === index ? {
+    ...row, item: { ...row.item, [campo]: valor, precosEditados: true },
+  } : row);
+  const revalidadas = validarItensCampanha(linhas.filter((row) => row.item).map((row) => row.item), { existentes });
+  let posicao = 0;
+  const revisao = resumirRevisaoCampanha(linhas.map((row) => row.item
+    ? { ...revalidadas.linhas[posicao++], codigo: row.codigo }
+    : row));
+  return { ...resultado, revisao, artigos: revisao.validos,
+    duplicados: revisao.totais.duplicado,
+    precosInvalidos: revisao.linhas.filter((row) => row.precoEditavel).map((row) => row.codigo),
+  };
+}

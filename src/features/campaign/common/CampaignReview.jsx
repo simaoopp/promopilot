@@ -5,6 +5,7 @@ const ESTADOS = {
 
 export default function CampaignReview({
   resultado, titulo = "Validar artigos da campanha", onConfirm, onCancel,
+  onPriceChange,
   modal = false, concluido = false, substituiTabela = false,
 }) {
   if (!resultado) return null;
@@ -29,6 +30,24 @@ export default function CampaignReview({
             <td style={{ padding: "8px", verticalAlign: "top" }}>{ESTADOS[linha.estado]}</td>
             <td style={{ padding: "8px", verticalAlign: "top" }}>
               {linha.motivo}
+              {onPriceChange && !concluido && (linha.precoEditavel || (linha.estado === "valido" && linha.item?.precosEditados)) && (
+                <fieldset style={{ marginTop: "8px" }}>
+                  <legend>Alterar preços da campanha</legend>
+                  <label className="input-group">
+                    <span>Preço antes (€)</span>
+                    <input type="text" inputMode="decimal" aria-label={`Preço antes de ${linha.codigo}`}
+                      value={linha.item.antes ?? (linha.item.pvp3 || linha.item.pvp2 || "")}
+                      onChange={(event) => onPriceChange(index, "antes", event.target.value)} />
+                  </label>
+                  <label className="input-group">
+                    <span>Preço atual (€)</span>
+                    <input type="text" inputMode="decimal" aria-label={`Preço atual de ${linha.codigo}`}
+                      value={linha.item.atual ?? linha.item.pvp2 ?? ""}
+                      onChange={(event) => onPriceChange(index, "atual", event.target.value)} />
+                  </label>
+                  <small>A alteração aplica-se apenas a esta campanha. Os preços do catálogo são preservados.</small>
+                </fieldset>
+              )}
               {origem && <details>
                 <summary>Ver informação original</summary>
                 <p>{origem.tipo === "excel" ? "Excel" : origem.tipo === "email" ? "Email / tabela colada" : "Catálogo"}

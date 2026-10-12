@@ -30,3 +30,34 @@ test("cancelar impede novas consultas e não devolve resultados parciais", async
   await expect(pesquisarCodigosCampanha("00123", { signal: controller.signal })).rejects.toHaveProperty("name", "AbortError");
   expect(supabase.rpc).not.toHaveBeenCalled();
 });
+
+test("corrige os preços, revalida e mantém os valores originais do catálogo", async () => {
+  const { alterarPrecoListaCampanha } = require("./manualCampaignCodes");
+  const original = { artigo: "00123", descricao: "Produto", codigo_barras: "5601234567890", pvp3: "100", pvp2: "120" };
+  supabase.rpc.mockResolvedValue({ data: [original] });
+  const inicial = await pesquisarCodigosCampanha("00123 5601234567890 inexistente");
+  expect(inicial.artigos).toHaveLength(0);
+  const corrigido = alterarPrecoListaCampanha(inicial, 0, "atual", "89,90");
+  expect(corrigido.artigos).toHaveLength(1);
+  expect(corrigido.artigos[0].atual).toBe("89,90");
+  expect(corrigido.artigos[0].pvp2).toBe("120");
+  expect(corrigido.artigos[0].pvp3).toBe("100");
+  expect(corrigido.revisao.totais.duplicado).toBe(1);
+  expect(corrigido.revisao.totais.naoEncontrado).toBe(1);
+  expect(inicial.revisao.linhas[0].item.atual).toBeUndefined();
+  const vazio = alterarPrecoListaCampanha(corrigido, 0, "atual", "");
+  expect(vazio.revisao.linhas[0].estado).toBe("bloqueado");
+  const antes = alterarPrecoListaCampanha(corrigido, 0, "antes", "80");
+  expect(antes.artigos).toHaveLength(0);
+  expect(antes.revisao.linhas[0].precoEditavel).toBe(true);
+});
+
+test("edição não contorna manutenção de PVP nem edita campos alheios ao preço", async () => {
+  const { alterarPrecoListaCampanha } = require("./manualCampaignCodes");
+  const original = { artigo: "00123", descricao: "Produto", pvp3: "100", pvp2: "120", info: "Desconto", origemDados: { informacao: "Actualizações de PVPs" } };
+  supabase.rpc.mockResolvedValue({ data: [original] });
+  const resultado = await pesquisarCodigosCampanha("00123");
+  expect(alterarPrecoListaCampanha(resultado, 0, "atual", "50")).toBe(resultado);
+  expect(alterarPrecoListaCampanha(resultado, 0, "info", "PROMO")).toBe(resultado);
+  expect(resultado.artigos).toHaveLength(0);
+});

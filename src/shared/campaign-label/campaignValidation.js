@@ -35,13 +35,13 @@ export function validarItensCampanha(items = [], {
       return { ...base, estado: "bloqueado", motivo: "Descrição do artigo em falta." };
     }
     if (validarPrecos && (antes <= 0 || atual <= 0)) {
-      return { ...base, estado: "bloqueado", motivo: "Os preços antes e atual devem ser superiores a zero." };
+      return { ...base, estado: "bloqueado", precoEditavel: true, motivo: "Os preços antes e atual devem ser superiores a zero." };
     }
     if (validarPrecos && atual >= antes) {
       if (permitirComparacaoPvp3 && atual < pv3) {
         motivo = "Requer confirmação da comparação com PVP3 antes de imprimir.";
       } else {
-        return { ...base, estado: "bloqueado", motivo: "Sem desconto: o preço atual deve ser inferior ao preço antes." };
+        return { ...base, estado: "bloqueado", precoEditavel: true, motivo: "Sem desconto: o preço atual deve ser inferior ao preço antes." };
       }
     }
     vistos.add(codigo);

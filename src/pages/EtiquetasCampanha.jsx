@@ -747,8 +747,8 @@ export default function EtiquetasPage() {
       return true;
     }) : [artigoCampanhaSelecionado];
     const novosItens = artigos.map((artigo, index) => {
-      const precoAntes = emLista ? converterPreco(artigo.pvp3 || artigo.pvp2) : antes;
-      const precoAtual = emLista ? converterPreco(artigo.pvp2) : atual;
+      const precoAntes = emLista ? converterPreco(artigo.antes ?? (artigo.pvp3 || artigo.pvp2)) : antes;
+      const precoAtual = emLista ? converterPreco(artigo.atual ?? artigo.pvp2) : atual;
       return {
         id: `${artigo.artigo}-${Date.now()}-${index}`,
         codigo: artigo.artigo || "",
