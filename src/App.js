@@ -1,5 +1,5 @@
 import React, { Suspense, lazy, useMemo, useState } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import Sidebar from "./components/Sidebar";
 import ProtectedRoute from "./components/ProtectedRoute";
 import PromoPilotMark from "./components/brand/PromoPilotMark";
@@ -9,6 +9,7 @@ import { PROMOPILOT_BRAND } from "./brand/promopilot";
 import { resolveInitialRoute } from "./utils/accessControl";
 import "./styles/styles.css";
 
+const Presentation = lazy(() => import("./pages/Presentation"));
 const EtiquetasPage = lazy(() => import("./pages/EtiquetasCampanha"));
 const EtiquetasExcelPage = lazy(() => import("./pages/EtiquetasCampanhaExcel"));
 const Etiquetas = lazy(() => import("./pages/Etiquetas"));
@@ -32,12 +33,16 @@ function PageFallback() {
 }
 
 export default function App() {
+  const { pathname } = useLocation();
+  const isPresentation = pathname.replace(/\/$/, "").toLowerCase() === "/apresentacao";
   const [menuAberto, setMenuAberto] = useState(false);
   const { user, loadingAuth, loadingProfile, onboardingRequired } = useAuth();
   const rotaInicial = useMemo(
     () => resolveInitialRoute({ user, onboardingRequired }),
     [user, onboardingRequired],
   );
+
+  if (isPresentation) return <Suspense fallback={<PageFallback />}><Presentation /></Suspense>;
 
   if (loadingAuth || (user && loadingProfile)) return <PageFallback />;
 
