@@ -2,12 +2,13 @@ import React, { Suspense, lazy, useMemo, useState } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import Sidebar from "./components/Sidebar";
 import ProtectedRoute from "./components/ProtectedRoute";
-import PromoPilotMark from "./components/brand/PromoPilotMark";
+import AppLoading from "./components/AppLoading";
 import GlobalSellerAssistant from "./components/GlobalSellerAssistant";
 import { useAuth } from "./context/AuthContext";
 import { PROMOPILOT_BRAND } from "./brand/promopilot";
 import { resolveInitialRoute } from "./utils/accessControl";
 import "./styles/styles.css";
+import "./styles/app-polish.css";
 
 const Presentation = lazy(() => import("./pages/Presentation"));
 const EtiquetasPage = lazy(() => import("./pages/EtiquetasCampanha"));
@@ -19,17 +20,7 @@ const OrcamentosDossiersPage = lazy(() => import("./pages/OrcamentosDossiers"));
 const EndedCampaignDetails = lazy(() => import("./pages/EndedCampaignDetails"));
 
 function PageFallback() {
-  return (
-    <div className="pp-splash-screen">
-      <div className="pp-splash-card">
-        <PromoPilotMark tone="light" />
-        <div className="pp-splash-loader" aria-hidden="true">
-          <span />
-        </div>
-        <p>A carregar...</p>
-      </div>
-    </div>
-  );
+  return <AppLoading />;
 }
 
 export default function App() {

@@ -3,6 +3,7 @@ import { Link, Navigate } from "react-router-dom";
 import ForcePasswordChangeModal from "../components/ForcePasswordChangeModal";
 import PasswordRecoveryModal from "../components/PasswordRecoveryModal";
 import PromoPilotMark from "../components/brand/PromoPilotMark";
+import AppLoading from "../components/AppLoading";
 import { useAuth } from "../context/AuthContext";
 
 import "../styles/styles.css";
@@ -28,14 +29,7 @@ export default function Login() {
   const mostrarModalOnboarding = !!user && !loadingProfile && onboardingRequired;
 
   if (loadingAuth || (user && loadingProfile)) {
-    return (
-      <div className="login-page pp-login-page pp-access-page">
-        <div className="pp-login-loading">
-          <PromoPilotMark tone="light" />
-          <p>A carregar...</p>
-        </div>
-      </div>
-    );
+    return <AppLoading message="A preparar o acesso à sua conta…" />;
   }
 
   if (user && !onboardingRequired && !passwordRecovery) {

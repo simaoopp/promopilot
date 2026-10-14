@@ -28,6 +28,40 @@ export default function Sidebar({
   const [userManagementOpen, setUserManagementOpen] = useState(false);
 
   const contaMenuRef = useRef(null);
+  const menuButtonRef = useRef(null);
+  const sidebarRef = useRef(null);
+  const accountButtonRef = useRef(null);
+
+  useEffect(() => {
+    setMenuContaAberto(false);
+    setMenuAberto(false);
+  }, [location.pathname, setMenuAberto]);
+
+  useEffect(() => {
+    if (!menuAberto) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    const returnTarget = document.activeElement;
+    document.body.style.overflow = "hidden";
+    sidebarRef.current?.querySelector(".close-sidebar")?.focus();
+    function containFocus(event) {
+      if (event.key !== "Tab") return;
+      const items = [...sidebarRef.current.querySelectorAll('a[href], button:not([disabled])')];
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && (document.activeElement === first || !sidebarRef.current.contains(document.activeElement))) {
+        event.preventDefault(); last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !sidebarRef.current.contains(document.activeElement))) {
+        event.preventDefault(); first.focus();
+      }
+    }
+    document.addEventListener("keydown", containFocus);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", containFocus);
+      if (returnTarget?.isConnected) returnTarget.focus();
+    };
+  }, [menuAberto]);
 
   const rotaEtiquetasAtiva = useMemo(() => {
     return (
@@ -70,6 +104,7 @@ export default function Sidebar({
       if (e.key === "Escape") {
         setMenuAberto(false);
         setMenuContaAberto(false);
+        if (contaMenuRef.current?.contains(document.activeElement)) accountButtonRef.current?.focus();
         setModalPasswordAberto(false);
       }
     }
@@ -174,6 +209,7 @@ export default function Sidebar({
         <button
           type="button"
           className="menu-button"
+          ref={menuButtonRef}
           onClick={() => setMenuAberto(true)}
           aria-label="Abrir menu"
           aria-expanded={menuAberto}
@@ -184,12 +220,12 @@ export default function Sidebar({
           <span />
         </button>
 
-        <PromoPilotMark className="pp-topbar-brand" />
+        <Link to="/Homepage" className="pp-brand-home-link" aria-label="PromoPilot — voltar ao início" onClick={fecharTudo}><PromoPilotMark className="pp-topbar-brand" /></Link>
         <div className="topbar-title">{titulo}</div>
 
         <div className="topbar-context">
-          <span className="topbar-context-label">Ambiente</span>
-          <strong>{PROMOPILOT_BRAND.versionLabel}</strong>
+          <span className="topbar-context-label">Loja</span>
+          <strong>{lojaAtual}</strong>
         </div>
 
         <div className="topbar-spacer" />
@@ -198,6 +234,10 @@ export default function Sidebar({
           <button
             type="button"
             className="topbar-account-button"
+            ref={accountButtonRef}
+            aria-expanded={menuContaAberto}
+            aria-controls="pp-account-options"
+            aria-label="Opções da conta"
             onClick={() => setMenuContaAberto((prev) => !prev)}
           >
             <span className="topbar-avatar">{iniciaisUtilizador}</span>
@@ -211,7 +251,7 @@ export default function Sidebar({
           </button>
 
           {menuContaAberto && (
-            <div className="topbar-account-menu">
+            <div className="topbar-account-menu" id="pp-account-options">
               <div className="topbar-account-menu-header">
                 <strong>{nomeUtilizador}</strong>
                 <span>{user?.email || lojaAtual}</span>
@@ -269,11 +309,16 @@ export default function Sidebar({
 
       <aside
         id="sidebar-navigation"
+        ref={sidebarRef}
+        inert={!menuAberto}
+        role="dialog"
+        aria-modal={menuAberto ? "true" : undefined}
+        aria-label="Menu principal"
         className={`sidebar no-print ${menuAberto ? "open" : ""}`}
         aria-hidden={!menuAberto}
       >
         <div className="sidebar-header">
-          <PromoPilotMark tone="light" />
+          <Link to="/Homepage" className="pp-brand-home-link" aria-label="PromoPilot — voltar ao início" onClick={fecharTudo}><PromoPilotMark /></Link>
 
           <button
             type="button"
@@ -294,10 +339,11 @@ export default function Sidebar({
         </div>
 
         <nav className="sidebar-body" aria-label="Navegação principal">
-          <div className="sidebar-section-label">Cockpit</div>
+          <div className="sidebar-section-label">O seu espaço</div>
 
           <Link
             to="/Homepage"
+            aria-current={isActive("/Homepage") ? "page" : undefined}
             className={`sidebar-link ${isActive("/Homepage") ? "active" : ""}`}
             onClick={fecharTudo}
           >
@@ -307,6 +353,7 @@ export default function Sidebar({
 
           <Link
             to="/OrcamentosDossiers"
+            aria-current={isActive("/OrcamentosDossiers") ? "page" : undefined}
             className={`sidebar-link ${isActive("/OrcamentosDossiers") ? "active" : ""}`}
             onClick={fecharTudo}
           >
@@ -331,6 +378,7 @@ export default function Sidebar({
             <div id="submenu-etiquetas" className="sidebar-submenu">
               <Link
                 to="/EtiquetasCampanha"
+            aria-current={isActive("/EtiquetasCampanha") ? "page" : undefined}
                 className={`sidebar-sublink ${isActive("/EtiquetasCampanha") ? "active" : ""}`}
                 onClick={fecharTudo}
               >
@@ -339,6 +387,7 @@ export default function Sidebar({
 
               <Link
                 to="/Etiquetas"
+            aria-current={isActive("/Etiquetas") ? "page" : undefined}
                 className={`sidebar-sublink ${isActive("/Etiquetas") ? "active" : ""}`}
                 onClick={fecharTudo}
               >
@@ -347,6 +396,7 @@ export default function Sidebar({
 
               <Link
                 to="/EtiquetasCampanhaExcel"
+            aria-current={isActive("/EtiquetasCampanhaExcel") ? "page" : undefined}
                 className={`sidebar-sublink ${isActive("/EtiquetasCampanhaExcel") ? "active" : ""}`}
                 onClick={fecharTudo}
               >
