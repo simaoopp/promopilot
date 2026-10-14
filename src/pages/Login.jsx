@@ -1,11 +1,12 @@
 import React, { useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import ForcePasswordChangeModal from "../components/ForcePasswordChangeModal";
 import PasswordRecoveryModal from "../components/PasswordRecoveryModal";
 import PromoPilotMark from "../components/brand/PromoPilotMark";
 import { useAuth } from "../context/AuthContext";
-import { PROMOPILOT_BRAND, PROMOPILOT_MODULES } from "../brand/promopilot";
+
 import "../styles/styles.css";
+import "../styles/login-access.css";
 
 export default function Login() {
   const {
@@ -28,7 +29,7 @@ export default function Login() {
 
   if (loadingAuth || (user && loadingProfile)) {
     return (
-      <div className="login-page pp-login-page">
+      <div className="login-page pp-login-page pp-access-page">
         <div className="pp-login-loading">
           <PromoPilotMark tone="light" />
           <p>A carregar...</p>
@@ -68,45 +69,21 @@ export default function Login() {
 
 
   return (
-    <div className="login-page pp-login-page">
+    <div className="login-page pp-login-page pp-access-page">
       <div className="pp-login-bg-grid" aria-hidden="true" />
       <div className="pp-login-orb pp-login-orb-one" aria-hidden="true" />
       <div className="pp-login-orb pp-login-orb-two" aria-hidden="true" />
 
       <main className="pp-login-layout">
-        <section className="pp-login-intro" aria-label="Apresentação PromoPilot">
-          <PromoPilotMark tone="light" className="pp-login-brand" />
-
-          <div className="pp-login-hero-copy">
-            <span className="pp-kicker">Ferramentas para loja</span>
-            <h1>{PROMOPILOT_BRAND.claim}</h1>
-            <p>
-              Tudo no mesmo sítio: pesquisa artigos, prepara campanhas, imprime
-              etiquetas e cria dossiers de orçamento com uma apresentação mais cuidada.
-            </p>
-          </div>
-
-          <div className="pp-login-module-grid">
-            {PROMOPILOT_MODULES.map((module) => (
-              <article key={module.key} className="pp-login-module-card">
-                <strong>{module.label}</strong>
-                <span>{module.description}</span>
-              </article>
-            ))}
-          </div>
-
-          <div className="pp-login-trust-row">
-            <span>Simples para usar</span>
-            <span>Pronto para imprimir</span>
-          </div>
-        </section>
+        <Link className="pp-access-back" to="/">← Voltar ao início</Link>
+        <Link className="pp-access-brand" to="/" aria-label="PromoPilot — início"><PromoPilotMark tone="light" /></Link>
 
         <section className="login-card pp-login-card" aria-label="Autenticação">
           {!user && (
             <>
               <div className="pp-login-card-header">
                 <span className="pp-card-chip">Acesso reservado</span>
-                <h2>Entrar no PromoPilot</h2>
+                <h1>Bem-vindo de volta.</h1>
                 <p>Use o seu email e palavra-passe para continuar.</p>
               </div>
 
@@ -151,12 +128,12 @@ export default function Login() {
                   <span>{carregando ? "A entrar..." : "Entrar"}</span>
                 </button>
 
-                {erro && <p className="login-erro">{erro}</p>}
+                {erro && <p className="login-erro" role="alert">{erro}</p>}
               </form>
 
               <div className="pp-login-footer-note">
-                <strong>Antes de imprimir</strong>
-                <span>Confirme sempre o artigo, o preço e a validade da campanha.</span>
+                <span>Precisa de acesso ou de ajuda?</span>
+                <a href="mailto:geral@promopilot.pt">geral@promopilot.pt</a>
               </div>
             </>
           )}

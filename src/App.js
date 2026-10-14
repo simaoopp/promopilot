@@ -33,15 +33,19 @@ function PageFallback() {
 }
 
 export default function App() {
-  const { pathname } = useLocation();
-  const isPresentation = pathname.replace(/\/$/, "").toLowerCase() === "/apresentacao";
+  const { pathname, search, hash } = useLocation();
+  const normalizedPath = pathname.replace(/\/$/, "").toLowerCase();
+  const isPresentation = normalizedPath === "";
+  const isLegacyPresentation = normalizedPath === "/apresentacao";
   const [menuAberto, setMenuAberto] = useState(false);
-  const { user, loadingAuth, loadingProfile, onboardingRequired } = useAuth();
+  const { user, loadingAuth, loadingProfile, onboardingRequired, passwordRecovery } = useAuth();
   const rotaInicial = useMemo(
     () => resolveInitialRoute({ user, onboardingRequired }),
     [user, onboardingRequired],
   );
 
+  if (isLegacyPresentation) return <Navigate to={`/${search}${hash}`} replace />;
+  if (isPresentation && (passwordRecovery || /(?:^|[?#&])type=recovery(?:&|$)/i.test(`${search}${hash}`))) return <Navigate to={`/login${search}${hash}`} replace />;
   if (isPresentation) return <Suspense fallback={<PageFallback />}><Presentation /></Suspense>;
 
   if (loadingAuth || (user && loadingProfile)) return <PageFallback />;
