@@ -438,7 +438,7 @@ export default function EtiquetasPage() {
 
       const revisao = validarItensCampanha(linhasNormalizadas, { permitirComparacaoPvp3: true });
       setRevisaoTabela(resumirRevisaoCampanha(revisao.linhas.map((linha) =>
-        linha.estado === "valido" && itemTabelaInvalido(linha.item)
+        linha.estado === "valido" && itemTabelaInvalido(linha.item, anoValidade)
           ? { ...linha, estado: "bloqueado", motivo: "Verifica descrição, EAN, preços e formato das datas da linha." }
           : linha,
       )));

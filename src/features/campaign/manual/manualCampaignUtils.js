@@ -2,6 +2,7 @@ import {
   campanhaSemDataDefinida,
 } from "../../../utils/campaignTitleRules";
 import { formatarEuro, parseNumero } from "../../../utils/formatters";
+import { normalizeCampaignDate } from "../../../shared/campaign-label/campaignDates";
 import {
   buildManualCampaignPrintPages,
   normalizarTexto as normalizarTextoPartilhado,
@@ -104,17 +105,28 @@ export function construirPaginasImpressao(itens, modoAutomatico, formatoManual) 
 }
 
 
-export function dataCampanhaInvalida(data) {
+const MESES_ABREVIADOS = {
+  jan: 1, fev: 2, feb: 2, mar: 3, abr: 4, apr: 4, mai: 5, may: 5,
+  jun: 6, jul: 7, ago: 8, aug: 8, set: 9, sep: 9, out: 10, oct: 10,
+  nov: 11, dez: 12, dec: 12,
+};
+
+export function dataCampanhaInvalida(data, anoValidade = new Date().getFullYear()) {
   const texto = String(data || "").trim();
   if (!texto || texto === "-") return false;
 
-  const formatoMesTexto = /^\d{1,2}\/[a-z]{3}\.?$/i;
-  const formatoMesNumero = /^\d{1,2}\/\d{2}$/;
+  if (/^\d{1,2}[-/]\d{1,2}$/.test(texto)) {
+    return !normalizeCampaignDate(texto, anoValidade);
+  }
 
-  return !formatoMesTexto.test(texto) && !formatoMesNumero.test(texto);
+  const mesTexto = texto.match(/^(\d{1,2})\/([a-z]{3})\.?$/i);
+  const mes = mesTexto && MESES_ABREVIADOS[mesTexto[2].toLowerCase()];
+  if (!mes) return true;
+
+  return !normalizeCampaignDate(`${mesTexto[1]}/${mes}`, anoValidade);
 }
 
-export function itemTabelaInvalido(item) {
+export function itemTabelaInvalido(item, anoValidade) {
   const nomeInvalido = !item.descricao || item.descricao.length < 3;
   const precoAntesInvalido = !item.antes || parseNumero(item.antes) <= 0;
   const precoAtualInvalido = !item.atual || parseNumero(item.atual) <= 0;
@@ -126,8 +138,8 @@ export function itemTabelaInvalido(item) {
     precoAntesInvalido ||
     precoAtualInvalido ||
     eanInvalido ||
-    dataCampanhaInvalida(item.dataInicio) ||
-    dataCampanhaInvalida(item.dataFim)
+    dataCampanhaInvalida(item.dataInicio, anoValidade) ||
+    dataCampanhaInvalida(item.dataFim, anoValidade)
   );
 }
 

@@ -1,5 +1,14 @@
 import { preservarOrigemCampanha } from "../shared/campaign-label/promotionInfoRules";
 import { parseNumero } from "./formatters";
+import { formatarDataCampanhaParaTabela } from "./campaignDates";
+
+function normalizarDataColada(valor = "") {
+  const texto = String(valor).trim();
+  // Normalize before the review; keep malformed input so validation can reject it.
+  return /^\d{1,2}[-/]\d{1,2}$/.test(texto)
+    ? formatarDataCampanhaParaTabela(texto)
+    : texto;
+}
 
 function normalizarTexto(texto) {
   return String(texto || "")
@@ -61,8 +70,8 @@ export function parseTabelaColada(texto) {
       a10: parseNumero(partes[11] || 0),
       a1e: parseNumero(partes[12] || 0),
       data: partes[13] || "",
-      dataInicio: partes[14] || "",
-      dataFim: partes[15] || "",
+      dataInicio: normalizarDataColada(partes[14]),
+      dataFim: normalizarDataColada(partes[15]),
       alterado: partes[16] || "",
       info: partes.slice(17).join(" ").trim(),
       selecionado: false,
