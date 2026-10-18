@@ -23,11 +23,15 @@ const ARTICLE_SEARCH_CACHE_MAX_ITEMS = Math.max(20, Number(process.env.ARTICLES_
 const articleSearchCache = new Map();
 const articleSearchPending = new Map();
 
-const allArticlesCache = {
-  value: null,
-  updatedAt: 0,
-  promise: null,
-};
+const cataloguesByOrganization = new Map();
+function organizationCatalogue(organizationId) {
+  if (!organizationId) throw new Error("Organização obrigatória para consultar o catálogo.");
+  if (!cataloguesByOrganization.has(organizationId)) {
+    if (cataloguesByOrganization.size >= 10) cataloguesByOrganization.delete(cataloguesByOrganization.keys().next().value);
+    cataloguesByOrganization.set(organizationId, { value: null, updatedAt: 0, promise: null });
+  }
+  return cataloguesByOrganization.get(organizationId);
+}
 
 const ARTICLE_SELECT = [
   "artigo",
@@ -281,7 +285,7 @@ export async function listArticles({
   useAdmin = false,
   organizationId = null,
 } = {}) {
-  const normalizedLimit = Math.min(50, Math.max(1, Number(limit) || 30));
+  const normalizedLimit = Math.min(useAdmin ? 1000 : 50, Math.max(1, Number(limit) || 30));
   const normalizedOffset = Math.max(0, Number(offset) || 0);
   const normalizedQuery = normalizeSearchValue(q || "");
 
@@ -340,10 +344,12 @@ export async function listArticles({
     }
   }
 
+  if (!organizationId) throw new Error("Organização obrigatória.");
   const client = requireAdminClient("Pesquisa administrativa de artigos");
   let query = client
     .from(ARTICLES_TABLE)
     .select(ARTICLE_SELECT, includeCount ? { count: "exact" } : undefined)
+    .eq("organization_id", organizationId)
     .order("artigo", { ascending: true })
     .range(normalizedOffset, normalizedOffset + normalizedLimit - 1);
 
@@ -368,11 +374,12 @@ export async function listArticles({
   };
 }
 
-async function getArticlesCount() {
+async function getArticlesCount(organizationId) {
   const client = requireAdminClient("Contagem administrativa de artigos");
   const { count, error } = await client
     .from(ARTICLES_TABLE)
-    .select("artigo", { count: "exact", head: true });
+    .select("artigo", { count: "exact", head: true })
+    .eq("organization_id", organizationId);
 
   if (error) {
     throw error;
@@ -402,7 +409,7 @@ async function runWithConcurrency(tasks, concurrency = ALL_ARTICLES_MAX_CONCURRE
   return results;
 }
 
-function isAllArticlesCacheFresh() {
+function isAllArticlesCacheFresh(allArticlesCache) {
   return (
     allArticlesCache.value &&
     allArticlesCache.updatedAt &&
@@ -410,10 +417,11 @@ function isAllArticlesCacheFresh() {
   );
 }
 
-export function getAllArticlesCacheStatus() {
+export function getAllArticlesCacheStatus(organizationId) {
+  const allArticlesCache = organizationCatalogue(organizationId);
   return {
     ready: Boolean(allArticlesCache.value),
-    fresh: Boolean(isAllArticlesCacheFresh()),
+    fresh: Boolean(isAllArticlesCacheFresh(allArticlesCache)),
     total: allArticlesCache.value?.total || 0,
     loaded: allArticlesCache.value?.loaded || allArticlesCache.value?.items?.length || 0,
     updatedAt: allArticlesCache.updatedAt || null,
@@ -422,14 +430,15 @@ export function getAllArticlesCacheStatus() {
   };
 }
 
-export async function listAllArticles({ forceRefresh = false, pageSize = ALL_ARTICLES_PAGE_SIZE } = {}) {
+export async function listAllArticles({ forceRefresh = false, pageSize = ALL_ARTICLES_PAGE_SIZE, organizationId } = {}) {
+  const allArticlesCache = organizationCatalogue(organizationId);
   if (!FULL_CATALOG_ENABLED) {
     throw new Error(
       "Catálogo completo desativado por segurança. Usa pesquisa server-side por termo/código.",
     );
   }
 
-  if (!forceRefresh && isAllArticlesCacheFresh()) {
+  if (!forceRefresh && isAllArticlesCacheFresh(allArticlesCache)) {
     return {
       ...allArticlesCache.value,
       fromCache: true,
@@ -451,7 +460,7 @@ export async function listAllArticles({ forceRefresh = false, pageSize = ALL_ART
       SUPABASE_MAX_ROWS_PER_REQUEST,
       Math.max(1, Number(pageSize) || ALL_ARTICLES_PAGE_SIZE),
     );
-    const total = await getArticlesCount();
+    const total = await getArticlesCount(organizationId);
 
     if (total <= 0) {
       const value = {
@@ -481,6 +490,7 @@ export async function listAllArticles({ forceRefresh = false, pageSize = ALL_ART
           offset,
           includeCount: false,
           useAdmin: true,
+          organizationId,
         }),
       ),
     );
@@ -522,7 +532,7 @@ export function warmArticlesCache() {
     return Promise.resolve(null);
   }
 
-  return listAllArticles({ forceRefresh: false }).catch((error) => {
+  return listAllArticles({ forceRefresh: false, organizationId: process.env.DEFAULT_ORGANIZATION_ID }).catch((error) => {
     console.warn("Não foi possível aquecer a cache de artigos.", error?.message || error);
     return null;
   });
@@ -632,7 +642,8 @@ export async function findArticleForSellerAssistant({
   return canonical;
 }
 
-export async function upsertArticle(article = {}) {
+export async function upsertArticle(article = {}, organizationId) {
+  if (!organizationId) throw new Error("Organização obrigatória para atualizar artigos.");
   const client = requireAdminClient("Gravação de artigos");
   const row = mapArticleToRow(article);
 
@@ -642,7 +653,9 @@ export async function upsertArticle(article = {}) {
 
   const { data, error } = await client
     .from(ARTICLES_TABLE)
-    .upsert(row, { onConflict: "artigo" })
+    .update(row)
+    .eq("organization_id", organizationId)
+    .eq("artigo", row.artigo)
     .select(ARTICLE_SELECT)
     .single();
 

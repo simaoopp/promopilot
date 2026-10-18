@@ -2,10 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 
 import {
-  STORE_OPTIONS,
   getPasswordValidationMessage,
   isValidPassword,
-  isValidStore,
 } from "../utils/validators";
 
 export default function ForcePasswordChangeModal({
@@ -14,6 +12,7 @@ export default function ForcePasswordChangeModal({
   onSuccess,
 }) {
   const { completeOnboarding, profile } = useAuth();
+  const storeOptions = (profile?.availableStores || []).map(store => store.name);
 
   const [novaPassword, setNovaPassword] = useState("");
   const [confirmarPassword, setConfirmarPassword] = useState("");
@@ -55,8 +54,8 @@ export default function ForcePasswordChangeModal({
       return;
     }
 
-    if (!isValidStore(store)) {
-      setErro("Seleciona uma loja válida.");
+    if (!profile?.platformAdmin && !storeOptions.includes(store)) {
+      setErro("Selecione uma loja autorizada. Se não existir nenhuma, contacte o administrador.");
       return;
     }
 
@@ -139,11 +138,11 @@ export default function ForcePasswordChangeModal({
             id="store"
             value={store}
             onChange={(e) => setStore(e.target.value)}
-            required
-            disabled={loading}
+            required={!profile?.platformAdmin}
+            disabled={loading || storeOptions.length === 0}
           >
-            <option value="">Seleciona a loja</option>
-            {STORE_OPTIONS.map((option) => (
+            <option value="">{profile?.platformAdmin ? "Administração global" : "Seleciona a loja"}</option>
+            {storeOptions.map((option) => (
               <option key={option} value={option}>
                 {option}
               </option>

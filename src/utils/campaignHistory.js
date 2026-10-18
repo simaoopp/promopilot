@@ -1,3 +1,4 @@
+import { currentOrganizationId } from "../services/platformService";
 import { supabase } from "../lib/supabase";
 import { buildCampaignHistoryExpiry } from "../shared/campaign-label/campaignDates";
 
@@ -128,6 +129,7 @@ export async function cleanupExpiredCampaignHistory(store) {
   const { error } = await supabase
     .from(CAMPAIGNS_TABLE)
     .delete()
+    .eq("organization_id", await currentOrganizationId())
     .eq("store", storeValue)
     .lt("expires_at", nowIso());
 
@@ -143,13 +145,14 @@ export async function loadCampaignHistory(store) {
     return [];
   }
 
-  await cleanupExpiredCampaignHistory(storeValue);
+
 
   const { data, error } = await supabase
     .from(CAMPAIGNS_TABLE)
     .select(
       "id, titulo, dados, ano_validade, formato_etiqueta, origem, created_by, created_by_email, created_at, expires_at, total_artigos, store, user_id",
     )
+    .eq("organization_id", await currentOrganizationId())
     .eq("store", storeValue)
     .gt("expires_at", nowIso())
     .order("created_at", { ascending: false })
@@ -171,7 +174,7 @@ export async function addCampaignToHistory(snapshot) {
 
   const { data, error } = await supabase
     .from(CAMPAIGNS_TABLE)
-    .upsert(row, { onConflict: "id" })
+    .upsert({ ...row, organization_id: await currentOrganizationId() }, { onConflict: "id" })
     .select(
       "id, titulo, dados, ano_validade, formato_etiqueta, origem, created_by, created_by_email, created_at, expires_at, total_artigos, store, user_id",
     )
@@ -195,6 +198,7 @@ export async function removeCampaignFromHistory(id, store) {
     .from(CAMPAIGNS_TABLE)
     .delete()
     .eq("id", id)
+    .eq("organization_id", await currentOrganizationId())
     .eq("store", storeValue);
 
   if (error) {
@@ -214,6 +218,7 @@ export async function clearCampaignHistory(store) {
   const { error } = await supabase
     .from(CAMPAIGNS_TABLE)
     .delete()
+    .eq("organization_id", await currentOrganizationId())
     .eq("store", storeValue);
 
   if (error) {

@@ -1,3 +1,4 @@
+import { systemModuleEnabled } from "../platform/accessService.js";
 import { supabaseAdminClient } from "../../lib/supabaseClients.js";
 
 const EVENT_TABLE = "campaign_end_events_v4";
@@ -308,58 +309,14 @@ function maskEmail(email = "") {
   return `${String(name || "").slice(0, 2)}***@${domain}`;
 }
 
-async function listPraiaRecipients(organizationId) {
-  if (!organizationId) return [];
-
-  const { data: memberships, error: membershipError } = await supabaseAdminClient
-    .from("organization_members")
-    .select("user_id,status")
-    .eq("organization_id", organizationId)
-    .eq("status", "active");
-
-  if (membershipError) throw membershipError;
-
-  const userIds = [...new Set((memberships || []).map((item) => item.user_id).filter(Boolean))];
-  if (!userIds.length) return [];
-
-  const { data: profiles, error: profileError } = await supabaseAdminClient
-    .from("profiles")
-    .select("id,first_name,last_name,store,role")
-    .in("id", userIds);
-
-  if (profileError) throw profileError;
-
-  const praiaProfiles = (profiles || []).filter((profile) => isPraiaCampaignStore(profile.store));
-  const recipients = [];
-
-  for (const profile of praiaProfiles) {
-    const { data, error } = await supabaseAdminClient.auth.admin.getUserById(profile.id);
-    if (error) {
-      console.warn(`[campaign-end] Falha ao obter email do utilizador ${profile.id}: ${error.message || error}`);
-      continue;
-    }
-
-    const email = clean(data?.user?.email).toLowerCase();
-    if (!email) continue;
-
-    const bannedUntil = data?.user?.banned_until ? Date.parse(data.user.banned_until) : 0;
-    if (Number.isFinite(bannedUntil) && bannedUntil > Date.now()) continue;
-
-    recipients.push({
-      userId: profile.id,
-      email,
-      firstName: profile.first_name || "",
-      lastName: profile.last_name || "",
-      role: profile.role || "user",
-      store: profile.store || "",
-    });
-  }
-
+async function listPraiaRecipients(organizationId, store) {
+  if (!organizationId || !store) return [];
+  const { data, error } = await supabaseAdminClient.rpc("platform_notification_recipients", { p_org: organizationId, p_store: store });
+  if (error) throw error;
   const seen = new Set();
-  return recipients.filter((recipient) => {
-    if (seen.has(recipient.email)) return false;
-    seen.add(recipient.email);
-    return true;
+  return (Array.isArray(data) ? data : []).filter(recipient => {
+    if (!recipient.email || seen.has(recipient.email)) return false;
+    seen.add(recipient.email); return true;
   });
 }
 
@@ -575,6 +532,19 @@ export async function runCampaignEndNotificationWorker({ dryRun = false } = {}) 
   };
 
   for (const event of events) {
+    if (!await systemModuleEnabled(event.organization_id, "automations", event.store)) {
+      if (!dryRun) {
+        const { error } = await supabaseAdminClient.from(EVENT_TABLE).update({
+          status: "pending", locked_at: null, attempt_count: Math.max(0, event.attempt_count - 1),
+          next_attempt_at: new Date().toISOString(), last_error: "Automatizações desativadas durante a execução.",
+        }).eq("id", event.id).eq("locked_at", event.locked_at);
+        if (error) throw error;
+      }
+      result.blockedByPermissions = (result.blockedByPermissions || 0) + 1;
+      result.events.push({ id: event.id, status: "blocked-by-permissions", recipients: [] });
+      continue;
+    }
+
     const eventResult = {
       id: event.id,
       sourceType: event.source_type,
@@ -587,7 +557,7 @@ export async function runCampaignEndNotificationWorker({ dryRun = false } = {}) 
 
     let recipients;
     try {
-      recipients = await listPraiaRecipients(event.organization_id);
+      recipients = await listPraiaRecipients(event.organization_id, event.store);
     } catch (error) {
       result.ok = false;
       result.failed += 1;

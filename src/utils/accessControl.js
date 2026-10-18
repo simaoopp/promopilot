@@ -9,7 +9,7 @@ export function hasMissingProfileFields(profile) {
     !profile ||
     isBlank(profile.first_name) ||
     isBlank(profile.last_name) ||
-    isBlank(profile.store)
+    (!profile.platformAdmin && isBlank(profile.store))
   );
 }
 

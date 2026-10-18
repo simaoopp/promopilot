@@ -1,3 +1,4 @@
+import { usePermissions } from "../../context/PermissionContext";
 import React from "react";
 
 function ActionIcon({ name }) {
@@ -56,6 +57,8 @@ export default function HomeQuickActions({
   onOpenExcel,
   onOpenDossiers,
 }) {
+  const { hasPage } = usePermissions();
+  const pageForAction = { campaign: "manual", articles: "catalog", scan: "catalog", dossiers: "dossiers", excel: "excel" };
   const handlers = {
     onOpenCampaign,
     onOpenArticles,
@@ -72,7 +75,7 @@ export default function HomeQuickActions({
       </div>
 
       <div className="home-grid pp-action-grid">
-        {ACTIONS.map((item) => {
+        {ACTIONS.filter(item => hasPage(pageForAction[item.key])).map((item) => {
           const handler = handlers[item.action];
 
           return (

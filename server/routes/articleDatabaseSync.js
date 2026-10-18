@@ -1,4 +1,4 @@
-import { AppError } from "../middleware/errorHandler.js";
+import { requirePermission } from "../services/platform/accessService.js";
 import { adminActionRateLimit, articleDatabaseSyncRateLimit } from "../middleware/security.js";
 import {
   finishArticleDatabaseSync,
@@ -7,18 +7,8 @@ import {
   startArticleDatabaseSync,
 } from "../services/articleDatabaseSyncService.js";
 
-const OWNER_EMAIL = "simao.pereira@susiarte.com";
-
-function requireDatabaseOwner(req, _res, next) {
-  const email = String(req.auth?.email || req.authUser?.email || "").trim().toLowerCase();
-  if (email !== OWNER_EMAIL) {
-    return next(new AppError("FORBIDDEN", "Esta função está disponível apenas para o administrador autorizado."));
-  }
-  return next();
-}
-
 export function registerArticleDatabaseSyncRoutes(app, { requireAuth, attachTenantContext }) {
-  const guard = [requireAuth, attachTenantContext, requireDatabaseOwner];
+  const guard = [requireAuth, attachTenantContext, requirePermission("products.manage")];
 
   app.get("/api/admin/articles/database-sync/history", ...guard, async (req, res, next) => {
     try {

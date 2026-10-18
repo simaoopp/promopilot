@@ -1,3 +1,4 @@
+import { systemModuleEnabled, systemStoreEmail } from "../platform/accessService.js";
 import { automaticCampaignStores, getAutomaticCampaignConfig } from "./config.js";
 import { parseAutomaticCampaignEmail } from "./campaignEmailParser.js";
 import { splitAutomaticCampaignByStore } from "./storeSplitterService.js";
@@ -89,6 +90,14 @@ export async function processAutomaticCampaignEmail(emailInput = {}, options = {
       continue;
     }
 
+    if (!await systemModuleEnabled(organizationId, "automations", store.store)) {
+      results.push({ store: store.store, skipped: true, blockedByPermissions: true, reason: "Automatizações indisponíveis para esta organização/loja." });
+      continue;
+    }
+
+    // Legacy environment recipient is scoped to its configured organization only.
+    const deliveryEmail = await systemStoreEmail(organizationId, store.store)
+      || (organizationId === config.defaultOrganizationId ? store.email : "");
     const existing = dryRun || !config.dedupeEnabled
       ? null
       : await findAutomaticCampaignDuplicate({
@@ -114,7 +123,7 @@ export async function processAutomaticCampaignEmail(emailInput = {}, options = {
       continue;
     }
 
-    const rowId = existing?.id || `auto-${email.messageId.replace(/[^a-zA-Z0-9._-]+/g, "-")}-${store.key}`;
+    const rowId = existing?.id || `auto-${organizationId}-${email.messageId.replace(/[^a-zA-Z0-9._-]+/g, "-")}-${store.key}`;
     const initialRow = buildAutomaticCampaignRow({
       id: rowId,
       title: historyTitle,
@@ -159,7 +168,7 @@ export async function processAutomaticCampaignEmail(emailInput = {}, options = {
 
       if (sendEmails && !dryRun) {
         mailResult = await sendAutomaticCampaignEmail({
-          to: store.email,
+          to: deliveryEmail,
           storeLabel: store.label,
           pdfBuffer,
           filename: pdfBuffer ? buildPdfFilename(store.key, email.subject) : "",
@@ -175,7 +184,7 @@ export async function processAutomaticCampaignEmail(emailInput = {}, options = {
         [store.store]: pdfInfo.signedUrl || "",
         [`${store.key}Path`]: pdfInfo.path || "",
         [`${store.key}Bucket`]: pdfInfo.bucket || "",
-        [`${store.key}EmailTo`]: store.email || "",
+        [`${store.key}EmailTo`]: deliveryEmail || "",
         [`${store.key}EmailSentAt`]: emailSentAt,
         pvpUpdateCodes: pvpUpdateCodes.join("|"),
         pvpUpdateTotal: pvpUpdateCodes.length,

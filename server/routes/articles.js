@@ -1,3 +1,4 @@
+import { requirePermission, userRpc } from "../services/platform/accessService.js";
 import { getAllArticlesCacheStatus, listAllArticles, listArticles } from "../services/articleRepository.js";
 
 function normalizeSearchValue(value) {
@@ -36,7 +37,7 @@ function shouldReturnFullCatalog(req) {
 }
 
 async function sendFullCatalogResponse(req, res) {
-  if (!req.isAdmin) {
+  if (!await userRpc(req,"platform_permission",{p_org:req.organizationId,p_store:req.storeId||null,p_permission:"products.manage"})) {
     return res.status(403).json({
       ok: false,
       error: "Catálogo completo disponível apenas para administradores.",
@@ -46,9 +47,9 @@ async function sendFullCatalogResponse(req, res) {
   try {
     const forceRefresh = parseBooleanQueryFlag(req.query.refresh);
     const pageSize = Math.min(parsePositiveInt(req.query.pageSize, 1000), 1000);
-    const result = await listAllArticles({ forceRefresh, pageSize });
+    const result = await listAllArticles({ forceRefresh, pageSize, organizationId: req.organizationId });
 
-    res.set("Cache-Control", "private, max-age=300");
+    res.set("Cache-Control", "no-store");
     res.set("X-Articles-Cache", result.fromCache ? "hit" : "miss");
 
     return res.json({
@@ -132,10 +133,10 @@ export function registerArticleRoutes(app, { requireAuth }) {
 
   app.get(["/api/artigos/catalogo", "/api/catalogo/artigos"], requireAuth, sendFullCatalogResponse);
 
-  app.get("/api/artigos/cache-status", requireAuth, (_req, res) => {
+  app.get("/api/artigos/cache-status", requireAuth, requirePermission("products.manage"), (req, res) => {
     return res.json({
       ok: true,
-      cache: getAllArticlesCacheStatus(),
+      cache: getAllArticlesCacheStatus(req.organizationId),
     });
   });
 }

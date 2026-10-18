@@ -16,6 +16,8 @@ def scan_forbidden_patterns() -> None:
         'from "../data/artigos.json"': "Ainda existe import direto do JSON de artigos.",
     }
     for file_path in [*SRC.rglob("*.js"), *SRC.rglob("*.jsx")]:
+        if ".test." in file_path.name or ".spec." in file_path.name or "__fixtures__" in file_path.parts:
+            continue
         content = file_path.read_text(encoding="utf-8")
         if file_path.name == "print.js":
             content = content.replace("window.print()", "")

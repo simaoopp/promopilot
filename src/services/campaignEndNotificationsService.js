@@ -1,3 +1,4 @@
+import { tenantHeaders } from "./platformService";
 import { supabase } from "../lib/supabase";
 
 const API_BASE_URL = String(process.env.REACT_APP_API_BASE_URL || "").replace(/\/+$/, "");
@@ -15,7 +16,7 @@ export async function getCampaignEndNotification(id) {
   const response = await fetch(
     `${API_BASE_URL}/api/campaign-end-notifications/${encodeURIComponent(safeId)}`,
     {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { ...tenantHeaders(), Authorization: `Bearer ${token}` },
     },
   );
   const body = await response.json().catch(() => ({}));

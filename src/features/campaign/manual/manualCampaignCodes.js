@@ -1,3 +1,4 @@
+import { getPermissionSnapshot } from "../../../services/platformService";
 import { preservarOrigemCampanha, isPvpUpdatePromotionInfo } from "../../../shared/campaign-label/promotionInfoRules";
 import { validarItensCampanha, resumirRevisaoCampanha } from "../../../shared/campaign-label/campaignValidation";
 import { supabase } from "../../../lib/supabase";
@@ -13,7 +14,7 @@ export async function pesquisarCodigosCampanha(texto, { existentes = [], signal 
       if (existentesSet.has(codigo)) return { codigo, estado: "duplicado", motivo: "Artigo já presente na campanha." };
       if (codigo.length < 3) return { codigo, estado: "erro", motivo: "O catálogo exige pelo menos 3 caracteres por código." };
       try {
-        let query = supabase.rpc("get_article_for_label", { p_code: codigo });
+        let query = supabase.rpc("get_article_for_label", { p_code: codigo, p_organization_id: getPermissionSnapshot()?.organizationId || null });
         if (signal) query = query.abortSignal(signal);
         const { data, error } = await query;
         if (error) throw error;

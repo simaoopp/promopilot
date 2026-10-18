@@ -1,103 +1,27 @@
-import { createSupabaseUserClient, supabaseAdminClient } from "../lib/supabaseClients.js";
-import { AppError } from "./errorHandler.js";
-
-function normalizeRole(value = "") {
-  return String(value || "").trim().toLowerCase();
+import { userRpc } from '../services/platform/accessService.js';
+import { AppError } from './errorHandler.js';
+export function normalizeUuid(value='') {
+  const text=String(value||'').trim();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(text)?text:'';
 }
-
-function isOrgAdminRole(role = "") {
-  return ["owner", "admin"].includes(normalizeRole(role));
+export async function attachTenantContext(req,_res,next) {
+ try {
+  const orgInput=req.headers['x-organization-id']||req.query?.organizationId||req.body?.organization_id||req.body?.organizationId;
+  const storeInput=req.headers['x-store-id'];
+  if((orgInput&&!normalizeUuid(orgInput))||(storeInput&&!normalizeUuid(storeInput)))throw new AppError('VALIDATION_ERROR','Organização ou loja inválida.');
+  const context=await userRpc(req,'platform_access_context',{p_organization_id:orgInput||null,p_store_id:storeInput||null,p_include_permissions:false});
+  req.permissionContext=context;
+  req.organizationId=context.organizationId;
+  req.organizationRole=context.role;
+  req.storeId=context.storeId;
+  req.organizationStoreId=context.storeId;
+  req.isAdmin=context.platformAdmin===true;
+  req.memberships=context.organizations.map(o=>({organization_id:o.id,status:'active'}));
+  const stores=context.stores.filter(s=>s.status==='active'&&(!context.storeId||s.id===context.storeId));
+  Object.assign(req.auth,{isAdmin:req.isAdmin,isPlatformAdmin:req.isAdmin,organizationId:req.organizationId,organizationRole:context.role,
+    isOrgAdmin:['owner','admin'].includes(context.role),store:stores.find(s=>s.id===context.storeId)?.name||'',allowedStores:stores.map(s=>s.name)});
+  next();
+ }catch(error){next(error);}
 }
-
-export function normalizeUuid(value = "") {
-  const text = String(value || "").trim();
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(text)
-    ? text
-    : "";
-}
-
-async function loadMemberships({ userId, accessToken }) {
-  if (!userId) return [];
-
-  const client = supabaseAdminClient || createSupabaseUserClient(accessToken);
-  if (!client) return [];
-
-  const { data, error } = await client
-    .from("organization_members")
-    .select("organization_id, role, store_id, status")
-    .eq("user_id", userId)
-    .eq("status", "active");
-
-  if (error) {
-    // A migration SaaS pode ainda não estar aplicada. Não rebentamos a app atual.
-    console.warn("[tenant] Não foi possível carregar membership SaaS:", error.message || error);
-    return [];
-  }
-
-  return Array.isArray(data) ? data : [];
-}
-
-function pickOrganizationId(req, memberships) {
-  const fromHeader = normalizeUuid(req.headers["x-organization-id"]);
-  const fromQuery = normalizeUuid(req.query?.organizationId);
-  const fromBody = normalizeUuid(req.body?.organization_id || req.body?.organizationId);
-  const requested = fromHeader || fromQuery || fromBody;
-
-  if (requested && memberships.some((member) => member.organization_id === requested)) {
-    return requested;
-  }
-
-  return memberships[0]?.organization_id || null;
-}
-
-export async function attachTenantContext(req, _res, next) {
-  try {
-    if (!req.authUser?.id) return next();
-
-    const memberships = await loadMemberships({
-      userId: req.authUser.id,
-      accessToken: req.accessToken,
-    });
-    const organizationId = pickOrganizationId(req, memberships);
-    const membership = memberships.find((item) => item.organization_id === organizationId) || null;
-
-    req.memberships = memberships;
-    req.organizationId = organizationId;
-    req.organizationRole = membership?.role || null;
-    req.organizationStoreId = membership?.store_id || null;
-
-    if (req.auth) {
-      req.auth.organizationId = organizationId;
-      req.auth.organizationRole = membership?.role || null;
-      req.auth.organizationStoreId = membership?.store_id || null;
-      req.auth.organizationMemberships = memberships;
-      req.auth.isOrgAdmin = Boolean(membership && isOrgAdminRole(membership.role));
-    }
-
-    return next();
-  } catch (error) {
-    return next(error);
-  }
-}
-
-export function requireOrganization(req, _res, next) {
-  if (req.auth?.isAdmin || req.isAdmin) {
-    return next();
-  }
-
-  if (!req.organizationId) {
-    return next(new AppError("TENANT_REQUIRED", "Organização obrigatória para esta operação."));
-  }
-
-  return next();
-}
-
-export function requireOrganizationRole(allowedRoles = []) {
-  const normalizedAllowed = new Set(allowedRoles.map(normalizeRole));
-  return function tenantRoleGuard(req, _res, next) {
-    if (req.auth?.isAdmin || req.isAdmin) return next();
-    const role = normalizeRole(req.organizationRole);
-    if (role && normalizedAllowed.has(role)) return next();
-    return next(new AppError("FORBIDDEN", "Sem permissões suficientes nesta organização."));
-  };
-}
+export function requireOrganization(req,_res,next){return req.organizationId?next():next(new AppError('TENANT_REQUIRED','Organização obrigatória.'));}
+export function requireOrganizationRole(roles=[]){return(req,_res,next)=>req.organizationId&&roles.includes(req.organizationRole)?next():next(new AppError('FORBIDDEN','Sem permissões nesta organização.'));}

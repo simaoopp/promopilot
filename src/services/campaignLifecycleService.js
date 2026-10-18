@@ -1,3 +1,4 @@
+import { tenantHeaders } from "./platformService";
 import { supabase } from "../lib/supabase";
 
 const API_BASE_URL = String(
@@ -19,7 +20,7 @@ export async function getEndedCampaignDetails(id) {
   const token = await getAccessToken();
   const response = await fetch(
     `${API_BASE_URL}/api/campaign-lifecycle/ended/${encodeURIComponent(id)}`,
-    { headers: { Authorization: `Bearer ${token}` } },
+    { headers: { ...tenantHeaders(), Authorization: `Bearer ${token}` } },
   );
 
   const data = await response.json().catch(() => ({}));

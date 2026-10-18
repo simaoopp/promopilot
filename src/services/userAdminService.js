@@ -1,3 +1,4 @@
+import { tenantHeaders } from "./platformService";
 import { supabase } from "../lib/supabase";
 
 const API_BASE_URL = String(process.env.REACT_APP_API_BASE_URL || "").replace(/\/+$/, "");
@@ -23,7 +24,7 @@ async function request(path, body) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
+      ...tenantHeaders(), Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(body || {}),
   });

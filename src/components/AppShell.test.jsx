@@ -4,6 +4,7 @@ import { MemoryRouter, useLocation } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import AppLoading from "./AppLoading";
 
+jest.mock("../context/PermissionContext", () => ({ usePermissions: () => ({ context: { pages: [{page_key:"home",path:"/Homepage",name:"Início"},{page_key:"manual",path:"/EtiquetasCampanha",name:"Campanha manual"}] }, can: () => false }) }));
 jest.mock("../context/AuthContext", () => ({ useAuth: () => ({ user: { id: "qa", email: "qa@example.test" }, profile: { first_name: "Teste", store: "Loja de teste", role: "store_user" } }) }));
 jest.mock("./admin/ArticleDatabaseSyncPanel", () => () => null);
 jest.mock("./admin/UserManagementPanel", () => () => null);

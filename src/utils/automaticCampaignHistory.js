@@ -1,3 +1,4 @@
+import { currentOrganizationId } from "../services/platformService";
 import { supabase } from "../lib/supabase";
 
 const AUTOMATIC_CAMPAIGNS_TABLE = "automatic_campaigns";
@@ -207,6 +208,7 @@ export async function cleanupExpiredAutomaticCampaignHistory(store) {
   const { error } = await supabase
     .from(AUTOMATIC_CAMPAIGNS_TABLE)
     .delete()
+    .eq("organization_id", await currentOrganizationId())
     .eq("store", storeValue)
     .lt("expires_at", nowIso());
 
@@ -222,13 +224,14 @@ export async function loadAutomaticCampaignHistory(store) {
     return [];
   }
 
-  await cleanupExpiredAutomaticCampaignHistory(storeValue);
+
 
   const { data, error } = await supabase
     .from(AUTOMATIC_CAMPAIGNS_TABLE)
     .select(
       "id, titulo, dados, ano_validade, formato_etiqueta, origem, created_by, created_by_email, created_at, expires_at, total_artigos, store, user_id, email_message_id, email_subject, email_from, email_received_at, processed_at, status, pdf_url, pdfs, error_message",
     )
+    .eq("organization_id", await currentOrganizationId())
     .eq("store", storeValue)
     .gt("expires_at", nowIso())
     .order("created_at", { ascending: false })
@@ -250,7 +253,7 @@ export async function addAutomaticCampaignToHistory(snapshot) {
 
   const { data, error } = await supabase
     .from(AUTOMATIC_CAMPAIGNS_TABLE)
-    .upsert(row, { onConflict: "id" })
+    .upsert({ ...row, organization_id: await currentOrganizationId() }, { onConflict: "id" })
     .select(
       "id, titulo, dados, ano_validade, formato_etiqueta, origem, created_by, created_by_email, created_at, expires_at, total_artigos, store, user_id, email_message_id, email_subject, email_from, email_received_at, processed_at, status, pdf_url, pdfs, error_message",
     )
@@ -274,6 +277,7 @@ export async function removeAutomaticCampaignFromHistory(id, store) {
     .from(AUTOMATIC_CAMPAIGNS_TABLE)
     .delete()
     .eq("id", id)
+    .eq("organization_id", await currentOrganizationId())
     .eq("store", storeValue);
 
   if (error) {
@@ -293,6 +297,7 @@ export async function clearAutomaticCampaignHistory(store) {
   const { error } = await supabase
     .from(AUTOMATIC_CAMPAIGNS_TABLE)
     .delete()
+    .eq("organization_id", await currentOrganizationId())
     .eq("store", storeValue);
 
   if (error) {

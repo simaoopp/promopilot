@@ -1,3 +1,4 @@
+import { preservarOrigemCampanha } from "../../../shared/campaign-label/promotionInfoRules";
 import { campanhaSemDataDefinida } from "../../../utils/campaignTitleRules";
 import { formatarEuro, parseNumero } from "../../../utils/formatters";
 
@@ -531,15 +532,10 @@ export function mapearLinhaExcelPrecosPromocionais(row, index) {
 }
 
 export function mapearLinhaExcel(row, index, formato) {
-  if (formato === EXCEL_FORMATS.SHOPPING) {
-    return mapearLinhaExcelShopping(row, index);
-  }
-
-  if (formato === EXCEL_FORMATS.PRECOS_PROMOCIONAIS) {
-    return mapearLinhaExcelPrecosPromocionais(row, index);
-  }
-
-  return mapearLinhaExcelCampanha(row, index);
+  const item = formato === EXCEL_FORMATS.SHOPPING ? mapearLinhaExcelShopping(row, index)
+    : formato === EXCEL_FORMATS.PRECOS_PROMOCIONAIS ? mapearLinhaExcelPrecosPromocionais(row, index)
+      : mapearLinhaExcelCampanha(row, index);
+  return preservarOrigemCampanha(item, { tipo: "excel", linha: index + 2 }, row);
 }
 
 export function obterFormatoAutomaticoEtiqueta(descricao = "") {

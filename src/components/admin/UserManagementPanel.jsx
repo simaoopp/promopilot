@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { STORE_OPTIONS } from "../../utils/validators";
+import { usePermissions } from "../../context/PermissionContext";
 import {
   inviteUserWithSupabase,
   sendUserPasswordReset,
@@ -12,6 +12,8 @@ const ROLE_OPTIONS = [
 ];
 
 export default function UserManagementPanel({ open, onClose }) {
+  const { context } = usePermissions();
+  const STORE_OPTIONS = (context?.stores || []).filter(item => item.status === "active").map(item => item.name);
   const [tab, setTab] = useState("invite");
 
   const [email, setEmail] = useState("");

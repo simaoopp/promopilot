@@ -1,3 +1,4 @@
+import { tenantHeaders } from "./platformService";
 import { supabase } from "../lib/supabase";
 import {
   isSupabaseRefreshTokenError,
@@ -69,7 +70,7 @@ export async function extractQuoteDossier({ filename, pdfBase64 }) {
   const response = await fetch(buildApiUrl("/api/orcamentos-dossiers/extract"), {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${token}`,
+      ...tenantHeaders(), Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -93,7 +94,7 @@ export async function generateQuoteDossierPdf({ dossier, items }) {
   const response = await fetch(buildApiUrl("/api/orcamentos-dossiers/generate"), {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${token}`,
+      ...tenantHeaders(), Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({

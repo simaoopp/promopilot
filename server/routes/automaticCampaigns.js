@@ -21,10 +21,6 @@ function getUserStore(req) {
 }
 
 function requireStoreScope(req, res) {
-  if (req.auth?.isAdmin || req.isAdmin) {
-    return "";
-  }
-
   const store = getUserStore(req);
   if (!store) {
     res.status(403).json({
@@ -67,7 +63,7 @@ export function registerAutomaticCampaignRoutes(app, { requireAuth, requireAdmin
   app.get("/api/campanhas-automaticas", requireAuth, async (req, res) => {
     try {
       const limit = Math.min(Number.parseInt(req.query.limit || "50", 10) || 50, 200);
-      const store = req.isAdmin && req.query.store ? String(req.query.store).trim() : requireStoreScope(req, res);
+      const store = requireStoreScope(req, res);
       if (store === null) return;
       const rows = await listAutomaticCampaignRows({ limit, store, organizationId: req.organizationId || null });
       return res.json({ ok: true, items: rows });
@@ -93,6 +89,7 @@ export function registerAutomaticCampaignRoutes(app, { requireAuth, requireAdmin
           rawText: req.body.rawEmailText || req.body.text || req.body.body,
         },
         {
+          organizationId: req.organizationId,
           dryRun: parseBoolean(req.body.dryRun, true),
           sendEmails: parseBoolean(req.body.sendEmails, false),
           force: parseBoolean(req.body.force, false),
@@ -185,16 +182,16 @@ export function registerAutomaticCampaignRoutes(app, { requireAuth, requireAdmin
         return res.status(400).json({ ok: false, error: "Caminho do PDF em falta." });
       }
 
-      const store = req.isAdmin && req.body?.store ? String(req.body.store).trim() : requireStoreScope(req, res);
+      const store = requireStoreScope(req, res);
       if (store === null) return;
 
       const matchingCampaign = await findAutomaticCampaignByPdfPath({
         path,
-        store: req.isAdmin ? store : getUserStore(req),
+        store,
         organizationId: req.organizationId || null,
       });
 
-      if (!matchingCampaign || (!req.isAdmin && !canAccessStore(req, matchingCampaign.store))) {
+      if (!matchingCampaign || !canAccessStore(req, matchingCampaign.store)) {
         return res.status(403).json({
           ok: false,
           error: "PDF não autorizado para este utilizador.",

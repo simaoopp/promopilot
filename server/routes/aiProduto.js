@@ -1,3 +1,4 @@
+import { requirePermission } from "../services/platform/accessService.js";
 import {
   answerSellerQuestion,
   enrichSingleArticle,
@@ -7,7 +8,7 @@ import {
 } from "../services/aiProdutoService.js";
 
 export function registerAiProdutoRoutes(app, { requireAuth, aiRateLimit, aiEnabled = false }) {
-  app.post("/api/ai-produto", requireAuth, aiRateLimit, async (req, res) => {
+  app.post("/api/ai-produto", requireAuth, requirePermission("ai.write"), requirePermission("products.write"), aiRateLimit, async (req, res) => {
     try {
       if (!aiEnabled) {
         return res.status(503).json({

@@ -16,27 +16,6 @@ function getBearerToken(req) {
   return header.slice("Bearer ".length).trim();
 }
 
-function normalizeEmail(value = "") {
-  return String(value || "").trim().toLowerCase();
-}
-
-function readAdminEmails() {
-  return new Set(
-    String(process.env.ADMIN_EMAILS || "")
-      .split(",")
-      .map(normalizeEmail)
-      .filter(Boolean),
-  );
-}
-
-function normalizeRole(value = "") {
-  return String(value || "").trim().toLowerCase();
-}
-
-function isAdminRole(role = "") {
-  return ["admin", "owner", "super_admin", "superadmin"].includes(normalizeRole(role));
-}
-
 async function loadAuthProfile(userId, accessToken = "") {
   if (!userId) {
     return null;
@@ -67,29 +46,9 @@ async function loadAuthProfile(userId, accessToken = "") {
   return data || null;
 }
 
-function buildAuthContext(user, profile) {
-  const email = normalizeEmail(user?.email);
-  const adminEmails = readAdminEmails();
-  const appRole = normalizeRole(user?.app_metadata?.role || user?.app_metadata?.user_role);
-  const metadataRole = normalizeRole(user?.user_metadata?.role || user?.user_metadata?.user_role);
-  const profileRole = normalizeRole(profile?.role);
-  const isAdmin =
-    adminEmails.has(email) ||
-    isAdminRole(appRole) ||
-    isAdminRole(metadataRole) ||
-    isAdminRole(profileRole);
-
-  return {
-    user,
-    profile,
-    email,
-    isAdmin,
-    role: profileRole || appRole || metadataRole || "user",
-    store: String(profile?.store || "").trim(),
-    allowedStores: Array.isArray(profile?.allowed_stores)
-      ? profile.allowed_stores.map((store) => String(store || "").trim()).filter(Boolean)
-      : [],
-  };
+export function buildAuthContext(user, profile) {
+  return { user, profile, email: String(user?.email || "").trim().toLowerCase(),
+    isAdmin: false, isPlatformAdmin: false, role: "user", store: "", allowedStores: [] };
 }
 
 export async function requireAuth(req, res, next) {
@@ -113,7 +72,7 @@ export async function requireAuth(req, res, next) {
 
     const { data, error } = await supabaseAuthClient.auth.getUser(token);
 
-    if (error || !data?.user) {
+    if (error || !data?.user || (data.user.banned_until && Date.parse(data.user.banned_until) > Date.now())) {
       return res.status(401).json({
         ok: false,
         error: "Sessão inválida ou expirada.",
@@ -156,7 +115,6 @@ export function canAccessStore(req, store = "") {
   const normalizedStore = String(store || "").trim();
 
   if (!normalizedStore) return false;
-  if (req.auth?.isAdmin || req.isAdmin) return true;
   if (String(req.auth?.store || "").trim() === normalizedStore) return true;
 
   return Array.isArray(req.auth?.allowedStores) && req.auth.allowedStores.includes(normalizedStore);

@@ -1,3 +1,4 @@
+import { requirePermission, userRpc } from "../services/platform/accessService.js";
 import { supabaseAdminClient, supabaseAuthClient } from "../lib/supabaseClients.js";
 import { adminActionRateLimit } from "../middleware/security.js";
 import { AppError } from "../middleware/errorHandler.js";
@@ -38,36 +39,9 @@ function publicAppUrl() {
     .replace(/\/+$/, "");
 }
 
-async function resolveOrganizationId(req, client) {
-  if (req.organizationId) return req.organizationId;
-
-  const fromProfile = String(
-    req.authProfile?.default_organization_id ||
-      req.auth?.profile?.default_organization_id ||
-      "",
-  ).trim();
-
-  if (fromProfile) return fromProfile;
-
-  const { data: membership, error: membershipError } = await client
-    .from("organization_members")
-    .select("organization_id")
-    .eq("user_id", req.authUser.id)
-    .eq("status", "active")
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-
-  if (membershipError) throw membershipError;
-  if (membership?.organization_id) return membership.organization_id;
-
-  const envOrganizationId = String(
-    process.env.DEFAULT_ORGANIZATION_ID ||
-      process.env.CAMPAIGN_DEFAULT_ORGANIZATION_ID ||
-      "",
-  ).trim();
-
-  return envOrganizationId || null;
+async function resolveOrganizationId(req) {
+  if (!req.organizationId) throw new AppError("TENANT_REQUIRED", "Organização obrigatória.");
+  return req.organizationId;
 }
 
 export function registerSaasAdminRoutes(app, { requireAuth, requireAdmin }) {
@@ -154,7 +128,7 @@ export function registerSaasAdminRoutes(app, { requireAuth, requireAdmin }) {
   app.post(
     "/api/admin/users/invite",
     requireAuth,
-    requireAdmin,
+    requirePermission("stores.manage"),
     adminActionRateLimit,
     async (req, res, next) => {
       try {
@@ -183,6 +157,12 @@ export function registerSaasAdminRoutes(app, { requireAuth, requireAdmin }) {
           max: 120,
         });
         const role = normalizeRole(req.body?.role);
+        if (email === req.auth.email) throw new AppError("FORBIDDEN", "Não pode alterar o seu próprio acesso através de um convite.");
+        if (role !== "user" && !["owner", "admin"].includes(req.organizationRole)) throw new AppError("FORBIDDEN", "Apenas um administrador da organização pode atribuir funções administrativas.");
+        const { data: stores, error: storesError } = await client.from("stores").select("id,name").eq("organization_id", organizationId).eq("status", "active");
+        if(storesError) throw storesError;
+        const matchedStore = (stores || []).find(item => item.name === store);
+        if(!matchedStore) throw new AppError("VALIDATION_ERROR", "Escolha uma loja ativa desta organização.");
 
         if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
           throw new AppError(
@@ -201,7 +181,6 @@ export function registerSaasAdminRoutes(app, { requireAuth, requireAdmin }) {
               first_name: firstName,
               last_name: lastName,
               store,
-              role,
               invited_from: "promopilot",
             },
           });
@@ -255,6 +234,7 @@ export function registerSaasAdminRoutes(app, { requireAuth, requireAdmin }) {
                 organization_id: organizationId,
                 user_id: invitedUser.id,
                 role: membershipRole(role),
+                store_id: role === "user" ? matchedStore.id : null,
                 status: "active",
               },
               { onConflict: "organization_id,user_id" },
@@ -310,7 +290,7 @@ export function registerSaasAdminRoutes(app, { requireAuth, requireAdmin }) {
   app.post(
     "/api/admin/users/password-reset",
     requireAuth,
-    requireAdmin,
+    requirePermission("stores.manage"),
     adminActionRateLimit,
     async (req, res, next) => {
       try {
@@ -332,6 +312,8 @@ export function registerSaasAdminRoutes(app, { requireAuth, requireAdmin }) {
           );
         }
 
+        const target = await userRpc(req, "platform_member_email", { p_org: req.organizationId, p_email: email });
+        if(!target) throw new AppError("FORBIDDEN", "Utilizador não pertence à organização selecionada.");
         const redirectTo = `${publicAppUrl()}/login?reset=1`;
         const { error } = await supabaseAuthClient.auth.resetPasswordForEmail(
           email,

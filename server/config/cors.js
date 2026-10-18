@@ -73,6 +73,8 @@ export const corsOptions = {
     "Accept",
     "X-Requested-With",
     "X-Request-Id",
+    "X-Organization-Id",
+    "X-Store-Id",
   ],
   credentials: false,
   optionsSuccessStatus: 204,

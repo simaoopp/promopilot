@@ -37,7 +37,7 @@ export function errorHandler(error, req, res, _next) {
   const meta = getRequestMeta(req);
 
   const safeMessage = isServerError
-    ? "Erro interno. A equipa técnica foi notificada."
+    ? "Não foi possível concluir o pedido. Tente novamente."
     : error?.message || "Pedido inválido.";
 
   const logPayload = {

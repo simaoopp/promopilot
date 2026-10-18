@@ -1,3 +1,4 @@
+import { tenantHeaders } from "./platformService";
 import * as XLSX from "xlsx";
 import { supabase } from "../lib/supabase";
 
@@ -188,7 +189,7 @@ async function api(path, options = {}, { maxRetries = 0, onRetry } = {}) {
         ...options,
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          ...tenantHeaders(), Authorization: `Bearer ${token}`,
           ...(options.headers || {}),
         },
       });

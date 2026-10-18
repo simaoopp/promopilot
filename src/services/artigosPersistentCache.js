@@ -1,7 +1,9 @@
+import { getAccessCacheScope } from "./platformService";
 const DB_NAME = "expert-artigos-cache";
 const DB_VERSION = 1;
 const STORE_NAME = "catalogos";
-const ALL_ARTIGOS_CACHE_KEY = "all-artigos-v1";
+const ALL_ARTIGOS_CACHE_KEY = "artigos-v2";
+const cacheKey = () => getAccessCacheScope() ? `${ALL_ARTIGOS_CACHE_KEY}:${getAccessCacheScope()}` : null;
 const DEFAULT_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 
 function hasIndexedDbSupport() {
@@ -85,9 +87,10 @@ function normalizePersistedRecord(record, maxAgeMs) {
 }
 
 export async function readPersistedArtigos({ maxAgeMs = DEFAULT_MAX_AGE_MS } = {}) {
+  if (!cacheKey()) return null;
   try {
     const record = await withStore("readonly", (store) =>
-      toPromise(store.get(ALL_ARTIGOS_CACHE_KEY)),
+      toPromise(store.get(cacheKey())),
     );
 
     return normalizePersistedRecord(record, maxAgeMs);
@@ -104,10 +107,10 @@ export async function writePersistedArtigos(payload = {}) {
       ? payload.artigos
       : [];
 
-  if (!items.length) return null;
+  if (!items.length || !cacheKey()) return null;
 
   const record = {
-    key: ALL_ARTIGOS_CACHE_KEY,
+    key: cacheKey(),
     items,
     total: Number.isFinite(payload.total) ? payload.total : items.length,
     updatedAt: Date.now(),
@@ -124,7 +127,7 @@ export async function writePersistedArtigos(payload = {}) {
 
 export async function clearPersistedArtigos() {
   try {
-    await withStore("readwrite", (store) => toPromise(store.delete(ALL_ARTIGOS_CACHE_KEY)));
+    await withStore("readwrite", (store) => toPromise(store.clear()));
   } catch (error) {
     console.warn("Não foi possível limpar a cache local de artigos.", error);
   }

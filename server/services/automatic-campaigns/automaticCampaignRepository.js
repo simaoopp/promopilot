@@ -244,7 +244,7 @@ export async function listExpiredAutomaticCampaignRows({ maxAgeDays = 5, limit =
 
   const { data, error } = await supabaseAdminClient
     .from(TABLE)
-    .select("id,created_at,expires_at,pdf_url,pdfs,status,email_subject,store")
+    .select("id,organization_id,created_at,expires_at,pdf_url,pdfs,status,email_subject,store")
     .lt("expires_at", nowIso)
     .order("expires_at", { ascending: true })
     .limit(safeLimit);

@@ -204,7 +204,7 @@ async function runDbOperation(
   }
 }
 
-async function fetchExistingArticles(client, codes) {
+async function fetchExistingArticles(client, codes, organizationId) {
   const rows = [];
 
   for (const codeChunk of chunk(codes, DB_READ_CHUNK_SIZE)) {
@@ -213,6 +213,7 @@ async function fetchExistingArticles(client, codes) {
         client
           .from("articles")
           .select("artigo,pvp1,pvp2,pvp3,estado")
+          .eq("organization_id", organizationId)
           .in("artigo", codeChunk),
       { label: `read ${codeChunk.length} articles` },
     );
@@ -223,15 +224,11 @@ async function fetchExistingArticles(client, codes) {
   return rows;
 }
 
-async function writeArticleUpdates(client, updates) {
-  for (const updateChunk of chunk(updates, DB_WRITE_CHUNK_SIZE)) {
-    await runDbOperation(
-      () =>
-        client
-          .from("articles")
-          .upsert(updateChunk, { onConflict: "artigo" }),
-      { label: `update ${updateChunk.length} articles` },
-    );
+async function writeArticleUpdates(client, updates, organizationId) {
+  // UPDATE with an immutable tenant predicate: never reassign another tenant's article on conflict.
+  for (const { artigo, ...fields } of updates) {
+    await runDbOperation(() => client.from("articles").update(fields)
+      .eq("organization_id", organizationId).eq("artigo", artigo), { label: "scoped article update" });
   }
 }
 
@@ -244,34 +241,9 @@ async function writeArticleInserts(client, inserts) {
   }
 }
 
-async function resolveOrganizationId({ req, client }) {
-  if (req.organizationId) return req.organizationId;
-
-  if (req.auth?.profile?.default_organization_id) {
-    return req.auth.profile.default_organization_id;
-  }
-
-  const { data, error } = await client
-    .from("profiles")
-    .select("default_organization_id")
-    .eq("id", req.authUser.id)
-    .maybeSingle();
-
-  if (error) throw error;
-  if (data?.default_organization_id) return data.default_organization_id;
-
-  const membership = await client
-    .from("organization_members")
-    .select("organization_id")
-    .eq("user_id", req.authUser.id)
-    .eq("status", "active")
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-
-  if (membership.error) throw membership.error;
-
-  return membership.data?.organization_id || null;
+async function resolveOrganizationId({ req }) {
+  if (!req.organizationId) throw new AppError("TENANT_REQUIRED", "Organização obrigatória.");
+  return req.organizationId;
 }
 
 function totalsFromLog(log = {}) {
@@ -399,6 +371,7 @@ export async function processArticleDatabaseSyncBatch({
     )
     .eq("id", syncId)
     .eq("user_id", req.authUser.id)
+    .eq("organization_id", req.organizationId)
     .maybeSingle();
 
   if (logError) throw logError;
@@ -443,7 +416,7 @@ export async function processArticleDatabaseSyncBatch({
   }
 
   const codes = [...new Set(normalizedRows.map((row) => row.artigo))];
-  const existingData = await fetchExistingArticles(client, codes);
+  const existingData = await fetchExistingArticles(client, codes, req.organizationId);
   const existing = new Map(existingData.map((row) => [row.artigo, row]));
 
   const updates = [];
@@ -512,7 +485,7 @@ export async function processArticleDatabaseSyncBatch({
   }
 
   if (updates.length) {
-    await writeArticleUpdates(client, updates);
+    await writeArticleUpdates(client, updates, req.organizationId);
   }
 
   if (inserts.length) {
@@ -539,6 +512,7 @@ export async function processArticleDatabaseSyncBatch({
     })
     .eq("id", syncId)
     .eq("user_id", req.authUser.id)
+    .eq("organization_id", req.organizationId)
     .eq("last_batch_index", lastBatchIndex)
     .select(
       "last_batch_index,processed_rows,updated_rows,inserted_rows,unchanged_rows,pvp1_changes,pvp2_changes,pvp3_changes,estado_changes",
@@ -589,6 +563,7 @@ export async function finishArticleDatabaseSync({
     })
     .eq("id", syncId)
     .eq("user_id", req.authUser.id)
+    .eq("organization_id", req.organizationId)
     .select("*")
     .single();
 
@@ -608,6 +583,7 @@ export async function listArticleDatabaseSyncHistory({
     .select(
       "id,file_name,status,total_rows,processed_rows,updated_rows,inserted_rows,unchanged_rows,pvp1_changes,pvp2_changes,pvp3_changes,estado_changes,last_batch_index,created_at,finished_at,error_message,user_email",
     )
+    .eq("organization_id", req.organizationId)
     .order("created_at", { ascending: false })
     .limit(safeLimit);
 

@@ -1,3 +1,4 @@
+import { systemModuleEnabled } from "../platform/accessService.js";
 import { getAutomaticCampaignConfig } from "./config.js";
 import {
   deleteAutomaticCampaignRowsByIds,
@@ -41,7 +42,11 @@ export async function cleanupExpiredAutomaticCampaigns(options = {}) {
   const batchSize = Math.min(500, Math.max(1, Number(options.batchSize || config.cleanup?.batchSize || 100)));
   const dryRun = Boolean(options.dryRun);
 
-  const rows = await listExpiredAutomaticCampaignRows({ maxAgeDays, limit: batchSize });
+  const candidates = await listExpiredAutomaticCampaignRows({ maxAgeDays, limit: batchSize });
+  const rows = [];
+  for (const row of candidates) {
+    if (await systemModuleEnabled(row.organization_id, "automations", row.store)) rows.push(row);
+  }
   const ids = rows.map((row) => row.id).filter(Boolean);
   const pdfPaths = [...new Set(rows.flatMap(extractAutomaticCampaignPdfPaths))];
 

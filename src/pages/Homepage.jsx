@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { usePermissions } from "../context/PermissionContext";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../components/ToastProvider";
 import HomeHero from "../components/home/HomeHero";
@@ -29,6 +30,9 @@ export default function HomePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { profile } = useAuth();
   const toast = useToast();
+  const { can } = usePermissions();
+  const canCampaigns = can("campaigns.read");
+  const canAutomations = can("automations.read");
 
   const initialCatalogo = getCatalogoPesquisaSnapshot();
 
@@ -64,12 +68,13 @@ export default function HomePage() {
       }
     }
 
-    syncHistoricoCampanhas();
+    if (canCampaigns) syncHistoricoCampanhas();
+    else { setHistoricoCampanhas([]); setCampanhaSelecionada(null); }
 
     return () => {
       isMounted = false;
     };
-  }, [profile?.store]);
+  }, [profile?.store, canCampaigns]);
 
   useEffect(() => {
     let isMounted = true;
@@ -84,12 +89,13 @@ export default function HomePage() {
       }
     }
 
-    syncHistoricoCampanhasAutomaticas();
+    if (canAutomations) syncHistoricoCampanhasAutomaticas();
+    else { setHistoricoCampanhasAutomaticas([]); setCampanhaAutomaticaSelecionada(null); }
 
     return () => {
       isMounted = false;
     };
-  }, [profile?.store]);
+  }, [profile?.store, canAutomations]);
 
 
   useEffect(() => {
@@ -251,7 +257,7 @@ export default function HomePage() {
 
   return (
     <div className="page-content">
-      <HomeHero
+      {can("products.read") && <HomeHero
         pesquisa={pesquisa}
         onPesquisaChange={setPesquisa}
         onPesquisaFocus={() => {}}
@@ -262,7 +268,7 @@ export default function HomePage() {
         highlightedIndex={highlightedIndex}
         onSuggestionHover={setHighlightedIndex}
         onSuggestionClick={abrirPopupArtigo}
-      />
+      />}
 
       <HomeQuickActions
         onOpenCampaign={() => navigate("/EtiquetasCampanha")}
@@ -272,18 +278,18 @@ export default function HomePage() {
         onOpenExcel={() => navigate("/EtiquetasCampanhaExcel")}
       />
 
-      <HomeHistorySection
+      {canCampaigns && <HomeHistorySection
         historicoPreview={historicoPreview}
         onOpenCampaign={abrirPopupCampanha}
         formatarDataHistorico={formatarDataHistorico}
         formatarAutorCampanha={formatarAutorCampanha}
-      />
+      />}
 
-      <HomeAutomaticCampaignHistorySection
+      {canAutomations && <HomeAutomaticCampaignHistorySection
         historicoPreview={historicoAutomaticoPreview}
         onOpenCampaign={abrirPopupCampanhaAutomatica}
         formatarDataHistorico={formatarDataHistorico}
-      />
+      />}
 
       <HomeSummarySection
         totalArtigos={catalogoTotal}

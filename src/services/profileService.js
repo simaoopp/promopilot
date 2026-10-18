@@ -11,19 +11,17 @@ export async function getProfile(userId) {
     .eq("id", userId)
     .single();
 
-  if (error) {
-    if (isNotFoundError(error)) {
-      return null;
-    }
-
-    throw error;
-  }
-
-  return data;
+  if (error && !isNotFoundError(error)) throw error;
+  const { data: access, error: accessError } = await supabase.rpc("platform_access_context");
+  if (accessError) throw accessError;
+  const selectedStore = access?.stores?.find(item => item.id === access.storeId);
+  return { id: userId, ...(data || {}), store: selectedStore?.name || data?.store || "",
+    organization_id: access?.organizationId || null, platformAdmin: access?.platformAdmin === true,
+    availableStores: (access?.stores || []).filter(store => store.status === "active") };
 }
 
 export async function upsertProfile(userId, payload = {}) {
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from("profiles")
     .upsert(
       {
@@ -43,5 +41,5 @@ export async function upsertProfile(userId, payload = {}) {
     throw error;
   }
 
-  return data;
+  return getProfile(userId);
 }

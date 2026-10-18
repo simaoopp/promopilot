@@ -6,7 +6,7 @@ import {
   syncArticleDatabase,
 } from "../../services/articleDatabaseSyncService";
 
-const OWNER_EMAIL = "simao.pereira@susiarte.com";
+import { usePermissions } from "../../context/PermissionContext";
 
 function formatDate(value) {
   if (!value) return "—";
@@ -26,7 +26,6 @@ function formatNumber(value) {
 }
 
 export default function ArticleDatabaseSyncPanel({
-  user,
   open,
   onClose,
 }) {
@@ -46,8 +45,8 @@ export default function ArticleDatabaseSyncPanel({
   const [history, setHistory] = useState([]);
 
   const busy = preparing || loading;
-  const isOwner =
-    String(user?.email || "").trim().toLowerCase() === OWNER_EMAIL;
+  const { can } = usePermissions();
+  const isOwner = can("products.manage");
 
   async function loadHistory() {
     try {

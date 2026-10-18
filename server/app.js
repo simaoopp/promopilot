@@ -18,6 +18,8 @@ import { registerSaasAdminRoutes } from "./routes/saasAdmin.js";
 import { registerArticleDatabaseSyncRoutes } from "./routes/articleDatabaseSync.js";
 import { registerCampaignEndNotificationRoutes } from "./routes/campaignEndNotifications.js";
 import { registerCampaignLifecycleRoutes } from "./routes/campaignLifecycle.js";
+import { requirePermission } from "./services/platform/accessService.js";
+import { registerPlatformRoutes } from "./routes/platform.js";
 import { isAiEnabled } from "./services/aiProdutoService.js";
 
 export function createApp() {
@@ -41,19 +43,20 @@ export function createApp() {
 
   registerHealthRoutes(app, { aiEnabled: isAiEnabled() });
   const authStack = [requireAuth, attachTenantContext];
+  registerPlatformRoutes(app, { authStack, requireAdmin });
 
-  registerArticleRoutes(app, { requireAuth: authStack });
+  registerArticleRoutes(app, { requireAuth: [...authStack, requirePermission("products.read")] });
   registerAiProdutoRoutes(app, {
-    requireAuth: authStack,
+    requireAuth: [...authStack, requirePermission("ai.read")],
     aiRateLimit,
     aiEnabled: isAiEnabled(),
   });
-  registerAutomaticCampaignRoutes(app, { requireAuth: authStack, requireAdmin });
-  registerQuoteDossierRoutes(app, { requireAuth: authStack });
+  registerAutomaticCampaignRoutes(app, { requireAuth: [...authStack, requirePermission("automations.read")], requireAdmin });
+  registerQuoteDossierRoutes(app, { requireAuth: [...authStack, requirePermission("dossiers.write")] });
   registerSaasAdminRoutes(app, { requireAuth: authStack, requireAdmin });
   registerArticleDatabaseSyncRoutes(app, { requireAuth, attachTenantContext });
-  registerCampaignEndNotificationRoutes(app, { requireAuth: authStack });
-  registerCampaignLifecycleRoutes(app, { requireAuth: authStack });
+  registerCampaignEndNotificationRoutes(app, { requireAuth: [...authStack, requirePermission("reports.read")] });
+  registerCampaignLifecycleRoutes(app, { requireAuth: [...authStack, requirePermission("reports.read")] });
 
   app.use(notFoundHandler);
   app.use(errorHandler);

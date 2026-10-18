@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import PromoPilotMark from "./brand/PromoPilotMark";
+import { usePermissions } from "../context/PermissionContext";
+import { selectAccess } from "../services/platformService";
 import { useAuth } from "../context/AuthContext";
 import { PROMOPILOT_BRAND } from "../brand/promopilot";
 import { getPasswordValidationMessage, isValidPassword } from "../utils/validators";
@@ -15,7 +17,14 @@ export default function Sidebar({
   const location = useLocation();
   const { user, profile, signOut, updatePassword } = useAuth();
 
-  const [submenuEtiquetasAberto, setSubmenuEtiquetasAberto] = useState(false);
+  const { context, can } = usePermissions();
+  const [contextBusy, setContextBusy] = useState(false);
+  const [contextError, setContextError] = useState("");
+  async function switchContext(organizationId, storeId) {
+    setContextBusy(true); setContextError("");
+    try { await selectAccess(organizationId, storeId); window.location.assign("/Homepage"); }
+    catch (error) { setContextError(error.message); setContextBusy(false); }
+  }
   const [loadingLogout, setLoadingLogout] = useState(false);
   const [menuContaAberto, setMenuContaAberto] = useState(false);
   const [modalPasswordAberto, setModalPasswordAberto] = useState(false);
@@ -63,14 +72,6 @@ export default function Sidebar({
     };
   }, [menuAberto]);
 
-  const rotaEtiquetasAtiva = useMemo(() => {
-    return (
-      location.pathname === "/Etiquetas" ||
-      location.pathname === "/EtiquetasCampanha" ||
-      location.pathname === "/EtiquetasCampanhaExcel"
-    );
-  }, [location.pathname]);
-
   const nomeUtilizador = useMemo(() => {
     const nome = [profile?.first_name, profile?.last_name]
       .map((value) => String(value || "").trim())
@@ -89,15 +90,9 @@ export default function Sidebar({
     return chunks.map((chunk) => chunk[0]).join("").toUpperCase() || "PP";
   }, [nomeUtilizador]);
 
-  const lojaAtual = String(profile?.store || profile?.store_id || "Operação").trim();
+  const lojaAtual = String(context?.stores?.find(store => store.id === context.storeId)?.name || profile?.store || "Operação").trim();
 
-  const canManageUsers =
-    ["admin", "owner"].includes(String(profile?.role || "").trim().toLowerCase()) ||
-    String(user?.email || "").trim().toLowerCase() === "simao.pereira@susiarte.com";
-
-  useEffect(() => {
-    if (rotaEtiquetasAtiva) setSubmenuEtiquetasAberto(true);
-  }, [rotaEtiquetasAtiva]);
+  const canManageUsers = can("stores.manage");
 
   useEffect(() => {
     function handleKeyDown(e) {
@@ -128,9 +123,6 @@ export default function Sidebar({
     setMenuAberto(false);
   }
 
-  function toggleSubmenu() {
-    setSubmenuEtiquetasAberto((prev) => !prev);
-  }
 
   function isActive(path) {
     if (path === "/Homepage") {
@@ -221,7 +213,7 @@ export default function Sidebar({
         </button>
 
         <Link to="/Homepage" className="pp-brand-home-link" aria-label="PromoPilot — voltar ao início" onClick={fecharTudo}><PromoPilotMark className="pp-topbar-brand" /></Link>
-        <div className="topbar-title">{titulo}</div>
+        <div className="topbar-title">{context?.platform?.display_name || titulo}</div>
 
         <div className="topbar-context">
           <span className="topbar-context-label">Loja</span>
@@ -270,7 +262,7 @@ export default function Sidebar({
                 </button>
               )}
 
-              {String(user?.email || "").trim().toLowerCase() === "simao.pereira@susiarte.com" && (
+              {can("products.manage") && (
                 <button
                   type="button"
                   className="topbar-account-menu-item"
@@ -340,77 +332,28 @@ export default function Sidebar({
 
         <nav className="sidebar-body" aria-label="Navegação principal">
           <div className="sidebar-section-label">O seu espaço</div>
-
-          <Link
-            to="/Homepage"
-            aria-current={isActive("/Homepage") ? "page" : undefined}
-            className={`sidebar-link ${isActive("/Homepage") ? "active" : ""}`}
-            onClick={fecharTudo}
-          >
-            <span className="sidebar-link-left"><span className="sidebar-icon">⌘</span> Início</span>
-            <small>Visão geral</small>
-          </Link>
-
-          <Link
-            to="/OrcamentosDossiers"
-            aria-current={isActive("/OrcamentosDossiers") ? "page" : undefined}
-            className={`sidebar-link ${isActive("/OrcamentosDossiers") ? "active" : ""}`}
-            onClick={fecharTudo}
-          >
-            <span className="sidebar-link-left"><span className="sidebar-icon">↗</span> Dossiers</span>
-            <small>Orçamentos</small>
-          </Link>
-
-          <div className="sidebar-section-label">Produção de loja</div>
-
-          <button
-            type="button"
-            className={`sidebar-link ${rotaEtiquetasAtiva ? "active" : ""}`}
-            onClick={toggleSubmenu}
-            aria-expanded={submenuEtiquetasAberto}
-            aria-controls="submenu-etiquetas"
-          >
-            <span className="sidebar-link-left"><span className="sidebar-icon">🏷</span> Etiquetas</span>
-            <span className={`arrow ${submenuEtiquetasAberto ? "open" : ""}`}>▸</span>
-          </button>
-
-          {submenuEtiquetasAberto && (
-            <div id="submenu-etiquetas" className="sidebar-submenu">
-              <Link
-                to="/EtiquetasCampanha"
-            aria-current={isActive("/EtiquetasCampanha") ? "page" : undefined}
-                className={`sidebar-sublink ${isActive("/EtiquetasCampanha") ? "active" : ""}`}
-                onClick={fecharTudo}
-              >
-                Campanha manual
-              </Link>
-
-              <Link
-                to="/Etiquetas"
-            aria-current={isActive("/Etiquetas") ? "page" : undefined}
-                className={`sidebar-sublink ${isActive("/Etiquetas") ? "active" : ""}`}
-                onClick={fecharTudo}
-              >
-                Catálogo e scan
-              </Link>
-
-              <Link
-                to="/EtiquetasCampanhaExcel"
-            aria-current={isActive("/EtiquetasCampanhaExcel") ? "page" : undefined}
-                className={`sidebar-sublink ${isActive("/EtiquetasCampanhaExcel") ? "active" : ""}`}
-                onClick={fecharTudo}
-              >
-                Importação Excel
-              </Link>
-            </div>
-          )}
+          {(context?.pages || []).filter(page => page.show_in_navigation !== false).map(page => <Link key={page.page_key} to={page.path}
+            aria-current={isActive(page.path) ? "page" : undefined}
+            className={`sidebar-link ${isActive(page.path) ? "active" : ""}`} onClick={fecharTudo}>{page.name}</Link>)}
+          {context?.platformAdmin && <Link className="sidebar-link" to="/ceo" onClick={fecharTudo}>Administração CEO <span aria-hidden="true">↗</span></Link>}
+          {(context?.organizations?.length > 1 || context?.stores?.length > 1) && <div className="pp-context-switcher">
+            <div className="sidebar-section-label">Organização e loja</div>
+            <label>Organização<select disabled={contextBusy} value={context.organizationId || ""} onChange={event => switchContext(event.target.value, null)}>
+              {context.organizations.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}
+            </select></label>
+            <label>Loja<select disabled={contextBusy} value={context.storeId || ""} onChange={event => switchContext(context.organizationId, event.target.value)}>
+              <option value="" disabled>Selecionar loja</option>
+              {context.stores.filter(store => store.status === "active").map(store => <option key={store.id} value={store.id}>{store.name}</option>)}
+            </select></label>
+            {contextError && <p role="alert">{contextError}</p>}
+          </div>}
         </nav>
       </aside>
 
-      <ArticleDatabaseSyncPanel user={user} open={articleDbPanelOpen} onClose={() => setArticleDbPanelOpen(false)} />
+      <ArticleDatabaseSyncPanel user={user} open={articleDbPanelOpen && can("products.manage")} onClose={() => setArticleDbPanelOpen(false)} />
 
       <UserManagementPanel
-        open={userManagementOpen}
+        open={userManagementOpen && canManageUsers}
         onClose={() => setUserManagementOpen(false)}
       />
 

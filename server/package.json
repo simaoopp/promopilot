@@ -13,7 +13,10 @@
     "qa:all": "npm run smoke && npm run qa:saas",
     "worker:campaign-end": "node scripts/runCampaignEndNotificationWorker.js",
     "worker:campaign-end:dry-run": "node scripts/runCampaignEndNotificationWorker.js --dry-run",
-    "worker:campaign-end:config": "node scripts/runCampaignEndNotificationWorker.js --config"
+    "worker:campaign-end:config": "node scripts/runCampaignEndNotificationWorker.js --config",
+    "test:phase-zero": "node --experimental-test-module-mocks --test tests/platformAccess.test.js",
+    "ceo:bootstrap": "node scripts/bootstrapPlatformAdmin.js",
+    "ceo:prepare-migration": "node scripts/preparePlatformMigration.js"
   },
   "dependencies": {
     "@google/genai": "^0.14.1",

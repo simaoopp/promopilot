@@ -1164,7 +1164,7 @@ export async function enrichSingleArticle({ artigoInterno, codigoBarras, descric
 
     let artigoAtualizado = art;
     try {
-      artigoAtualizado = await upsertArticle(art);
+      artigoAtualizado = await upsertArticle(art, organizationId);
     } catch (error) {
       console.warn("[ai-produto] Enriquecimento gerado, mas não foi possível persistir o artigo:", error?.message || error);
     }
@@ -1266,7 +1266,7 @@ export async function enrichSingleArticle({ artigoInterno, codigoBarras, descric
 
     let artigoAtualizado = art;
     try {
-      artigoAtualizado = await upsertArticle(art);
+      artigoAtualizado = await upsertArticle(art, organizationId);
     } catch (error) {
       console.warn("[ai-produto] Enriquecimento gerado, mas não foi possível persistir o artigo:", error?.message || error);
     }

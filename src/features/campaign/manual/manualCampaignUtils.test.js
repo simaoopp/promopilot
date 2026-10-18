@@ -4,22 +4,21 @@ describe("construirPaginasImpressao", () => {
   test("agrupa duas etiquetas A5 por folha em modo automático", () => {
     const paginas = construirPaginasImpressao(
       [
-        { id: "1", _formato: "a5" },
-        { id: "2", _formato: "a5" },
-        { id: "3", _formato: "a5" },
+        { id: "1", descricao: "Frigorífico" },
+        { id: "2", descricao: "Frigorífico" },
+        { id: "3", descricao: "Frigorífico" },
       ],
       true,
       "a6",
     );
 
-    expect(paginas).toEqual([
-      { layout: "a5", items: [{ id: "1", _formato: "a5" }, { id: "2", _formato: "a5" }] },
-      { layout: "a5", items: [{ id: "3", _formato: "a5" }] },
+    expect(paginas.map(page => ({ layout: page.layout, ids: page.items.map(item => item.id) }))).toEqual([
+      { layout: "a5", ids: ["1", "2"] }, { layout: "a5", ids: ["3"] },
     ]);
   });
 
   test("mantém quatro etiquetas A6 por folha em modo automático", () => {
-    const itens = Array.from({ length: 5 }, (_, index) => ({ id: String(index), _formato: "a6" }));
+    const itens = Array.from({ length: 5 }, (_, index) => ({ id: String(index), descricao: "Aspirador" }));
     const paginas = construirPaginasImpressao(itens, true, "a6");
 
     expect(paginas).toHaveLength(2);
@@ -30,11 +29,11 @@ describe("construirPaginasImpressao", () => {
   test("em modo automático imprime todas as A6 antes das A5", () => {
     const paginas = construirPaginasImpressao(
       [
-        { id: "1", _formato: "a6" },
-        { id: "2", _formato: "a5" },
-        { id: "3", _formato: "a6" },
-        { id: "4", _formato: "a5" },
-        { id: "5", _formato: "a6" },
+        { id: "1", descricao: "Aspirador" },
+        { id: "2", descricao: "Frigorífico" },
+        { id: "3", descricao: "Aspirador" },
+        { id: "4", descricao: "Frigorífico" },
+        { id: "5", descricao: "Aspirador" },
       ],
       true,
       "a6",

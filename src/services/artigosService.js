@@ -1,9 +1,10 @@
+import { getAccessCacheScope, tenantHeaders } from "./platformService";
 import { supabase } from "../lib/supabase";
 import {
   isSupabaseRefreshTokenError,
   recoverFromInvalidSupabaseSession,
 } from "../utils/supabaseAuthRecovery";
-import { readPersistedArtigos, writePersistedArtigos } from "./artigosPersistentCache";
+import { readPersistedArtigos, writePersistedArtigos, clearPersistedArtigos } from "./artigosPersistentCache";
 
 const API_BASE_URL =
   process.env.REACT_APP_API_BASE_URL ||
@@ -19,6 +20,9 @@ const ALL_ARTIGOS_CACHE_KEY = "all-artigos";
 const artigosCache = new Map();
 const artigosPendingRequests = new Map();
 let lastBackgroundRefreshAt = 0;
+if (typeof window !== "undefined") window.addEventListener("promopilot:access-changed", () => {
+  artigosCache.clear(); artigosPendingRequests.clear(); lastBackgroundRefreshAt = 0; clearPersistedArtigos();
+});
 
 function buildApiUrl(path) {
   return `${API_BASE_URL}${path}`;
@@ -213,7 +217,7 @@ export async function fetchArtigosPage({
   try {
     response = await fetch(buildApiUrl(`/api/artigos?${params.toString()}`), {
       headers: {
-        Authorization: `Bearer ${token}`,
+        ...tenantHeaders(), Authorization: `Bearer ${token}`,
       },
       signal: requestSignal.signal,
     });
@@ -289,7 +293,7 @@ async function fetchAllArtigosCatalogo({ forceRefresh = false, pageSize = 1000, 
   const path = buildArtigosCatalogoPath({ forceRefresh, pageSize });
   const response = await fetch(buildApiUrl(path), {
     headers: {
-      Authorization: `Bearer ${token}`,
+      ...tenantHeaders(), Authorization: `Bearer ${token}`,
     },
     signal,
   });
@@ -451,7 +455,8 @@ export async function searchArtigos({ q = "", limit = 20, offset = 0, signal, ti
   if (signal?.aborted) throw Object.assign(new Error("Pesquisa cancelada."), { name: "AbortError" });
   const token = await getAccessToken();
   // Session-scoped results cannot be reused by a different signed-in account.
-  const cacheKey = `${token}:${buildSearchCacheKey({ q, limit, offset })}`;
+  const requestScope = getAccessCacheScope();
+  const cacheKey = `${requestScope}:${token}:${buildSearchCacheKey({ q, limit, offset })}`;
   const cached = cacheGet(cacheKey);
   if (cached) return cached;
   const pending = !signal ? getPendingRequest(cacheKey) : null;
@@ -467,6 +472,7 @@ export async function searchArtigos({ q = "", limit = 20, offset = 0, signal, ti
     if (result.searchTimedOut || result.degraded) {
       throw new Error("A pesquisa não foi concluída. Tenta novamente.");
     }
+    if (requestScope !== getAccessCacheScope()) throw Object.assign(new Error("O contexto de acesso mudou."), { name: "AbortError" });
     return cacheSet(cacheKey, result);
   })();
   if (!signal) setPendingRequest(cacheKey, request);
@@ -498,7 +504,7 @@ export async function askSellerAssistant(payload) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
+      ...tenantHeaders(), Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(payload),
   });
@@ -525,7 +531,7 @@ export async function enrichArtigoWithAi(payload) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
+      ...tenantHeaders(), Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(payload),
   });

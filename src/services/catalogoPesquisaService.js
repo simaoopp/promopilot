@@ -112,3 +112,5 @@ export function __resetCatalogoPesquisaForTests() {
   catalogoPesquisaState.index = null;
   catalogoPesquisaState.promise = null;
 }
+
+if (typeof window !== "undefined") window.addEventListener("promopilot:access-changed", __resetCatalogoPesquisaForTests);
