@@ -4,7 +4,7 @@ import { AppError } from '../middleware/errorHandler.js';
 const RESOURCES=new Set(['dashboard','organizations','organization','stores','users','audit','catalog','permissions','settings']);
 export function registerPlatformRoutes(app,{authStack,requireAdmin}) {
  app.get('/api/access',...authStack,async(req,res,next)=>{
-  try { const context=await userRpc(req,'platform_access_context',{p_organization_id:req.organizationId||null,p_store_id:req.storeId||null});res.set('Cache-Control','no-store').json({ok:true,context}); }catch(error){next(error);}
+  try { const context=req.permissionContextComplete ? req.permissionContext : await userRpc(req,'platform_access_context',{p_organization_id:req.organizationId||null,p_store_id:req.storeId||null});res.set('Cache-Control','no-store').json({ok:true,context}); }catch(error){next(error);}
  });
  app.post('/api/access/context',...authStack,async(req,res,next)=>{
   try { const context=await userRpc(req,'platform_select_context',{p_organization_id:req.body?.organizationId,p_store_id:req.body?.storeId||null});res.set('Cache-Control','no-store').json({ok:true,context}); }catch(e){next(e);}

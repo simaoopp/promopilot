@@ -7,8 +7,8 @@ function readHeader(req, name) {
 
 export function requestContext(req, res, next) {
   const inbound = readHeader(req, "x-request-id");
-  const requestId = inbound && String(inbound).trim()
-    ? String(inbound).trim().slice(0, 128)
+  const requestId = typeof inbound === "string" && /^[A-Za-z0-9_.:-]{1,128}$/.test(inbound)
+    ? inbound
     : `req_${crypto.randomUUID()}`;
 
   req.requestId = requestId;
@@ -22,7 +22,7 @@ export function getRequestMeta(req) {
     userId: req.authUser?.id || req.auth?.user?.id || null,
     organizationId: req.organizationId || req.auth?.organizationId || null,
     role: req.auth?.role || null,
-    path: req.originalUrl || req.url || null,
+    path: String(req.originalUrl || req.url || "").split("?")[0] || null,
     method: req.method || null,
   };
 }

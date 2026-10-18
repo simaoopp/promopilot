@@ -17,7 +17,10 @@ export async function ensureAutomaticCampaignBucket() {
 
   const { data: bucket } = await supabaseAdminClient.storage.getBucket(AUTOMATIC_CAMPAIGN_BUCKET);
 
-  if (bucket) return bucket;
+  if (bucket) {
+    if (bucket.public !== false) throw new Error("O bucket de campanhas tem de ser privado antes de receber PDFs.");
+    return bucket;
+  }
 
   const { data, error } = await supabaseAdminClient.storage.createBucket(
     AUTOMATIC_CAMPAIGN_BUCKET,
@@ -39,6 +42,9 @@ export async function uploadAutomaticCampaignPdf({ pdfBuffer, emailMessageId, st
   if (!Buffer.isBuffer(pdfBuffer) || !pdfBuffer.length) {
     throw new Error("PDF inválido para upload.");
   }
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(organizationId)) {
+    throw new Error("Organização explícita obrigatória para guardar o PDF.");
+  }
 
   await ensureAutomaticCampaignBucket();
 
@@ -46,7 +52,7 @@ export async function uploadAutomaticCampaignPdf({ pdfBuffer, emailMessageId, st
   const datePart = date.toISOString().slice(0, 10);
   const safeMessage = normalizePathPart(emailMessageId || title || `email-${date.getTime()}`);
   const safeStore = normalizePathPart(storeKey || "loja");
-  const safeOrganization = normalizePathPart(organizationId || "legacy");
+  const safeOrganization = normalizePathPart(organizationId);
   const filePath = `${safeOrganization}/${datePart}/${safeMessage}/${safeStore}.pdf`;
 
   const { error } = await supabaseAdminClient.storage

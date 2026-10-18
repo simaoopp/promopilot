@@ -4,7 +4,9 @@ import ForcePasswordChangeModal from "../components/ForcePasswordChangeModal";
 import PasswordRecoveryModal from "../components/PasswordRecoveryModal";
 import PromoPilotMark from "../components/brand/PromoPilotMark";
 import AppLoading from "../components/AppLoading";
+import ProfileLoadError from "../components/ProfileLoadError";
 import { useAuth } from "../context/AuthContext";
+import { safeNextPath } from "../utils/safeNextPath";
 
 import "../styles/styles.css";
 import "../styles/login-access.css";
@@ -14,6 +16,7 @@ export default function Login() {
     user,
     loadingAuth,
     loadingProfile,
+    profileError,
     signIn,
     onboardingRequired,
     requiresPasswordChange,
@@ -32,15 +35,14 @@ export default function Login() {
     return <AppLoading message="A preparar o acesso à sua conta…" />;
   }
 
+  if (user && profileError && !passwordRecovery) return <ProfileLoadError />;
+
   if (user && !onboardingRequired && !passwordRecovery) {
     const nextCandidate =
       typeof window !== "undefined"
         ? new URLSearchParams(window.location.search).get("next")
         : "";
-    const safeNext =
-      nextCandidate && nextCandidate.startsWith("/") && !nextCandidate.startsWith("//")
-        ? nextCandidate
-        : "/Homepage";
+    const safeNext = safeNextPath(nextCandidate, window.location.origin);
 
     return <Navigate to={safeNext} replace />;
   }

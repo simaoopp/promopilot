@@ -31,21 +31,24 @@ export function notFoundHandler(req, res) {
 }
 
 export function errorHandler(error, req, res, _next) {
-  const status = Number(error?.status || error?.statusCode || 500);
-  const code = error?.code || (status === 500 ? "INTERNAL_ERROR" : "REQUEST_ERROR");
+  const candidate = Number(error?.status || error?.statusCode || 500);
+  const status = Number.isInteger(candidate) && candidate >= 400 && candidate <= 599 ? candidate : 500;
+  const trusted = error instanceof AppError;
+  const code = trusted ? error.code : status === 413 ? "PAYLOAD_TOO_LARGE" : status === 500 ? "INTERNAL_ERROR" : "REQUEST_ERROR";
   const isServerError = status >= 500;
   const meta = getRequestMeta(req);
 
   const safeMessage = isServerError
     ? "Não foi possível concluir o pedido. Tente novamente."
-    : error?.message || "Pedido inválido.";
+    : trusted ? error.message : status === 413 ? "Pedido demasiado grande." : "Pedido inválido.";
 
   const logPayload = {
     ...meta,
     status,
     code,
-    message: error?.message,
-    stack: isServerError ? error?.stack : undefined,
+    // Raw errors and stacks may contain SQL values, URLs, credentials or bodies.
+    // Correlate with requestId; never log these fields from an upstream error.
+    errorType: trusted ? "AppError" : "UpstreamError",
   };
 
   if (isServerError) {
@@ -60,7 +63,7 @@ export function errorHandler(error, req, res, _next) {
       code,
       message: safeMessage,
       requestId: req.requestId || null,
-      details: isServerError ? undefined : error?.details,
+      details: isServerError || !trusted ? undefined : error?.details,
     },
   });
 }

@@ -14,7 +14,7 @@
     "react-router-dom": "^6.22.3",
     "react-scripts": "^5.0.0",
     "tesseract.js": "^7.0.0",
-    "xlsx": "0.18.5"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@types/react": "19.0.0",
@@ -34,7 +34,8 @@
     "repair:artigos-json": "node scripts/repair-artigos-json.mjs",
     "migrate:article-prices": "node scripts/migrate-artigos-prices-to-supabase.mjs",
     "qa:saas": "npm --prefix server run test:phase-zero && npm --prefix qa/phase-zero test",
-    "qa:all": "npm run qa:static && npm run qa:saas && npm --prefix server run smoke",
+    "qa:all": "npm run qa:static && npm run qa:saas && npm run qa:audit:sql && npm --prefix server run smoke",
+    "qa:audit:sql": "node scripts/test-audit-sql.mjs && node scripts/test-article-sync-sql.mjs",
     "migrate:articles-db-update": "node scripts/migrate-artigos-db-update-to-supabase.mjs",
     "prebuild": "node scripts/verify-frontend-package.mjs"
   },

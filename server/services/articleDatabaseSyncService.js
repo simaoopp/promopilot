@@ -1,14 +1,10 @@
 import { supabaseAdminClient } from "../lib/supabaseClients.js";
+import { userRpc } from "./platform/accessService.js";
 import { AppError } from "../middleware/errorHandler.js";
 
 const MAX_BATCH_SIZE = Number(process.env.ARTICLE_DB_SYNC_MAX_BATCH_SIZE || 300);
 const DB_READ_CHUNK_SIZE = Number(process.env.ARTICLE_DB_SYNC_READ_CHUNK_SIZE || 80);
 const DB_WRITE_CHUNK_SIZE = Number(process.env.ARTICLE_DB_SYNC_WRITE_CHUNK_SIZE || 40);
-const DB_TIMEOUT_RETRIES = Math.max(
-  0,
-  Number(process.env.ARTICLE_DB_SYNC_TIMEOUT_RETRIES || 4),
-);
-
 const ARTICLE_COLUMNS = ["artigo", "descricao", "pvp1", "pvp2", "pvp3", "estado"];
 
 function text(value) {
@@ -80,62 +76,6 @@ function normalizeRow(input = {}) {
   return row;
 }
 
-function buildSearchTerms(row) {
-  return [row.artigo, row.descricao, row.codigoBarras]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-}
-
-function samePrice(a, b) {
-  if (a === null || a === undefined || a === "") {
-    return b === null || b === undefined || b === "";
-  }
-
-  const left = Number(a);
-  const right = Number(b);
-
-  if (Number.isFinite(left) && Number.isFinite(right)) {
-    return left === right;
-  }
-
-  return text(a) === text(b);
-}
-
-function getChangedFields(next, current) {
-  const changes = {};
-
-  if (
-    next.pvp1 !== undefined &&
-    text(current.pvp1) !== next.pvp1
-  ) {
-    changes.pvp1 = true;
-  }
-
-  if (
-    next.pvp2 !== undefined &&
-    !samePrice(current.pvp2, next.pvp2)
-  ) {
-    changes.pvp2 = true;
-  }
-
-  if (
-    next.pvp3 !== undefined &&
-    text(current.pvp3) !== next.pvp3
-  ) {
-    changes.pvp3 = true;
-  }
-
-  if (
-    next.estado !== undefined &&
-    text(current.estado) !== next.estado
-  ) {
-    changes.estado = true;
-  }
-
-  return changes;
-}
-
 function requireClient() {
   if (!supabaseAdminClient) {
     throw new AppError(
@@ -148,115 +88,9 @@ function requireClient() {
   return supabaseAdminClient;
 }
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function chunk(items, size) {
-  const safeSize = Math.max(1, Number(size) || 1);
-  const result = [];
-
-  for (let index = 0; index < items.length; index += safeSize) {
-    result.push(items.slice(index, index + safeSize));
-  }
-
-  return result;
-}
-
-function isStatementTimeout(error) {
-  return (
-    String(error?.code || "") === "57014" ||
-    /statement timeout|canceling statement/i.test(String(error?.message || ""))
-  );
-}
-
-async function runDbOperation(
-  operation,
-  {
-    label = "database operation",
-    retries = DB_TIMEOUT_RETRIES,
-  } = {},
-) {
-  let attempt = 0;
-
-  while (true) {
-    const result = await operation();
-
-    if (!result?.error) {
-      return result;
-    }
-
-    if (!isStatementTimeout(result.error) || attempt >= retries) {
-      throw result.error;
-    }
-
-    attempt += 1;
-
-    console.warn(
-      `[article-db-sync] ${label} timeout; retry ${attempt}/${retries}`,
-      {
-        code: result.error.code,
-        message: result.error.message,
-      },
-    );
-
-    await sleep(Math.min(250 * (2 ** (attempt - 1)), 2_500));
-  }
-}
-
-async function fetchExistingArticles(client, codes, organizationId) {
-  const rows = [];
-
-  for (const codeChunk of chunk(codes, DB_READ_CHUNK_SIZE)) {
-    const result = await runDbOperation(
-      () =>
-        client
-          .from("articles")
-          .select("artigo,pvp1,pvp2,pvp3,estado")
-          .eq("organization_id", organizationId)
-          .in("artigo", codeChunk),
-      { label: `read ${codeChunk.length} articles` },
-    );
-
-    rows.push(...(result.data || []));
-  }
-
-  return rows;
-}
-
-async function writeArticleUpdates(client, updates, organizationId) {
-  // UPDATE with an immutable tenant predicate: never reassign another tenant's article on conflict.
-  for (const { artigo, ...fields } of updates) {
-    await runDbOperation(() => client.from("articles").update(fields)
-      .eq("organization_id", organizationId).eq("artigo", artigo), { label: "scoped article update" });
-  }
-}
-
-async function writeArticleInserts(client, inserts) {
-  for (const insertChunk of chunk(inserts, DB_WRITE_CHUNK_SIZE)) {
-    await runDbOperation(
-      () => client.from("articles").insert(insertChunk),
-      { label: `insert ${insertChunk.length} articles` },
-    );
-  }
-}
-
 async function resolveOrganizationId({ req }) {
   if (!req.organizationId) throw new AppError("TENANT_REQUIRED", "Organização obrigatória.");
   return req.organizationId;
-}
-
-function totalsFromLog(log = {}) {
-  return {
-    processed_rows: Number(log.processed_rows || 0),
-    updated_rows: Number(log.updated_rows || 0),
-    inserted_rows: Number(log.inserted_rows || 0),
-    unchanged_rows: Number(log.unchanged_rows || 0),
-    pvp1_changes: Number(log.pvp1_changes || 0),
-    pvp2_changes: Number(log.pvp2_changes || 0),
-    pvp3_changes: Number(log.pvp3_changes || 0),
-    estado_changes: Number(log.estado_changes || 0),
-  };
 }
 
 export async function startArticleDatabaseSync({
@@ -316,7 +150,9 @@ export async function processArticleDatabaseSyncBatch({
   batchIndex,
   rows,
 }) {
-  const client = requireClient();
+  if (!Array.isArray(rows) || rows.length > Math.min(MAX_BATCH_SIZE, 300)) {
+    throw new AppError("VALIDATION_ERROR", "Lote inválido: máximo de 300 linhas.");
+  }
 
   const receivedRows = (Array.isArray(rows) ? rows : [])
     .map(normalizeRow)
@@ -342,11 +178,6 @@ export async function processArticleDatabaseSyncBatch({
   }
 
   const normalizedRows = [...rowsByArticle.values()];
-  const duplicateRowsInBatch = Math.max(
-    0,
-    receivedRows.length - normalizedRows.length,
-  );
-
   const safeBatchIndex = Number(batchIndex);
 
   if (!syncId || !normalizedRows.length) {
@@ -364,182 +195,10 @@ export async function processArticleDatabaseSyncBatch({
     );
   }
 
-  const { data: log, error: logError } = await client
-    .from("article_sync_logs")
-    .select(
-      "id,organization_id,status,last_batch_index,processed_rows,updated_rows,inserted_rows,unchanged_rows,pvp1_changes,pvp2_changes,pvp3_changes,estado_changes",
-    )
-    .eq("id", syncId)
-    .eq("user_id", req.authUser.id)
-    .eq("organization_id", req.organizationId)
-    .maybeSingle();
-
-  if (logError) throw logError;
-  if (!log) throw new AppError("NOT_FOUND", "Sincronização não encontrada.");
-
-  if (log.status !== "processing") {
-    throw new AppError(
-      "VALIDATION_ERROR",
-      "Esta sincronização já terminou.",
-    );
-  }
-
-  const lastBatchIndex = Number(log.last_batch_index ?? -1);
-
-  // A response may be lost after the database commit. Retrying the same HTTP
-  // batch must not apply it twice or double the counters.
-  if (safeBatchIndex <= lastBatchIndex) {
-    return {
-      duplicate: true,
-      processed: 0,
-      duplicateRowsInBatch: 0,
-      updated: 0,
-      inserted: 0,
-      unchanged: 0,
-      changedFields: { pvp1: 0, pvp2: 0, pvp3: 0, estado: 0 },
-      totals: totalsFromLog(log),
-    };
-  }
-
-  if (safeBatchIndex !== lastBatchIndex + 1) {
-    throw new AppError(
-      "BATCH_OUT_OF_ORDER",
-      "Os lotes chegaram fora de ordem. Repete a sincronização a partir do lote atual.",
-      {
-        status: 409,
-        details: {
-          expectedBatchIndex: lastBatchIndex + 1,
-          receivedBatchIndex: safeBatchIndex,
-        },
-      },
-    );
-  }
-
-  const codes = [...new Set(normalizedRows.map((row) => row.artigo))];
-  const existingData = await fetchExistingArticles(client, codes, req.organizationId);
-  const existing = new Map(existingData.map((row) => [row.artigo, row]));
-
-  const updates = [];
-  const inserts = [];
-  const changedFields = { pvp1: 0, pvp2: 0, pvp3: 0, estado: 0 };
-  let unchanged = 0;
-
-  for (const row of normalizedRows) {
-    const current = existing.get(row.artigo);
-
-    if (current) {
-      const changes = getChangedFields(row, current);
-
-      if (!Object.keys(changes).length) {
-        unchanged += 1;
-        continue;
-      }
-
-      for (const field of Object.keys(changes)) {
-        changedFields[field] += 1;
-      }
-
-      // Supabase/PostgREST bulk upsert builds one column-set for the whole
-      // payload. If some rows contain pvp1/pvp3 and others omit them, omitted
-      // keys can become NULL for those rows before ON CONFLICT is evaluated.
-      // Since pvp1/pvp3/estado are NOT NULL in the live schema, every update
-      // payload must therefore contain a complete price/status snapshot.
-      //
-      // We still preserve the database value when the import did not provide
-      // that field, so only intended changes are applied.
-      updates.push({
-        artigo: row.artigo,
-        pvp1:
-          row.pvp1 !== undefined
-            ? row.pvp1
-            : text(current.pvp1),
-        pvp2:
-          row.pvp2 !== undefined
-            ? row.pvp2
-            : current.pvp2,
-        pvp3:
-          row.pvp3 !== undefined
-            ? row.pvp3
-            : text(current.pvp3),
-        estado:
-          row.estado !== undefined
-            ? row.estado
-            : text(current.estado),
-      });
-    } else {
-      // New rows receive explicit values for every article field that is
-      // NOT NULL in the canonical schema. Rich fields not listed here keep
-      // their database defaults.
-      inserts.push({
-        artigo: row.artigo,
-        descricao: row.descricao ?? "",
-        pvp1: row.pvp1 ?? "",
-        pvp2: row.pvp2,
-        pvp3: row.pvp3 ?? "",
-        estado: row.estado ?? "",
-        organization_id: log.organization_id,
-        codigo_barras: row.codigoBarras ?? "",
-        search_terms: buildSearchTerms(row),
-      });
-    }
-  }
-
-  if (updates.length) {
-    await writeArticleUpdates(client, updates, req.organizationId);
-  }
-
-  if (inserts.length) {
-    await writeArticleInserts(client, inserts);
-  }
-
-  const nextTotals = {
-    processed_rows: Number(log.processed_rows || 0) + receivedRows.length,
-    updated_rows: Number(log.updated_rows || 0) + updates.length,
-    inserted_rows: Number(log.inserted_rows || 0) + inserts.length,
-    unchanged_rows: Number(log.unchanged_rows || 0) + unchanged,
-    pvp1_changes: Number(log.pvp1_changes || 0) + changedFields.pvp1,
-    pvp2_changes: Number(log.pvp2_changes || 0) + changedFields.pvp2,
-    pvp3_changes: Number(log.pvp3_changes || 0) + changedFields.pvp3,
-    estado_changes: Number(log.estado_changes || 0) + changedFields.estado,
-  };
-
-  const { data: updatedLog, error: updateLogError } = await client
-    .from("article_sync_logs")
-    .update({
-      ...nextTotals,
-      last_batch_index: safeBatchIndex,
-      last_batch_at: new Date().toISOString(),
-    })
-    .eq("id", syncId)
-    .eq("user_id", req.authUser.id)
-    .eq("organization_id", req.organizationId)
-    .eq("last_batch_index", lastBatchIndex)
-    .select(
-      "last_batch_index,processed_rows,updated_rows,inserted_rows,unchanged_rows,pvp1_changes,pvp2_changes,pvp3_changes,estado_changes",
-    )
-    .maybeSingle();
-
-  if (updateLogError) throw updateLogError;
-
-  if (!updatedLog) {
-    throw new AppError(
-      "BATCH_CONFLICT",
-      "O estado da sincronização mudou durante o processamento. Repete este lote.",
-      { status: 409 },
-    );
-  }
-
-  return {
-    duplicate: false,
-    processed: receivedRows.length,
-    duplicateRowsInBatch,
-    uniqueRowsInBatch: normalizedRows.length,
-    updated: updates.length,
-    inserted: inserts.length,
-    unchanged,
-    changedFields,
-    totals: updatedLog,
-  };
+  return userRpc(req, "platform_article_sync_batch", {
+    p_org: req.organizationId, p_store: req.storeId || null, p_sync: syncId,
+    p_batch: safeBatchIndex, p_rows: normalizedRows, p_received: receivedRows.length,
+  });
 }
 
 export async function finishArticleDatabaseSync({

@@ -12,13 +12,12 @@ const tables = ['organizations', 'stores', 'organization_members', 'profiles', '
 
 export async function runFoundationTests() {
   const sql = async path => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
-  const [fixture, partial, migration, preflight, preservation, pos] = await Promise.all([
+  const [fixture, partial, migration, preflight, preservation] = await Promise.all([
     sql('supabase/tests/phase_zero.fixture.sql'),
     sql('supabase/tests/phase_zero_partial.fixture.sql'),
     sql('supabase/migrations/20261015_platform_permissions.sql'),
     sql('supabase/tests/phase_zero_preflight.sql'),
     sql('supabase/tests/phase_zero_verify_preservation.sql'),
-    sql('supabase/migrations/20261017_pos_operations.sql'),
   ]);
   let passed = 0;
   const val = async (db, query, params = []) => Object.values((await db.query(query, params)).rows[0])[0];
@@ -178,14 +177,15 @@ export async function runFoundationTests() {
     await noFoundation(db);
   });
 
-  await check('POS installs after the repaired foundation and survives CEO migration re-run', partial, async db => {
+  await check('future POS remains unavailable and existing core decisions survive re-run', partial, async db => {
     await db.exec(migration);
-    await db.exec(pos);
-    await db.exec("update organization_features set enabled=true where organization_id='20000000-0000-4000-8000-000000000001' and module_key='pos'");
+    await db.query("update organization_features set enabled=false where organization_id=$1 and module_key='ai'", [org]);
     await db.exec(migration);
-    assert.equal(await val(db, "select implemented from feature_modules where module_key='pos'"), true);
-    assert.equal(await val(db, "select enabled from organization_features where organization_id=$1 and module_key='pos'", [org]), true);
-    assert.ok(await val(db, "select to_regclass('public.pos_orders')"));
+    assert.equal(await val(db, "select implemented from feature_modules where module_key='pos'"), false);
+    assert.equal(await val(db, "select enabled from organization_features where organization_id=$1 and module_key='ai'", [org]), false);
+    assert.equal(await val(db, "select to_regclass('public.pos_orders')"), null);
+    await as(db, user);
+    assert.equal(await val(db, "select platform_permission($1,'pos.read',$2)", [org, store]), false);
   });
   return passed;
 }

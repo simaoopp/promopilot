@@ -14,7 +14,7 @@
     "worker:campaign-end": "node scripts/runCampaignEndNotificationWorker.js",
     "worker:campaign-end:dry-run": "node scripts/runCampaignEndNotificationWorker.js --dry-run",
     "worker:campaign-end:config": "node scripts/runCampaignEndNotificationWorker.js --config",
-    "test:phase-zero": "node --experimental-test-module-mocks --test tests/platformAccess.test.js",
+    "test:phase-zero": "node --experimental-test-module-mocks --test tests/*.test.js",
     "ceo:bootstrap": "node scripts/bootstrapPlatformAdmin.js",
     "ceo:prepare-migration": "node scripts/preparePlatformMigration.js"
   },
@@ -28,7 +28,7 @@
     "express": "^5.2.1",
     "imapflow": "^1.0.194",
     "mailparser": "^3.7.4",
-    "nodemailer": "^6.10.1",
+    "nodemailer": "^10.1.7",
     "pdfkit": "^0.17.2",
     "playwright": "1.60.0",
     "pdf-parse": "^1.1.1"

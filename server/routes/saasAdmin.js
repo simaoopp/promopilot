@@ -70,17 +70,11 @@ export function registerSaasAdminRoutes(app, { requireAuth, requireAdmin }) {
 
   app.post("/api/admin/organizations", requireAuth, requireAdmin, adminActionRateLimit, async (req, res, next) => {
     try {
-      const client = requireAdminClient();
       const name = requireString(req.body?.name, "name", { min: 2, max: 160 });
       const slug = requireString(req.body?.slug, "slug", { min: 2, max: 80 }).toLowerCase();
-      const { data, error } = await client
-        .from("organizations")
-        .insert({ name, slug, status: "active" })
-        .select("id,name,slug,status,created_at")
-        .single();
-
-      if (error) throw error;
-      await writeAuditLog({ req, organizationId: data.id, action: "organization.created", entityType: "organization", entityId: data.id, after: data });
+      const data = await userRpc(req, "platform_admin_mutate", {
+        p_entity: "organization", p_data: { name, slug, status: "active" },
+      });
       return res.status(201).json({ ok: true, item: data });
     } catch (error) {
       return next(error);
@@ -89,21 +83,12 @@ export function registerSaasAdminRoutes(app, { requireAuth, requireAdmin }) {
 
   app.get("/api/admin/audit-logs", requireAuth, requireAdmin, async (req, res, next) => {
     try {
-      const client = requireAdminClient();
       const { limit, offset } = parsePageQuery(req.query);
-      let query = client
-        .from("audit_logs")
-        .select("id,organization_id,user_id,action,entity_type,entity_id,request_id,created_at,metadata", { count: "exact" })
-        .order("created_at", { ascending: false })
-        .range(offset, offset + limit - 1);
-
-      if (req.query.organizationId) {
-        query = query.eq("organization_id", requireUuid(req.query.organizationId, "organizationId"));
-      }
-
-      const { data, count, error } = await query;
-      if (error) throw error;
-      return res.json({ ok: true, items: data || [], total: count || 0, limit, offset });
+      const data = await userRpc(req, "platform_admin_read", {
+        p_resource: "audit", p_limit: limit, p_offset: offset,
+        p_organization_id: req.query.organizationId ? requireUuid(req.query.organizationId, "organizationId") : null,
+      });
+      return res.set("Cache-Control", "no-store").json({ ok: true, ...data });
     } catch (error) {
       return next(error);
     }
@@ -171,6 +156,11 @@ export function registerSaasAdminRoutes(app, { requireAuth, requireAdmin }) {
             { status: 400 },
           );
         }
+
+        const permitted = await userRpc(req, "platform_can_invite_member", {
+          p_org: organizationId, p_store: matchedStore.id, p_role: membershipRole(role),
+        });
+        if (permitted !== true) throw new AppError("FORBIDDEN", "Sem autorização para convidar esta função para a loja escolhida.");
 
         const redirectTo = `${publicAppUrl()}/login?invite=1`;
 
@@ -242,16 +232,9 @@ export function registerSaasAdminRoutes(app, { requireAuth, requireAdmin }) {
 
           if (membershipError) throw membershipError;
         } catch (setupError) {
-          // Evita deixar um utilizador Auth órfão se a configuração do perfil falhar.
-          try {
-            await client.auth.admin.deleteUser(invitedUser.id);
-          } catch (rollbackError) {
-            console.warn(
-              "[admin-users] Falha ao reverter utilizador convidado:",
-              rollbackError?.message || rollbackError,
-            );
-          }
-
+          // Auth invitations and database writes are not one transaction. The
+          // returned account may already exist: never delete it as compensation.
+          // Without a membership the invited account gains no tenant access.
           throw setupError;
         }
 
@@ -262,10 +245,7 @@ export function registerSaasAdminRoutes(app, { requireAuth, requireAdmin }) {
           entityType: "user",
           entityId: invitedUser.id,
           after: {
-            email,
-            first_name: firstName,
-            last_name: lastName,
-            store,
+            store_id: matchedStore.id,
             role,
           },
         });
@@ -327,8 +307,7 @@ export function registerSaasAdminRoutes(app, { requireAuth, requireAdmin }) {
           organizationId: req.organizationId || null,
           action: "user.password_reset_requested",
           entityType: "user",
-          entityId: null,
-          metadata: { email },
+          entityId: target,
         });
 
         return res.json({

@@ -159,7 +159,7 @@ function resolveCustomerName({ extracted, parsedDossier }) {
   );
 }
 
-export function registerQuoteDossierRoutes(app, { requireAuth }) {
+export function registerQuoteDossierRoutes(app, { requireAuth, bodyParser = (_req, _res, next) => next() }) {
   app.get("/api/orcamentos-dossiers/version", (req, res) => {
     return res.json({
       ok: true,
@@ -173,7 +173,7 @@ export function registerQuoteDossierRoutes(app, { requireAuth }) {
     });
   });
 
-  app.post("/api/orcamentos-dossiers/extract", requireAuth, async (req, res) => {
+  app.post("/api/orcamentos-dossiers/extract", requireAuth, bodyParser, async (req, res) => {
     try {
       const filename = requireString(req.body?.filename || "orcamento.pdf", "filename", { min: 1, max: 220 });
       const base64Pdf = requireString(req.body?.pdfBase64, "pdfBase64", { min: 20, max: 90_000_000 });
@@ -226,7 +226,7 @@ export function registerQuoteDossierRoutes(app, { requireAuth }) {
     }
   });
 
-  app.post("/api/orcamentos-dossiers/generate", requireAuth, async (req, res) => {
+  app.post("/api/orcamentos-dossiers/generate", requireAuth, bodyParser, async (req, res) => {
     try {
       const dossier = req.body?.dossier || {};
       const items = Array.isArray(req.body?.items) ? req.body.items : [];

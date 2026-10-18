@@ -3,14 +3,16 @@ import { AppError } from '../../middleware/errorHandler.js';
 
 export function rpcError(error) {
   const denied = error?.code === '42501';
+  if (['40001','40P01','55P03'].includes(error?.code)) return new AppError('BATCH_CONFLICT','Operação concorrente ou lote fora de ordem. Repita o lote atual.',{status:409});
   if(error?.code === '23505') return new AppError('CONFLICT','Já existe um registo com este identificador.',{status:409});
   const invalid = ['22023','22P02','23503','23514','23502'].includes(error?.code);
   return new AppError(denied ? 'FORBIDDEN' : invalid ? 'VALIDATION_ERROR' : 'SERVICE_UNAVAILABLE',
     denied ? 'Sem autorização para esta operação.' : invalid ? 'Dados inválidos ou dependências de módulos em falta.' : 'Não foi possível verificar as permissões. Tente novamente.',
     { status: denied ? 403 : invalid ? 400 : error?.code === '23505' ? 409 : 503 });
 }
+const requestClient = Symbol('platformUserClient');
 export async function userRpc(req, name, args = {}) {
-  const client = createSupabaseUserClient(req.accessToken);
+  const client = req[requestClient] || (req[requestClient] = createSupabaseUserClient(req.accessToken));
   if (!client) throw new AppError('SERVICE_UNAVAILABLE','Serviço de permissões indisponível.',{status:503});
   const { data, error } = await client.rpc(name,args);
   if(error) throw rpcError(error);
@@ -22,14 +24,14 @@ export function requirePermission(permission) {
       // No platform-admin bypass for ordinary tenant operations.
       if (!req.organizationId) throw new AppError('TENANT_REQUIRED','Selecione uma organização autorizada.');
       const allowed=await userRpc(req,'platform_permission',{p_org:req.organizationId,p_permission:permission,p_store:req.storeId||null});
-      if(!allowed) throw new AppError('FORBIDDEN','Esta funcionalidade não está disponível para o seu acesso.');
+      if(allowed !== true) throw new AppError('FORBIDDEN','Esta funcionalidade não está disponível para o seu acesso.');
       next();
     } catch(error){next(error);}
   };
 }
 export async function requireEventAccess(req,event) {
   if(!event?.organization_id || event.organization_id!==req.organizationId) return false;
-  return Boolean(await userRpc(req,'platform_row_access',{p_org:event.organization_id,p_store:event.store||null,p_permission:'reports.read'}));
+  return (await userRpc(req,'platform_row_access',{p_org:event.organization_id,p_store:event.store||null,p_permission:'reports.read'})) === true;
 }
 export async function systemModuleEnabled(organizationId,moduleKey,storeName=null) {
   if(!organizationId || !supabaseAdminClient) return false;

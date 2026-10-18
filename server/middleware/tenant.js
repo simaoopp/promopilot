@@ -9,7 +9,10 @@ export async function attachTenantContext(req,_res,next) {
   const orgInput=req.headers['x-organization-id']||req.query?.organizationId||req.body?.organization_id||req.body?.organizationId;
   const storeInput=req.headers['x-store-id'];
   if((orgInput&&!normalizeUuid(orgInput))||(storeInput&&!normalizeUuid(storeInput)))throw new AppError('VALIDATION_ERROR','Organização ou loja inválida.');
-  const context=await userRpc(req,'platform_access_context',{p_organization_id:orgInput||null,p_store_id:storeInput||null,p_include_permissions:false});
+  const includePermissions = req.method === 'GET' && req.path === '/api/access';
+  const context=await userRpc(req,'platform_access_context',{p_organization_id:orgInput||null,p_store_id:storeInput||null,p_include_permissions:includePermissions});
+  if (!context || !Array.isArray(context.organizations) || !Array.isArray(context.stores)) throw new AppError('SERVICE_UNAVAILABLE','Contexto de acesso inválido.',{status:503});
+  req.permissionContextComplete = includePermissions;
   req.permissionContext=context;
   req.organizationId=context.organizationId;
   req.organizationRole=context.role;

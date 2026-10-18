@@ -29,3 +29,11 @@ Thumbs.db
 
 # misc
 *.local
+
+# Local migration batches, credentials and interpreter caches
+*.private.sql
+*.private.json
+*.pem
+*.key
+__pycache__/
+*.pyc

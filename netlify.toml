@@ -1,5 +1,5 @@
 [build]
-command = "npm run build"
+command = "node scripts/verify-api-deployment.mjs && npm run build"
 publish = "build"
 
 [build.environment]

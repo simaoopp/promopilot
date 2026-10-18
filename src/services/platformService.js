@@ -1,6 +1,6 @@
 import { supabase } from "../lib/supabase";
+import { normalizeApiBaseUrl } from "../shared/apiBaseUrl.mjs";
 
-const API = (process.env.REACT_APP_API_BASE_URL || (typeof window !== "undefined" && window.location.hostname === "localhost" ? "http://localhost:3001" : "")).replace(/\/$/, "");
 let snapshot = null;
 export const getPermissionSnapshot = () => snapshot;
 export const tenantHeaders = () => ({
@@ -16,6 +16,7 @@ export function setPermissionSnapshot(value) {
 }
 
 export async function platformRequest(path, { method = "GET", body, signal } = {}) {
+  const API = normalizeApiBaseUrl(process.env.REACT_APP_API_BASE_URL, typeof window !== "undefined" ? window.location.hostname : "");
   const { data, error } = await supabase.auth.getSession();
   if (error || !data?.session?.access_token) throw new Error("Inicie sessão para continuar.");
   const controller = new AbortController();
@@ -29,6 +30,9 @@ export async function platformRequest(path, { method = "GET", body, signal } = {
       headers: { Authorization: `Bearer ${data.session.access_token}`, "Content-Type": "application/json" },
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     });
+    if (response.status === 404 && path === "/api/access") {
+      throw Object.assign(new Error("A API de acesso não está disponível. É necessário publicar o backend atualizado e verificar o endereço da API no Netlify."), { status: 404, code: "ACCESS_API_NOT_DEPLOYED" });
+    }
     let payload;
     try { payload = await response.json(); } catch { throw new Error("A API não devolveu uma resposta válida. Verifique a publicação do servidor."); }
     if (!response.ok || payload.ok === false) {
@@ -41,7 +45,13 @@ export async function platformRequest(path, { method = "GET", body, signal } = {
     signal?.removeEventListener("abort", abort);
   }
 }
-export async function loadAccess(signal) { return (await platformRequest("/api/access", { signal })).context; }
+export async function loadAccess(signal) {
+  const { context } = await platformRequest("/api/access", { signal });
+  if (!context || !Array.isArray(context.organizations) || !Array.isArray(context.stores) || !context.permissions || typeof context.permissions !== "object") {
+    throw new Error("Resposta de acesso incompatível. Verifique a versão do backend e a migração de permissões.");
+  }
+  return context;
+}
 export async function selectAccess(organizationId, storeId) {
   return (await platformRequest("/api/access/context", { method: "POST", body: { organizationId, storeId } })).context;
 }

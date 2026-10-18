@@ -31,154 +31,92 @@ export function AuthProvider({ children }) {
 
   const lastLoadedProfileUserId = useRef(null);
   const profileRef = useRef(null);
-  const preloadedCatalogUserId = useRef(null);
+  const currentUserId = useRef(null);
+  const generation = useRef(0);
+  const [profileError, setProfileError] = useState("");
 
-  const preloadCatalogForUser = useCallback((_userId) => {
-    // Catálogo completo com centenas de milhares de artigos não deve ser carregado no login.
-    // As páginas pesquisam server-side e só carregam resultados necessários.
+  const acceptUser = useCallback((nextUser) => {
+    const id = nextUser?.id || null;
+    if (currentUserId.current !== id || !id) {
+      currentUserId.current = id;
+      generation.current += 1;
+      lastLoadedProfileUserId.current = null;
+      profileRef.current = null;
+      setProfile(null);
+      setProfileError("");
+      setLoadingProfile(Boolean(id));
+      setPasswordRecovery(false);
+    }
+    setUser(nextUser);
   }, []);
 
-  const loadProfile = useCallback(async (userId, options = {}) => {
-    const { force = false } = options;
-
-    if (!userId) {
-      lastLoadedProfileUserId.current = null;
-      setProfile(null);
-      setLoadingProfile(false);
-      return null;
-    }
-
-    if (!force && lastLoadedProfileUserId.current === userId) {
-      return profileRef.current;
-    }
-
+  const loadProfile = useCallback(async (userId, { force = false } = {}) => {
+    if (!userId || currentUserId.current !== userId) return null;
+    if (!force && lastLoadedProfileUserId.current === userId) return profileRef.current;
+    const request = ++generation.current;
+    const isCurrent = () => request === generation.current && currentUserId.current === userId;
+    setLoadingProfile(true);
+    setProfileError("");
     try {
-      setLoadingProfile(true);
-      const profileData = await getProfile(userId);
-      setProfile(profileData);
+      const data = await getProfile(userId);
+      if (!isCurrent()) return null;
+      profileRef.current = data;
+      setProfile(data);
       lastLoadedProfileUserId.current = userId;
-      return profileData;
-    } catch (error) {
-      console.error("Erro ao carregar perfil:", error?.message || error);
-      setProfile(null);
-      lastLoadedProfileUserId.current = null;
+      return data;
+    } catch {
+      if (isCurrent()) {
+        setProfileError("Não foi possível carregar o perfil. Tente novamente.");
+        lastLoadedProfileUserId.current = null;
+      }
       return null;
     } finally {
-      setLoadingProfile(false);
+      if (isCurrent()) setLoadingProfile(false);
     }
   }, []);
-
-  useEffect(() => {
-    profileRef.current = profile;
-  }, [profile]);
 
   useEffect(() => {
     let active = true;
-
-    async function loadSession() {
+    let revision = 0;
+    let timer;
+    const applySession = (session, event) => {
+      if (!active) return;
+      const nextUser = session?.user || null;
+      acceptUser(nextUser);
+      const recoveryUrl = typeof window !== "undefined" && (
+        /(?:^|[?#&])type=recovery(?:&|$)/i.test(`${window.location.search}${window.location.hash}`) ||
+        new URLSearchParams(window.location.search).get("reset") === "1"
+      );
+      if (nextUser && (event === "PASSWORD_RECOVERY" || recoveryUrl)) setPasswordRecovery(true);
+      setLoadingAuth(false);
+      clearTimeout(timer);
+      // Leave Supabase's synchronous auth callback before making another request.
+      if (nextUser) timer = setTimeout(() => { if (active) loadProfile(nextUser.id); }, 0);
+    };
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      revision += 1;
+      applySession(session, event);
+    });
+    const initialRevision = revision;
+    (async () => {
       try {
         const { data, error } = await supabase.auth.getSession();
-
-        if (!active) return;
-
-        if (error) {
-          if (isSupabaseRefreshTokenError(error)) {
-            console.warn("Sessão local Supabase inválida/removida. A limpar sessão local.");
-            await recoverFromInvalidSupabaseSession(supabase);
-          } else {
-            console.error("Erro ao buscar sessão:", error.message);
-          }
-
-          setUser(null);
-          setProfile(null);
-          lastLoadedProfileUserId.current = null;
-          preloadedCatalogUserId.current = null;
-          setLoadingProfile(false);
-          setLoadingAuth(false);
-          return;
-        }
-
-        const currentUser = data?.session?.user ?? null;
-        const recoveryUrl =
-          typeof window !== "undefined" &&
-          (
-            /(?:^|[?#&])type=recovery(?:&|$)/i.test(
-              `${window.location.search}${window.location.hash}`,
-            ) ||
-            new URLSearchParams(window.location.search).get("reset") === "1"
-          );
-
-        if (currentUser && recoveryUrl) {
-          setPasswordRecovery(true);
-        }
-
-        setUser(currentUser);
-        setLoadingAuth(false);
-
-        if (currentUser?.id) {
-          preloadCatalogForUser(currentUser.id);
-          await loadProfile(currentUser.id);
-        } else {
-          setProfile(null);
-          lastLoadedProfileUserId.current = null;
-          preloadedCatalogUserId.current = null;
-          setLoadingProfile(false);
-        }
+        if (!active || revision !== initialRevision) return;
+        if (error) throw error;
+        applySession(data?.session);
       } catch (error) {
-        if (!active) return;
-
-        if (isSupabaseRefreshTokenError(error)) {
-          console.warn("Sessão local Supabase expirada ou revogada. A limpar sessão local.");
-          await recoverFromInvalidSupabaseSession(supabase);
-        } else {
-          console.error("Erro inesperado ao carregar sessão:", error);
-        }
-
-        setUser(null);
-        setProfile(null);
-        lastLoadedProfileUserId.current = null;
-        preloadedCatalogUserId.current = null;
-        setLoadingProfile(false);
-        setLoadingAuth(false);
+        if (!active || revision !== initialRevision) return;
+        if (isSupabaseRefreshTokenError(error)) await recoverFromInvalidSupabaseSession(supabase);
+        if (active && revision === initialRevision) applySession(null);
       }
-    }
-
-    loadSession();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      if (!active) return;
-
-      const currentUser = session?.user ?? null;
-
-      if (event === "PASSWORD_RECOVERY") {
-        setPasswordRecovery(true);
-      }
-
-      setUser(currentUser);
-      setLoadingAuth(false);
-
-      if (!currentUser?.id) {
-        setProfile(null);
-        lastLoadedProfileUserId.current = null;
-        preloadedCatalogUserId.current = null;
-        setLoadingProfile(false);
-        return;
-      }
-
-      preloadCatalogForUser(currentUser.id);
-
-      if (lastLoadedProfileUserId.current !== currentUser.id) {
-        loadProfile(currentUser.id);
-      }
-    });
-
+    })();
     return () => {
       active = false;
+      generation.current += 1;
+      clearTimeout(timer);
       subscription?.unsubscribe();
     };
-  }, [loadProfile, preloadCatalogForUser]);
+  }, [acceptUser, loadProfile]);
 
   const signIn = useCallback(async (email, password) => {
     const { error } = await supabase.auth.signInWithPassword({
@@ -198,13 +136,9 @@ export function AuthProvider({ children }) {
       clearSupabaseAuthStorage();
     }
 
-    setUser(null);
-    setProfile(null);
-    lastLoadedProfileUserId.current = null;
-    preloadedCatalogUserId.current = null;
-    setLoadingProfile(false);
+    acceptUser(null);
     setPasswordRecovery(false);
-  }, []);
+  }, [acceptUser]);
 
   const updatePassword = useCallback(async (newPassword) => {
     const { error } = await supabase.auth.updateUser({
@@ -249,7 +183,12 @@ export function AuthProvider({ children }) {
         must_change_password: false,
       });
 
+      if (currentUserId.current !== user.id) throw new Error("A sessão mudou. Inicie sessão novamente.");
+      generation.current += 1;
+      profileRef.current = updatedProfile;
       setProfile(updatedProfile);
+      setProfileError("");
+      setLoadingProfile(false);
       lastLoadedProfileUserId.current = user.id;
       return updatedProfile;
     },
@@ -258,7 +197,7 @@ export function AuthProvider({ children }) {
 
   const requiresPasswordChange = profileRequiresPasswordChange(profile);
   const missingProfileFields = !!user && hasMissingProfileFields(profile);
-  const onboardingRequired = isOnboardingRequired({
+  const onboardingRequired = !profileError && isOnboardingRequired({
     user,
     profile,
     loadingProfile,
@@ -275,6 +214,7 @@ export function AuthProvider({ children }) {
       profile,
       loadingAuth,
       loadingProfile,
+      profileError,
       onboardingRequired,
       requiresPasswordChange,
       missingProfileFields,
@@ -291,6 +231,7 @@ export function AuthProvider({ children }) {
       profile,
       loadingAuth,
       loadingProfile,
+      profileError,
       onboardingRequired,
       requiresPasswordChange,
       missingProfileFields,

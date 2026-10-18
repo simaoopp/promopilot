@@ -21,6 +21,7 @@ import { registerCampaignLifecycleRoutes } from "./routes/campaignLifecycle.js";
 import { requirePermission } from "./services/platform/accessService.js";
 import { registerPlatformRoutes } from "./routes/platform.js";
 import { isAiEnabled } from "./services/aiProdutoService.js";
+import { installBodyParsers, dossierBodyParser } from "./middleware/payloadLimits.js";
 
 export function createApp() {
   const app = express();
@@ -37,9 +38,8 @@ export function createApp() {
   // para preservarmos o raw body usado na validação Svix.
   registerResendInboundWebhookRoute(app);
 
-  app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || "80mb" }));
-  app.use(express.urlencoded({ extended: true, limit: process.env.URLENCODED_BODY_LIMIT || "80mb" }));
   app.use("/api", apiRateLimit);
+  installBodyParsers(app);
 
   registerHealthRoutes(app, { aiEnabled: isAiEnabled() });
   const authStack = [requireAuth, attachTenantContext];
@@ -52,7 +52,7 @@ export function createApp() {
     aiEnabled: isAiEnabled(),
   });
   registerAutomaticCampaignRoutes(app, { requireAuth: [...authStack, requirePermission("automations.read")], requireAdmin });
-  registerQuoteDossierRoutes(app, { requireAuth: [...authStack, requirePermission("dossiers.write")] });
+  registerQuoteDossierRoutes(app, { requireAuth: [...authStack, requirePermission("dossiers.write")], bodyParser: dossierBodyParser });
   registerSaasAdminRoutes(app, { requireAuth: authStack, requireAdmin });
   registerArticleDatabaseSyncRoutes(app, { requireAuth, attachTenantContext });
   registerCampaignEndNotificationRoutes(app, { requireAuth: [...authStack, requirePermission("reports.read")] });
