@@ -562,24 +562,26 @@ export async function findArticleByIdentifiers({ artigoInterno = "", codigoBarra
     return row ? mapRowToArticle(row) : null;
   }
 
+  // Admin/service_role bypasses RLS. Fail closed if the tenant is not explicit;
+  // a globally duplicated commercial code must never choose an arbitrary row.
+  if (!organizationId) {
+    throw new Error("Organização obrigatória para pesquisa administrativa de artigos.");
+  }
   const client = requireAdminClient("Pesquisa exata administrativa de artigos");
-  let query = client.from(ARTICLES_TABLE).select(ARTICLE_SELECT).limit(1);
-
-  if (artigo && barcode) {
-    query = query.or(`artigo.eq.${artigo},codigo_barras.eq.${barcode}`);
-  } else if (artigo) {
-    query = query.eq("artigo", artigo);
-  } else {
-    query = query.eq("codigo_barras", barcode);
-  }
-
-  const { data, error } = await query.maybeSingle();
-
-  if (error) {
-    throw error;
-  }
-
-  return data ? mapRowToArticle(data) : null;
+  const lookupOne = async (field, value) => {
+    const { data, error } = await client.from(ARTICLES_TABLE)
+      .select(ARTICLE_SELECT)
+      .eq("organization_id", organizationId)
+      .eq(field, value)
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  };
+  // Separate filters also avoid interpolating user values into PostgREST .or().
+  const data = artigo ? await lookupOne("artigo", artigo) : null;
+  const matched = data || (barcode ? await lookupOne("codigo_barras", barcode) : null);
+  return matched ? mapRowToArticle(matched) : null;
 }
 
 

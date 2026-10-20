@@ -28,16 +28,20 @@
     "test": "react-scripts test --env=jsdom",
     "eject": "react-scripts eject",
     "test:ci": "react-scripts test --watch=false --runInBand",
-    "qa:static": "python3 scripts/qa_check.py",
+    "qa:static": "node scripts/run-python.mjs scripts/qa_check.py",
     "seed:articles": "node scripts/import-artigos-to-supabase.mjs",
     "validate:artigos-json": "node -e \"const fs=require('fs');const data=JSON.parse(fs.readFileSync('src/data/artigos.json','utf8'));if(!Array.isArray(data.artigos)){throw new Error('artigos.json precisa de conter um array artigos')}console.log('artigos.json válido:', data.artigos.length, 'artigos')\"",
     "repair:artigos-json": "node scripts/repair-artigos-json.mjs",
     "migrate:article-prices": "node scripts/migrate-artigos-prices-to-supabase.mjs",
     "qa:saas": "npm --prefix server run test:phase-zero && npm --prefix qa/phase-zero test",
-    "qa:all": "npm run qa:static && npm run qa:saas && npm run qa:audit:sql && npm --prefix server run smoke",
+    "qa:all": "npm run qa:maintenance-safety && npm run qa:python-wrapper && npm run qa:static && npm run qa:saas && npm run qa:audit:sql && npm run qa:article-identity:static && npm run qa:article-identity:sql && npm --prefix server run smoke",
     "qa:audit:sql": "node scripts/test-audit-sql.mjs && node scripts/test-article-sync-sql.mjs",
     "migrate:articles-db-update": "node scripts/migrate-artigos-db-update-to-supabase.mjs",
-    "prebuild": "node scripts/verify-frontend-package.mjs"
+    "prebuild": "node scripts/verify-frontend-package.mjs",
+    "qa:article-identity:static": "node --test scripts/test-article-identity-static.mjs",
+    "qa:article-identity:sql": "node scripts/test-article-identity-sql.mjs",
+    "qa:python-wrapper": "node --test scripts/run-python.test.mjs",
+    "qa:maintenance-safety": "node --test scripts/test-article-maintenance-guard.mjs"
   },
   "browserslist": [
     ">0.2%",

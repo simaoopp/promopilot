@@ -9,6 +9,13 @@ dotenv.config();
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const ARTICLES_TABLE = process.env.ARTICLES_TABLE || "articles";
+// Maintenance scripts use service_role: RLS does not limit that client.
+// Never resolve a target organization from a code or an implicit "first" tenant.
+const ORGANIZATION_ID = String(process.env.ARTICLE_MIGRATION_ORGANIZATION_ID || "").trim();
+if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ORGANIZATION_ID)) {
+  throw new Error("Configure ARTICLE_MIGRATION_ORGANIZATION_ID com UUID explícito antes de executar esta importação.");
+}
+
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
   throw new Error("Faltam SUPABASE_URL ou SUPABASE_SERVICE_ROLE_KEY no server/.env");
@@ -26,6 +33,7 @@ function normalizeArticle(item) {
   const ts = item.ultima_atualizacao?.trim?.() || "";
   return {
     artigo: String(item.artigo || "").trim(),
+    organization_id: ORGANIZATION_ID,
     descricao: String(item.descricao || "").trim(),
     pvp1: String(item.pvp1 || "").trim(),
     pvp2: String(item.pvp2 || "").trim(),
@@ -63,7 +71,7 @@ async function main() {
 
     const { error } = await supabase
       .from(ARTICLES_TABLE)
-      .upsert(batch, { onConflict: "artigo" });
+      .upsert(batch, { onConflict: "organization_id,artigo" });
 
     if (error) {
       throw error;

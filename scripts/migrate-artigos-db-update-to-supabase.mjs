@@ -9,6 +9,13 @@ dotenv.config();
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const ARTICLES_TABLE = process.env.ARTICLES_TABLE || "articles";
+// Maintenance scripts use service_role: RLS does not limit that client.
+// Never resolve a target organization from a code or an implicit "first" tenant.
+const ORGANIZATION_ID = String(process.env.ARTICLE_MIGRATION_ORGANIZATION_ID || "").trim();
+if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ORGANIZATION_ID)) {
+  throw new Error("Configure ARTICLE_MIGRATION_ORGANIZATION_ID com UUID explícito antes de executar esta importação.");
+}
+
 const DEFAULT_JSON_PATH = "src/data/artigos.json";
 const BATCH_SIZE = Number(process.env.ARTICLE_DB_UPDATE_BATCH_SIZE || 500);
 const VALID_ARTICLE_RE = /^\d{2}\.\d{3}\.\d{3}\.\d{5}$/;
@@ -110,6 +117,7 @@ function normalizeArticle(item) {
 
   const row = {
     artigo,
+    organization_id: ORGANIZATION_ID,
     descricao: text(item.descricao),
     pvp1: text(item.pvp1),
     pvp2: text(item.pvp2),
@@ -137,13 +145,10 @@ function normalizeArticle(item) {
   return row;
 }
 
-<<<<<<< HEAD
-=======
 function articleHasValidFormat(row) {
   return VALID_ARTICLE_RE.test(row.artigo);
 }
 
->>>>>>> 1d4a0b5ae270efa2d28ecc6ae2991ce1e530d7bc
 async function loadArticles(filePath) {
   const raw = await fs.readFile(filePath, "utf8");
   const parsed = JSON.parse(raw);
@@ -176,7 +181,8 @@ async function getExistingArticles(codes) {
   const { data, error } = await supabase
     .from(ARTICLES_TABLE)
     .select("artigo,descricao,pvp1,pvp2,pvp3,codigo_barras")
-    .in("artigo", codes);
+    .in("artigo", codes)
+    .eq("organization_id", ORGANIZATION_ID);
 
   if (error) throw error;
 
@@ -223,6 +229,7 @@ function getChangedFields(nextRow, currentRow) {
 function makeExistingUpdateRows(rows, { pvp2Mode = "text" } = {}) {
   return rows.map((row) => ({
     artigo: row.artigo,
+    organization_id: ORGANIZATION_ID,
     descricao: row.descricao,
     pvp1: row.pvp1,
     pvp2: pvp2Mode === "numeric" ? toNumericPrice(row.pvp2) : row.pvp2,
@@ -265,7 +272,7 @@ async function upsertWithPvp2Fallback(rows, makeRows, options = {}) {
 
   const { error } = await supabase
     .from(ARTICLES_TABLE)
-    .upsert(payload, { onConflict: "artigo" });
+    .upsert(payload, { onConflict: "organization_id,artigo" });
 
   if (!error) return initialMode;
 
@@ -276,7 +283,7 @@ async function upsertWithPvp2Fallback(rows, makeRows, options = {}) {
   const numericPayload = makeRows(rows, { pvp2Mode: "numeric" });
   const retry = await supabase
     .from(ARTICLES_TABLE)
-    .upsert(numericPayload, { onConflict: "artigo" });
+    .upsert(numericPayload, { onConflict: "organization_id,artigo" });
 
   if (retry.error) throw retry.error;
 
@@ -356,14 +363,9 @@ async function main() {
     const existingRows = batch.filter((row) => existingMap.has(row.artigo));
     const changedExistingRows = existingRows.filter((row) => rowChanged(row, existingMap.get(row.artigo)));
     const unchangedExistingRows = existingRows.length - changedExistingRows.length;
-<<<<<<< HEAD
-    const newRows = batch.filter((row) => !existingMap.has(row.artigo));
-    const skippedInvalidNewRows = 0;
-=======
     const newRowsAll = batch.filter((row) => !existingMap.has(row.artigo));
     const newRows = newRowsAll.filter(articleHasValidFormat);
     const skippedInvalidNewRows = newRowsAll.length - newRows.length;
->>>>>>> 1d4a0b5ae270efa2d28ecc6ae2991ce1e530d7bc
 
     for (const row of changedExistingRows) {
       const changes = getChangedFields(row, existingMap.get(row.artigo));
@@ -399,11 +401,7 @@ async function main() {
         `${changedExistingRows.length} existentes alterados, ` +
         `${unchangedExistingRows} já iguais, ` +
         `${newRows.length} novos inseridos, ` +
-<<<<<<< HEAD
-        `${skippedInvalidNewRows} novos ignorados`,
-=======
         `${skippedInvalidNewRows} novos ignorados por formato`,
->>>>>>> 1d4a0b5ae270efa2d28ecc6ae2991ce1e530d7bc
     );
   }
 
@@ -414,11 +412,7 @@ async function main() {
   console.log(`Existentes alterados: ${totalExistingUpdated}`);
   console.log(`Existentes já iguais: ${totalExistingUnchanged}`);
   console.log(`Novos artigos inseridos: ${totalNewInserted}`);
-<<<<<<< HEAD
-  console.log(`Novos ignorados: ${totalNewSkippedInvalidFormat}`);
-=======
   console.log(`Novos ignorados por formato inválido: ${totalNewSkippedInvalidFormat}`);
->>>>>>> 1d4a0b5ae270efa2d28ecc6ae2991ce1e530d7bc
   console.log(`Campos alterados: ${JSON.stringify(changedFieldCounts)}`);
   if (!dryRun) console.log(`Modo pvp2 usado: ${pvp2FallbackMode}`);
   console.log(`Duração: ${seconds}s`);
