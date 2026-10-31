@@ -35,7 +35,7 @@ export default function ImportReview({ batch, edits, onEdit, existingCodes, disa
         const review = reviewRow(row, edit, existingCodes);
         return <tr key={row.id}>
           <td><input type="checkbox" aria-label={`Incluir ${row.code || `linha ${row.line}`}`} checked={Boolean(edit.selected)} disabled={disabled || Boolean(review.error)} onChange={e => onEdit(row.id, { selected: e.target.checked })} /></td>
-          <td><strong>{row.code || "Sem código"}</strong><span className="price-import-description">{row.description || "—"}</span><small>Linha {row.line}</small>
+          <td><strong>{row.code || "Sem código"}</strong><span className="price-import-description">{row.description || "—"}</span><small>{row.sourceSheet ? `${row.sourceSheet} · linha ${row.sourceLine || row.line}` : `Linha ${row.line}`}</small>
             <details><summary>Origem</summary><p>Código: {row.rawCode || "—"}<br />Preço: {row.rawPrice || "—"}</p></details></td>
           <td>{money(row.beforeCents)}</td>
           <td><input inputMode="decimal" aria-label={`PVP2 Atual de ${row.code || row.line}`} value={edit.price ?? ""} disabled={disabled || Boolean(row.problem)} onChange={e => onEdit(row.id, { price: e.target.value, selected: false })} />

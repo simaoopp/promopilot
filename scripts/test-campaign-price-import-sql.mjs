@@ -43,6 +43,17 @@ try {
   batch=await prepare();const row=batch.rows[0];assert.equal(row.beforeCents,34999);assert.equal(row.currentCents,29999);assert.equal(row.description,'Original catalogue description');
   assert.equal(batch.rows[3].problem,'not_found');assert.equal(batch.rows[4].currentCents,null);
  });
+ await check('mixed worksheet origin is retained and discrepant supplier PVP2 needs review',async()=>{
+  const b=await prepare({rows:[{...rows[0],sourceSheet:'bose',sourceLine:33,
+    originalRawPrice:'479,99',originalCents:47999}]});
+  const r=b.rows[0];
+  assert.equal(r.beforeCents,34999);
+  assert.equal(r.sourceSheet,'bose');assert.equal(r.sourceLine,33);
+  assert.match(r.warning,/diverge/);
+  await assert.rejects(()=>confirm(b,[{id:r.id,cents:29999,reviewed:false}]),e=>e.code==='22023');
+  const confirmedBatch=await confirm(b,[{id:r.id,cents:29999,reviewed:true}]);
+  assert.equal(confirmedBatch.items[0].campaignPriceImport.sourceSheet,'bose');
+ });
  await check('later administrative price changes do not replace a prepared snapshot',async()=>{
   await owner('alter table articles disable trigger reject_catalog_writes');
   await owner("update articles set pvp2=399.99 where organization_id=$1 and artigo='0010025'",[org]);

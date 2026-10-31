@@ -28,3 +28,9 @@
 .price-import-pagination,.price-import-review-tools{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:.85rem;color:#52647b}.price-import-review-tools{flex-wrap:wrap}.price-import-confirm-column{display:flex;gap:7px;align-items:flex-start;line-height:1.5;margin-top:18px}
 .price-import-footer{display:flex;justify-content:flex-end;gap:10px;padding:16px 28px;border-top:1px solid #e2e8f0;background:#f9fbfe;flex-wrap:wrap}
 @media(max-width:650px){.price-import-launcher{align-items:stretch;flex-direction:column;padding:18px}.price-import-dialog{width:100vw;max-height:100dvh;margin:0;border-radius:0;height:100dvh}.price-import-header,.price-import-body{padding:18px}.price-import-steps{padding:0 18px 14px;gap:12px;justify-content:space-between}.price-import-steps li{font-size:.78rem}.price-import-fields{grid-template-columns:1fr}.price-import-footer{padding:14px;gap:8px}.price-import-footer button{flex:1}.price-import-header h2{font-size:1.35rem}.price-import-body{flex:1}.price-import-pagination{flex-wrap:wrap}}
+
+/* Multisheet supplier workbook: keep all mappings visible before confirmation. */
+.price-import-sheets { display: grid; gap: .4rem; margin: .5rem 0 1rem; }
+.price-import-sheet-option { display: flex; align-items: baseline; gap: .6rem; padding: .5rem .7rem; border: 1px solid var(--border-color, #d4d4d4); border-radius: .5rem; flex-wrap: wrap; }
+.price-import-sheet-option small { color: var(--text-muted, #666); margin-left: auto; }
+.price-import-sheets > strong { font-size: .94rem; }

@@ -31,7 +31,7 @@ create table if not exists public.campaign_price_imports (
 create index if not exists campaign_price_imports_org_actor_idx on public.campaign_price_imports(organization_id,created_by,created_at desc);
 create table if not exists public.campaign_price_import_rows (
  id uuid primary key default gen_random_uuid(), import_id uuid not null references public.campaign_price_imports(id),
- line integer not null, code text not null, raw_code text not null, raw_price text not null,
+ line integer not null, source_sheet text not null default '', source_line integer, code text not null, raw_code text not null, raw_price text not null,
  article_id text, catalog_snapshot jsonb, before_cents bigint,
  imported_cents bigint, current_cents bigint,
  problem text, warning text not null default '', selected boolean not null default false,
@@ -40,6 +40,9 @@ create table if not exists public.campaign_price_import_rows (
  check(imported_cents is null or imported_cents between 1 and 999999999),
  check(current_cents is null or current_cents between 1 and 999999999)
 );
+-- Also supports a previously created draft schema when the script is rerun.
+alter table public.campaign_price_import_rows add column if not exists source_sheet text not null default '';
+alter table public.campaign_price_import_rows add column if not exists source_line integer;
 create table if not exists public.campaign_price_import_applications (
  campaign_id text not null, row_id uuid not null references public.campaign_price_import_rows(id),
  organization_id uuid not null references public.organizations(id), store_name text not null,
@@ -77,7 +80,8 @@ language sql stable security definer set search_path='' as $$
   'campaignPriceImport',jsonb_build_object('kind','catalog-pvp2-v1','rowId',r.id,'importId',b.id,
    'beforeCents',r.before_cents,'afterCents',r.current_cents,'capturedAt',b.created_at,
    'state',case when r.current_cents<r.before_cents then 'Promoção' when r.current_cents=r.before_cents then 'Sem alteração' else 'Aumento' end,
-   'source',b.source,'line',r.line))
+   'source',jsonb_build_object('name',b.source->>'name','sha256',b.source->>'sha256',
+     'sheet',r.source_sheet),'line',r.line,'sourceSheet',r.source_sheet,'sourceLine',r.source_line))
  from public.campaign_price_import_rows r join public.campaign_price_imports b on b.id=r.import_id
  where r.id=p_row and r.selected and b.status='confirmed';
 $$;
@@ -88,7 +92,8 @@ language sql stable security definer set search_path='' as $$
   'rows',coalesce((select jsonb_agg(jsonb_build_object('id',r.id,'line',r.line,'code',r.code,
     'description',r.catalog_snapshot->>'descricao','beforeCents',r.before_cents,
     'importedCents',r.imported_cents,'currentCents',r.current_cents,'problem',r.problem,
-    'warning',r.warning,'rawCode',r.raw_code,'rawPrice',r.raw_price) order by r.line)
+    'warning',r.warning,'rawCode',r.raw_code,'rawPrice',r.raw_price,
+    'sourceSheet',r.source_sheet,'sourceLine',r.source_line) order by r.line)
     from public.campaign_price_import_rows r where r.import_id=b.id),'[]'::jsonb),
   'items',coalesce((select jsonb_agg(public.campaign_price_import_item(r.id) order by r.line)
     from public.campaign_price_import_rows r where r.import_id=b.id and r.selected),'[]'::jsonb))
@@ -101,7 +106,8 @@ create or replace function public.campaign_price_import(
 declare
  sid uuid; store_name text; matches integer; batch public.campaign_price_imports%rowtype;
  bid uuid; v jsonb; article jsonb; n integer; prior bigint; next_price bigint; problem text;
- req_hash text; selection jsonb; row_record public.campaign_price_import_rows%rowtype;
+ req_hash text; selection jsonb; row_record public.campaign_price_import_rows%rowtype; v_warning text;
+ v_catalog_price numeric; v_catalog_text text;
 begin
  if auth.uid() is null or p_organization_id is null or coalesce(trim(p_store),'')=''
  or not public.platform_row_access(p_organization_id,p_store,'campaigns.write')
@@ -174,7 +180,10 @@ begin
     from jsonb_array_elements(p_payload->'rows') x loop
    if jsonb_typeof(v)<>'object' or coalesce(v->>'line','') !~ '^[0-9]+$' or (v->>'line')::integer not between 1 and 5000
     or length(coalesce(v->>'code',''))>200 or length(coalesce(v->>'rawCode',''))>1000
-    or length(coalesce(v->>'rawPrice',''))>1000 or length(coalesce(v->>'warning',''))>1000 then
+    or length(coalesce(v->>'rawPrice',''))>1000 or length(coalesce(v->>'warning',''))>1000
+    or length(coalesce(v->>'sourceSheet',''))>120
+    or (v ? 'sourceLine' and (coalesce(v->>'sourceLine','') !~ '^[0-9]+$' or (v->>'sourceLine')::integer not between 1 and 5000))
+    or length(coalesce(v->>'originalRawPrice',''))>1000 then
     raise exception 'Invalid row' using errcode='22023';
    end if;
    prior:=null; next_price:=null; problem:=null; article:=null;
@@ -184,19 +193,48 @@ begin
     select count(*),(jsonb_agg(to_jsonb(a)))->0 into n,article
     from public.articles a where a.organization_id=p_organization_id and a.artigo=trim(v->>'code');
     if n=0 then problem:='not_found'; elsif n<>1 then problem:='ambiguous';
-    elsif (article->>'pvp2')::numeric is null or (article->>'pvp2')::numeric<=0
-      or (article->>'pvp2')::numeric*100<>trunc((article->>'pvp2')::numeric*100)
-      or (article->>'pvp2')::numeric*100>999999999 then problem:='invalid_catalog_price';
-    else prior:=((article->>'pvp2')::numeric*100)::bigint;
+    else
+     -- The live catalogue stores PVP2 as TEXT. Never cast untrusted text
+     -- directly: accept exact 1–2 decimal places and normal grouped prices.
+     v_catalog_text:=btrim(coalesce(article->>'pvp2',''));
+     v_catalog_price:=null;
+     if v_catalog_text ~ '^[0-9]+([.,][0-9]{1,2})?$' then
+      v_catalog_price:=replace(v_catalog_text,',','.')::numeric;
+     elsif v_catalog_text ~ '^[0-9]{1,3}(\.[0-9]{3})+,[0-9]{1,2}$' then
+      v_catalog_price:=replace(replace(v_catalog_text,'.',''),',','.')::numeric;
+     elsif v_catalog_text ~ '^[0-9]{1,3}(,[0-9]{3})+\.[0-9]{1,2}$' then
+      v_catalog_price:=replace(v_catalog_text,',','')::numeric;
+     end if;
+     if v_catalog_price is null or v_catalog_price<=0 or
+        v_catalog_price*100>999999999 then
+      problem:='invalid_catalog_price';
+     else
+      prior:=(v_catalog_price*100)::bigint;
+     end if;
     end if;
    end if;
    if coalesce(v->>'cents','') ~ '^[0-9]{1,9}$' and (v->>'cents')::bigint between 1 and 999999999 then next_price:=(v->>'cents')::bigint; end if;
-   insert into public.campaign_price_import_rows(import_id,line,code,raw_code,raw_price,article_id,catalog_snapshot,before_cents,imported_cents,current_cents,problem,warning)
-   values(bid,(v->>'line')::integer,trim(coalesce(v->>'code','')),coalesce(v->>'rawCode',''),coalesce(v->>'rawPrice',''),article->>'id',
-    case when prior is not null then jsonb_build_object('article_id',article->'id','organization_id',p_organization_id,
+   v_warning:=coalesce(v->>'warning','');
+   -- An imported regular PVP2 is evidence for comparison, never the baseline.
+   -- A mismatch cannot be silently applied as a promotional discount.
+   if coalesce(v->>'originalRawPrice','')<>'' then
+    if coalesce(v->>'originalCents','') !~ '^[0-9]{1,9}$' then
+     v_warning:=concat_ws(' · ',nullif(v_warning,''),'PVP2 original da tabela inválido; verificação necessária');
+    elsif prior is not null and (v->>'originalCents')::bigint<>prior then
+     v_warning:=concat_ws(' · ',nullif(v_warning,''),'PVP2 da tabela diverge do catálogo: '||
+       to_char((v->>'originalCents')::bigint::numeric/100,'FM99999990D00')||' / '||
+       to_char(prior::numeric/100,'FM99999990D00'));
+    end if;
+   end if;
+   insert into public.campaign_price_import_rows(import_id,line,source_sheet,source_line,code,raw_code,raw_price,article_id,catalog_snapshot,before_cents,imported_cents,current_cents,problem,warning)
+   values(bid,(v->>'line')::integer,coalesce(v->>'sourceSheet',p_payload->'source'->>'sheet',''),
+    coalesce((v->>'sourceLine')::integer,(v->>'line')::integer),
+    trim(coalesce(v->>'code','')),coalesce(v->>'rawCode',''),coalesce(v->>'rawPrice',''),
+    coalesce(article->>'article_id',article->>'id'),
+    case when prior is not null then jsonb_build_object('article_id',coalesce(article->'article_id',article->'id'),'organization_id',p_organization_id,
      'codigo',article->>'artigo','descricao',article->>'descricao','ean',coalesce(article->>'codigo_barras',''),
      'pn',coalesce(article->>'referencia','')) else null end,
-    prior,next_price,next_price,problem,coalesce(v->>'warning',''));
+    prior,next_price,next_price,problem,v_warning);
   end loop;
  elsif p_action='confirm' then
   if batch.id is null then raise exception 'Import not found' using errcode='42501'; end if;
