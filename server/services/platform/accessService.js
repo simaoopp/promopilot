@@ -2,6 +2,7 @@ import { createSupabaseUserClient, supabaseAdminClient } from '../../lib/supabas
 import { AppError } from '../../middleware/errorHandler.js';
 
 export function rpcError(error) {
+  if (['PGRST301', 'PGRST303'].includes(error?.code)) return new AppError('SESSION_INVALID', 'A sessão expirou. Inicie sessão novamente.', {status:401});
   const denied = error?.code === '42501';
   if (['40001','40P01','55P03'].includes(error?.code)) return new AppError('BATCH_CONFLICT','Operação concorrente ou lote fora de ordem. Repita o lote atual.',{status:409});
   if(error?.code === '23505') return new AppError('CONFLICT','Já existe um registo com este identificador.',{status:409});

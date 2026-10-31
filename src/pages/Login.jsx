@@ -4,6 +4,9 @@ import ForcePasswordChangeModal from "../components/ForcePasswordChangeModal";
 import PasswordRecoveryModal from "../components/PasswordRecoveryModal";
 import PromoPilotMark from "../components/brand/PromoPilotMark";
 import AppLoading from "../components/AppLoading";
+import AuthStateError from "../components/AuthStateError";
+import { usePermissions } from "../context/PermissionContext";
+import { classifyAuthError } from "../utils/authErrors";
 import ProfileLoadError from "../components/ProfileLoadError";
 import { useAuth } from "../context/AuthContext";
 import { safeNextPath } from "../utils/safeNextPath";
@@ -14,6 +17,8 @@ import "../styles/login-access.css";
 export default function Login() {
   const {
     user,
+    authStatus,
+    authError,
     loadingAuth,
     loadingProfile,
     profileError,
@@ -23,6 +28,7 @@ export default function Login() {
     passwordRecovery,
   } = useAuth();
 
+  const permissions = usePermissions();
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [erro, setErro] = useState("");
@@ -34,6 +40,8 @@ export default function Login() {
   if (loadingAuth || (user && loadingProfile)) {
     return <AppLoading message="A preparar o acesso à sua conta…" />;
   }
+
+  if (["network_error", "auth_error", "permission_error"].includes(authStatus)) return <AuthStateError />;
 
   if (user && profileError && !passwordRecovery) return <ProfileLoadError />;
 
@@ -55,8 +63,8 @@ export default function Login() {
     try {
       const emailLimpo = String(email || "").trim();
       await signIn(emailLimpo, senha);
-    } catch (_err) {
-      setErro("Email ou palavra-passe inválidos.");
+    } catch (error) {
+      setErro(classifyAuthError(error).message);
     } finally {
       setCarregando(false);
     }
@@ -83,6 +91,7 @@ export default function Login() {
                 <p>Use o seu email e palavra-passe para continuar.</p>
               </div>
 
+              {authStatus === "session_expired" && <p role="status">{authError}</p>}
               <form onSubmit={handleSubmit} className="login-form pp-login-form">
                 <label htmlFor="email">Email</label>
                 <input
@@ -140,7 +149,8 @@ export default function Login() {
         <PasswordRecoveryModal open={true} />
       )}
 
-      {mostrarModalOnboarding && !passwordRecovery && (
+      {mostrarModalOnboarding && !passwordRecovery && permissions.loading && <AppLoading message="A verificar permissões…" />}
+      {mostrarModalOnboarding && !passwordRecovery && !permissions.loading && (
         <ForcePasswordChangeModal
           open={true}
           requirePassword={requiresPasswordChange}

@@ -8,8 +8,7 @@ export function hasMissingProfileFields(profile) {
   return (
     !profile ||
     isBlank(profile.first_name) ||
-    isBlank(profile.last_name) ||
-    (!profile.platformAdmin && isBlank(profile.store))
+    isBlank(profile.last_name)
   );
 }
 

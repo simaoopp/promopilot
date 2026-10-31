@@ -10,7 +10,7 @@ let platformAdmin=false, allowed=false, failAccess=false, calls=[];
 const profileQuery={select(){return this;},eq(){return this;},async maybeSingle(){return {data:{role:'admin',store:'forged-store'}};}};
 await mock.module('../lib/supabaseClients.js', { namedExports: {
   hasSupabaseAuthConfig:()=>true, hasSupabaseAdminConfig:()=>false, supabaseAdminClient:null,
-  supabaseAuthClient:{auth:{async getUser(token){return token==='valid' ? {data:{user:{id:'10000000-0000-4000-8000-000000000001',email:'qa@example.test',user_metadata:{role:'ceo',isAdmin:true}}}} : {error:{message:'invalid'}};}}},
+  supabaseAuthClient:{auth:{async getUser(token){return token==='valid' ? {data:{user:{id:'10000000-0000-4000-8000-000000000001',email:'qa@example.test',user_metadata:{role:'ceo',isAdmin:true}}}} : {error:{status:401,code:'bad_jwt',message:'invalid'}};}}},
   createSupabaseUserClient:()=>({from:()=>profileQuery,async rpc(name,args){
     calls.push({name,args});
     if(failAccess) return {error:{code:'08006'}};

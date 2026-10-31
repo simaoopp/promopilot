@@ -18,7 +18,12 @@ test('HTML fallback and incomplete access payload are rejected',async()=>{
  await expect(loadAccess()).rejects.toThrow('incompatível');
 });
 test('valid context remains unchanged',async()=>{
- const context={platformAdmin:false,organizations:[],stores:[],permissions:{'products.read':false}};
+ const context={platformAdmin:false,organizations:[],stores:[],pages:[],permissions:{'products.read':false}};
  fetch.mockResolvedValue({status:200,ok:true,json:async()=>({ok:true,context})});
  await expect(loadAccess()).resolves.toEqual(context);
+});
+
+test('an outdated access context is an explicit contract error, never an authenticated session failure',async()=>{
+ fetch.mockResolvedValue({status:200,ok:true,json:async()=>({ok:true,context:{organizations:[],stores:[],permissions:{}}})});
+ await expect(loadAccess()).rejects.toMatchObject({code:'ACCESS_CONTEXT_INVALID',status:502});
 });

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { logAuthIssue, withAuthDeadline } from "../utils/authErrors";
 import { usePermissions } from "../context/PermissionContext";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../components/ToastProvider";
@@ -30,9 +31,13 @@ export default function HomePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { profile } = useAuth();
   const toast = useToast();
-  const { can } = usePermissions();
+  const { can, context } = usePermissions();
   const canCampaigns = can("campaigns.read");
   const canAutomations = can("automations.read");
+
+  const [historyState, setHistoryState] = useState({ manual: "loading", automatic: "loading" });
+  const [historyAttempt, setHistoryAttempt] = useState(0);
+  const organizationId = context?.organizationId;
 
   const initialCatalogo = getCatalogoPesquisaSnapshot();
 
@@ -59,12 +64,15 @@ export default function HomePage() {
     let isMounted = true;
 
     async function syncHistoricoCampanhas() {
+      setHistoryState(previous => ({ ...previous, manual: "loading" }));
       try {
-        const campanhas = await loadCampaignHistory(profile?.store);
-        if (isMounted) setHistoricoCampanhas(campanhas);
+        const campanhas = await withAuthDeadline(loadCampaignHistory(profile?.store), 20000);
+        if (isMounted) { setHistoricoCampanhas(campanhas); setHistoryState(previous => ({ ...previous, manual: "ready" })); }
       } catch (error) {
-        console.warn("Não foi possível carregar o histórico de campanhas.", error);
-        if (isMounted) setHistoricoCampanhas([]);
+        if (isMounted) {
+          logAuthIssue("homepage.history", error); setHistoricoCampanhas([]);
+          setHistoryState(previous => ({ ...previous, manual: "error" }));
+        }
       }
     }
 
@@ -74,18 +82,21 @@ export default function HomePage() {
     return () => {
       isMounted = false;
     };
-  }, [profile?.store, canCampaigns]);
+  }, [profile?.store, organizationId, canCampaigns, historyAttempt]);
 
   useEffect(() => {
     let isMounted = true;
 
     async function syncHistoricoCampanhasAutomaticas() {
+      setHistoryState(previous => ({ ...previous, automatic: "loading" }));
       try {
-        const campanhas = await loadAutomaticCampaignHistory(profile?.store);
-        if (isMounted) setHistoricoCampanhasAutomaticas(campanhas);
+        const campanhas = await withAuthDeadline(loadAutomaticCampaignHistory(profile?.store), 20000);
+        if (isMounted) { setHistoricoCampanhasAutomaticas(campanhas); setHistoryState(previous => ({ ...previous, automatic: "ready" })); }
       } catch (error) {
-        console.warn("Não foi possível carregar o histórico de campanhas automático.", error);
-        if (isMounted) setHistoricoCampanhasAutomaticas([]);
+        if (isMounted) {
+          logAuthIssue("homepage.automatic_history", error); setHistoricoCampanhasAutomaticas([]);
+          setHistoryState(previous => ({ ...previous, automatic: "error" }));
+        }
       }
     }
 
@@ -95,7 +106,7 @@ export default function HomePage() {
     return () => {
       isMounted = false;
     };
-  }, [profile?.store, canAutomations]);
+  }, [profile?.store, organizationId, canAutomations, historyAttempt]);
 
 
   useEffect(() => {
@@ -278,14 +289,20 @@ export default function HomePage() {
         onOpenExcel={() => navigate("/EtiquetasCampanhaExcel")}
       />
 
-      {canCampaigns && <HomeHistorySection
+      {((canCampaigns && historyState.manual === "loading") || (canAutomations && historyState.automatic === "loading")) && <p role="status">A carregar os resumos da homepage…</p>}
+      {((canCampaigns && historyState.manual === "error") || (canAutomations && historyState.automatic === "error")) && <div role="alert">
+        <p>Não foi possível carregar alguns resumos da homepage. Tenta novamente.</p>
+        <button type="button" onClick={() => setHistoryAttempt(value => value + 1)}>Tentar novamente</button>
+      </div>}
+
+      {canCampaigns && historyState.manual === "ready" && <HomeHistorySection
         historicoPreview={historicoPreview}
         onOpenCampaign={abrirPopupCampanha}
         formatarDataHistorico={formatarDataHistorico}
         formatarAutorCampanha={formatarAutorCampanha}
       />}
 
-      {canAutomations && <HomeAutomaticCampaignHistorySection
+      {canAutomations && historyState.automatic === "ready" && <HomeAutomaticCampaignHistorySection
         historicoPreview={historicoAutomaticoPreview}
         onOpenCampaign={abrirPopupCampanhaAutomatica}
         formatarDataHistorico={formatarDataHistorico}

@@ -1,3 +1,4 @@
+import { classifyAuthError } from "../utils/authErrors";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import PromoPilotMark from "./brand/PromoPilotMark";
@@ -16,6 +17,7 @@ export default function Sidebar({
 }) {
   const location = useLocation();
   const { user, profile, signOut, updatePassword } = useAuth();
+  const [logoutError, setLogoutError] = useState("");
 
   const { context, can } = usePermissions();
   const [contextBusy, setContextBusy] = useState(false);
@@ -151,12 +153,13 @@ export default function Sidebar({
 
   async function handleLogout() {
     try {
+      setLogoutError("");
       setLoadingLogout(true);
       await signOut();
       setMenuContaAberto(false);
       fecharTudo();
     } catch (error) {
-      console.error("Erro ao sair:", error.message);
+      setLogoutError(classifyAuthError(error).message);
     } finally {
       setLoadingLogout(false);
     }
@@ -288,6 +291,7 @@ export default function Sidebar({
               >
                 {loadingLogout ? "A sair..." : "Sair da conta"}
               </button>
+              {logoutError && <p role="alert">{logoutError}</p>}
             </div>
           )}
         </div>

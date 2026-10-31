@@ -1,4 +1,6 @@
 import { supabase } from "../lib/supabase";
+import { requireSession, refreshRejectedSession } from "./authSessionService";
+import { authIssue, classifyAuthError, withAuthDeadline } from "../utils/authErrors";
 import { normalizeApiBaseUrl } from "../shared/apiBaseUrl.mjs";
 
 let snapshot = null;
@@ -17,38 +19,54 @@ export function setPermissionSnapshot(value) {
 
 export async function platformRequest(path, { method = "GET", body, signal } = {}) {
   const API = normalizeApiBaseUrl(process.env.REACT_APP_API_BASE_URL, typeof window !== "undefined" ? window.location.hostname : "");
-  const { data, error } = await supabase.auth.getSession();
-  if (error || !data?.session?.access_token) throw new Error("Inicie sessão para continuar.");
-  const controller = new AbortController();
-  const abort = () => controller.abort();
-  if (signal?.aborted) abort();
-  signal?.addEventListener("abort", abort, { once: true });
-  const timeout = setTimeout(abort, 20000);
-  try {
-    const response = await fetch(`${API}${path}`, {
-      method, cache: "no-store", signal: controller.signal,
-      headers: { Authorization: `Bearer ${data.session.access_token}`, "Content-Type": "application/json" },
-      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-    });
-    if (response.status === 404 && path === "/api/access") {
-      throw Object.assign(new Error("A API de acesso não está disponível. É necessário publicar o backend atualizado e verificar o endereço da API no Netlify."), { status: 404, code: "ACCESS_API_NOT_DEPLOYED" });
+  let session = await requireSession(signal);
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const token = session.access_token;
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    if (signal?.aborted) abort();
+    signal?.addEventListener("abort", abort, { once: true });
+    try {
+      const result = await withAuthDeadline((async () => {
+        const response = await fetch(`${API}${path}`, {
+          method, cache: "no-store", signal: controller.signal,
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+        });
+        if (response.status === 401) {
+          await response.body?.cancel();
+          return { unauthorized: true };
+        }
+        if (response.status === 403) throw authIssue("PERMISSION_DENIED", 403);
+        if (response.status >= 500 || response.status === 429) throw authIssue("NETWORK_ERROR", response.status);
+        if (response.status === 404 && path === "/api/access") {
+          throw Object.assign(new Error("A API de acesso não está disponível. Contacte o suporte para verificar a publicação da aplicação."), { status: 404, code: "ACCESS_API_NOT_DEPLOYED" });
+        }
+        let payload;
+        try { payload = await response.json(); }
+        catch { throw Object.assign(new Error("A API não devolveu uma resposta válida. Tenta novamente ou contacta o suporte."), { code: "API_INVALID_RESPONSE" }); }
+        if (!response.ok || payload.ok === false) {
+          // Never render arbitrary upstream error text in the authentication UI.
+          throw Object.assign(new Error("Não foi possível concluir esta operação. Verifique os dados e tente novamente."), { status: response.status, code: "API_REQUEST_FAILED" });
+        }
+        return { payload };
+      })(), 20000, signal);
+      if (!result.unauthorized) return result.payload;
+    } catch (error) {
+      if (signal?.aborted || error?.code?.startsWith("API_") || error?.code === "ACCESS_API_NOT_DEPLOYED") throw error;
+      throw classifyAuthError(error);
+    } finally {
+      controller.abort(); signal?.removeEventListener("abort", abort);
     }
-    let payload;
-    try { payload = await response.json(); } catch { throw new Error("A API não devolveu uma resposta válida. Verifique a publicação do servidor."); }
-    if (!response.ok || payload.ok === false) {
-      const message = typeof payload.error === "string" ? payload.error : payload.error?.message || payload.message;
-      throw Object.assign(new Error(message || "Não foi possível concluir esta operação."), { status: response.status });
-    }
-    return payload;
-  } finally {
-    clearTimeout(timeout);
-    signal?.removeEventListener("abort", abort);
+    // Read requests may retry after one SDK refresh. Do not replay mutations.
+    if (attempt || !["GET", "HEAD"].includes(method)) throw authIssue("API_SESSION_REJECTED", 401);
+    session = await refreshRejectedSession(session, signal);
   }
 }
 export async function loadAccess(signal) {
   const { context } = await platformRequest("/api/access", { signal });
-  if (!context || !Array.isArray(context.organizations) || !Array.isArray(context.stores) || !context.permissions || typeof context.permissions !== "object") {
-    throw new Error("Resposta de acesso incompatível. Verifique a versão do backend e a migração de permissões.");
+  if (!context || !Array.isArray(context.organizations) || !Array.isArray(context.stores) || !Array.isArray(context.pages) || !context.permissions || Array.isArray(context.permissions) || typeof context.permissions !== "object") {
+    throw Object.assign(new Error("A resposta de permissões é incompatível. Contacte o suporte."), { code: "ACCESS_CONTEXT_INVALID", status: 502 });
   }
   return context;
 }

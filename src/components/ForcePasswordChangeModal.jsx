@@ -54,7 +54,7 @@ export default function ForcePasswordChangeModal({
       return;
     }
 
-    if (!profile?.platformAdmin && !storeOptions.includes(store)) {
+    if (!profile?.platformAdmin && storeOptions.length > 0 && !storeOptions.includes(store)) {
       setErro("Selecione uma loja autorizada. Se não existir nenhuma, contacte o administrador.");
       return;
     }
@@ -78,7 +78,7 @@ export default function ForcePasswordChangeModal({
         password: requirePassword ? passwordTrimmed : "",
         first_name: firstName,
         last_name: lastName,
-        store,
+        store: storeOptions.includes(store) ? store : undefined,
         requirePassword,
       });
 
@@ -138,7 +138,7 @@ export default function ForcePasswordChangeModal({
             id="store"
             value={store}
             onChange={(e) => setStore(e.target.value)}
-            required={!profile?.platformAdmin}
+            required={!profile?.platformAdmin && storeOptions.length > 0}
             disabled={loading || storeOptions.length === 0}
           >
             <option value="">{profile?.platformAdmin ? "Administração global" : "Seleciona a loja"}</option>
@@ -148,6 +148,8 @@ export default function ForcePasswordChangeModal({
               </option>
             ))}
           </select>
+
+          {storeOptions.length === 0 && !profile?.platformAdmin && <p role="status">A conta ainda não tem uma loja autorizada. Pode completar os dados pessoais; o acesso à organização depende do administrador.</p>}
 
           {requirePassword && (
             <>

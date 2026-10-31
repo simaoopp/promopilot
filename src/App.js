@@ -31,13 +31,13 @@ export default function App() {
 }
 
 function AppContent() {
-  const { can } = usePermissions();
+  const { can, context } = usePermissions();
   const { pathname, search, hash } = useLocation();
   const normalizedPath = pathname.replace(/\/$/, "").toLowerCase();
   const isPresentation = normalizedPath === "";
   const isLegacyPresentation = normalizedPath === "/apresentacao";
   const [menuAberto, setMenuAberto] = useState(false);
-  const { user, loadingAuth, loadingProfile, onboardingRequired, passwordRecovery } = useAuth();
+  const { user, authStatus, loadingAuth, loadingProfile, onboardingRequired, passwordRecovery } = useAuth();
   const rotaInicial = useMemo(
     () => resolveInitialRoute({ user, onboardingRequired }),
     [user, onboardingRequired],
@@ -51,7 +51,7 @@ function AppContent() {
 
   return (
     <div className={user ? "app pp-app-shell" : "app app-login pp-login-shell"}>
-      {user && !onboardingRequired && (
+      {user && authStatus === "authenticated" && !onboardingRequired && (
         <Sidebar
           menuAberto={menuAberto}
           setMenuAberto={setMenuAberto}
@@ -59,13 +59,13 @@ function AppContent() {
         />
       )}
 
-      {user && !onboardingRequired && can("ai.read") && <GlobalSellerAssistant />}
+      {user && authStatus === "authenticated" && !onboardingRequired && can("ai.read") && <GlobalSellerAssistant />}
 
       <Suspense fallback={<PageFallback />}>
         <Routes>
           <Route path="/" element={<Navigate to={rotaInicial} replace />} />
           <Route path="/login" element={<Login />} />
-          <Route path="/Homepage" element={<ProtectedRoute><FeatureRoute page="home"><Homepage /></FeatureRoute></ProtectedRoute>} />
+          <Route path="/Homepage" element={<ProtectedRoute><FeatureRoute page="home"><Homepage key={`${user?.id}:${context?.organizationId}:${context?.storeId}`} /></FeatureRoute></ProtectedRoute>} />
           <Route path="/EtiquetasCampanha" element={<ProtectedRoute><FeatureRoute page="manual"><EtiquetasPage /></FeatureRoute></ProtectedRoute>} />
           <Route path="/Etiquetas" element={<ProtectedRoute><FeatureRoute page="catalog"><Etiquetas /></FeatureRoute></ProtectedRoute>} />
           <Route path="/EtiquetasCampanhaExcel" element={<ProtectedRoute><FeatureRoute page="excel"><EtiquetasExcelPage /></FeatureRoute></ProtectedRoute>} />
