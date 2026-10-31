@@ -8,7 +8,7 @@ import { useAutoFontSize } from "../../utils/useAutoFontSize";
 import { isPriceImport } from "../../shared/campaign-price-import/model";
 
 export const DEFAULT_PROMOTION_NOTE =
-  "VÁLIDO ENQUANTO DURAR O STOCK. Limitado ao stock existente e não acumulável com outras promoções.";
+  "Limitado ao stock existente e não acumulável com outras promoções.";
 
 function AutoText({ texto, className, min, max, style = {} }) {
   const autoFont = useAutoFontSize(texto, min, max);

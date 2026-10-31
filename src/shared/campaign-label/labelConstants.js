@@ -7,4 +7,4 @@ export const CAMPAIGN_LABEL_FONT_FAMILY = "Arial, Helvetica, sans-serif";
 export const CAMPAIGN_LABEL_HEAVY_FONT_FAMILY = "Arial, Helvetica, sans-serif";
 
 export const DEFAULT_PROMOTION_NOTE =
-  "VÁLIDO ENQUANTO DURAR O STOCK. Limitado ao stock existente e não acumulável com outras promoções.";
+  "Limitado ao stock existente e não acumulável com outras promoções.";
