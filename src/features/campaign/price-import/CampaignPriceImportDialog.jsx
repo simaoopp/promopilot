@@ -3,7 +3,12 @@ import { createImportApi } from "./importApi";
 import { extractInWorker } from "./extractInWorker";
 import ImportMapping from "./ImportMapping";
 import ImportReview, { reviewRow } from "./ImportReview";
-import { headerLabels, mappingMatches, collectPromotionRows, detectPromotionMapping, validateMapping } from "../../../shared/campaign-price-import/model";
+import {
+  mappingMatches,
+  collectPromotionRows,
+  detectPromotionMapping,
+  validateMapping
+} from "../../../shared/campaign-price-import/model";
 import "./CampaignPriceImport.css";
 
 const EMPTY_MAPPING = { version: 1, headerRow: 0, codeColumn: -1, priceColumn: -1, originalColumn: -1 };
