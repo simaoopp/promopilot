@@ -2,50 +2,6 @@ export const MAX_IMPORT_ROWS = 2000;
 export const MAX_PRICE_CENTS = 999999999;
 export const IMPORT_KIND = "catalog-pvp2-v1";
 
-// Supplier names are hints only. Ambiguous/unknown columns always require mapping.
-const HEADER_ALIASES = Object.freeze({
-  code: ["artigo", "code", "codigo", "codigo artigo", "nosso codigo", "referencia", "ref", "sku", "item code", "reference"],
-  promo: ["pvp2promo", "pvp2 promo", "pvp2p", "pvp 2 promocional", "promo", "promocao", "preco promo", "preco promocional", "preco campanha", "preco black friday", "preco promocao", "sale price"],
-  original: ["pvp2", "pvp 2", "pvp2 antes", "preco anterior", "preco normal", "preco original"],
-});
-
-export function normalizedHeader(value) {
-  return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
-}
-
-function headerCandidates(row, field) {
-  const aliases = new Set(HEADER_ALIASES[field].map(normalizedHeader));
-  return row.flatMap((cell, index) => aliases.has(normalizedHeader(cell?.text)) ? [index] : []);
-}
-
-// Never guess by price magnitude, column position, or supplier brand. Auto-map
-// only an unambiguous code + promotional-price header pair.
-export function detectPromotionMapping(sheet) {
-  let best = null;
-  for (let headerRow = 0; headerRow < Math.min(sheet.rows.length, 40); headerRow += 1) {
-    const row = sheet.rows[headerRow];
-    const codes = headerCandidates(row, "code");
-    const promos = headerCandidates(row, "promo");
-    const originals = headerCandidates(row, "original");
-    if (codes.length !== 1 || promos.length !== 1 || codes[0] === promos[0]) continue;
-    // Multiple original prices are not guessed, even if a promo match is clear.
-    const mapping = { version: 1, headerRow, codeColumn: codes[0], priceColumn: promos[0],
-      originalColumn: originals.length === 1 && ![codes[0], promos[0]].includes(originals[0]) ? originals[0] : -1 };
-    const candidate = { mapping, sheet: sheet.name, headerRow, confidence: "alta",
-      promoLabel: String(row[promos[0]]?.text || ""), codeLabel: String(row[codes[0]]?.text || ""),
-      originalLabel: mapping.originalColumn >= 0 ? String(row[mapping.originalColumn]?.text || "") : "",
-      candidates: { code: codes.length, promo: promos.length, original: originals.length } };
-    if (!best) best = candidate;
-    else if (best.headerRow !== headerRow && (best.mapping.codeColumn !== mapping.codeColumn ||
-      best.mapping.priceColumn !== mapping.priceColumn || best.mapping.originalColumn !== mapping.originalColumn)) {
-      return null; // Conflicting header layouts in one sheet require manual review.
-    }
-  }
-  return best;
-}
-
-
 // Prices are integer cents throughout preparation/review. Never guess a cost,
 // PVP1 or PVP3 column and never remove arbitrary letters from a malformed price.
 export function priceInCents(value) {
@@ -91,6 +47,55 @@ export function headerLabels(sheet, headerRow) {
     : `Coluna ${index + 1}`);
 }
 
+
+// One-click, header-driven discovery. Only exact normalized names are trusted;
+// confusing PVP2 with PVP2PROMO would create misleading discounts.
+export const WAREHOUSE_CODES = Object.freeze(["AF", "A1", "A1E", "AE", "AEA", "A10", "AEV"]);
+const AUTO_ALIASES = {
+  code: ["artigo", "codigo", "codigo artigo", "codigo de artigo", "nosso codigo", "codigo interno", "referencia", "ref", "sku", "code", "item code", "product code"],
+  description: ["descricao", "designacao", "produto", "nome", "nome produto", "description", "product"],
+  ean: ["ean", "ean13", "ean 13", "codigo barras", "codigo de barras", "barcode", "gtin", "gtin13"],
+  promo: ["pvp2promo", "pvp2 promo", "pvp2p", "pvp 2 p", "pvp2 atual", "pvp atual", "preco promo", "preco promocional", "preco de campanha", "preco campanha", "preco black friday", "promo", "promocao", "sale price"],
+};
+const autoHeader = text => String(text ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+  .toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
+export function detectSimpleColumns(sheet) {
+  let winner = null;
+  for (let headerRow=0;headerRow<Math.min(40,sheet.rows.length);headerRow++) {
+    const labels = headerLabels(sheet,headerRow);
+    const normalized = labels.map(autoHeader);
+    const find = aliases => normalized.flatMap((name, i) => aliases.includes(name) ? [i] : []);
+    const fields = {};
+    for (const [key,aliases] of Object.entries(AUTO_ALIASES)) {
+      const found = find(aliases);
+      if (found.length===1) fields[key]=found[0];
+    }
+    const warehouses = {};
+    for(const code of WAREHOUSE_CODES) {
+      const found = find([autoHeader(code)]);
+      if(found.length===1) warehouses[code.toLowerCase()]=found[0];
+    }
+    const essential = Number(fields.code!==undefined)+Number(fields.promo!==undefined);
+    const score = essential*20 + Object.keys(fields).length*3 + Object.keys(warehouses).length;
+    if(!winner||score>winner.score)winner={headerRow,fields,warehouses,score,essential};
+  }
+  if (!winner) return null;
+  return {...winner, recognized:winner.essential===2&&winner.fields.code!==winner.fields.promo,
+    mapping:{version:1,headerRow:winner.headerRow,codeColumn:winner.fields.code??-1,priceColumn:winner.fields.promo??-1,
+      descriptionColumn:winner.fields.description??-1,eanColumn:winner.fields.ean??-1,warehouseColumns:winner.warehouses}};
+}
+export function safeWarehouseValues(cells, mapping={}) {
+  const out={};
+  for(const code of WAREHOUSE_CODES){
+    const index=mapping[code.toLowerCase()];
+    const raw=Number.isInteger(index)?String(cells[index]?.text??"").trim():"";
+    if(!/^(?:0|[1-9]\d{0,6})(?:[.,]\d{1,2})?$/.test(raw))continue;
+    const number=Number(raw.replace(",","."));
+    if(Number.isFinite(number)&&number<=1000000)out[code.toLowerCase()]=number;
+  }
+  return out;
+}
+
 export function validateMapping(mapping, sheet) {
   const labels = headerLabels(sheet, mapping.headerRow);
   if (!Number.isInteger(mapping.headerRow) || mapping.headerRow < -1 || mapping.headerRow >= sheet.rows.length ||
@@ -98,12 +103,6 @@ export function validateMapping(mapping, sheet) {
       mapping.codeColumn < 0 || mapping.priceColumn < 0 || mapping.codeColumn >= labels.length ||
       mapping.priceColumn >= labels.length || mapping.codeColumn === mapping.priceColumn) {
     throw new Error("Escolha duas colunas distintas: código do artigo e PVP2 Atual.");
-  }
-  if (mapping.originalColumn !== undefined && mapping.originalColumn !== -1 &&
-    (!Number.isInteger(mapping.originalColumn) || mapping.originalColumn < 0 ||
-      mapping.originalColumn >= labels.length ||
-      [mapping.codeColumn, mapping.priceColumn].includes(mapping.originalColumn))) {
-    throw new Error("A coluna PVP2 da tabela deve ser diferente das colunas de artigo e promoção.");
   }
   return labels;
 }
@@ -120,63 +119,15 @@ export function projectRows(sheet, mapping) {
       rawPrice: String(priceCell?.text ?? ""),
       cents: priceCell?.unsafe ? null : priceInCents(priceCell?.number ?? priceCell?.text),
       warning: [codeCell?.unsafe, priceCell?.unsafe].filter(Boolean).join(" · "),
+      extra: {
+        description: mapping.descriptionColumn >= 0 ? String(cells[mapping.descriptionColumn]?.text ?? "").trim() : "",
+        ean: mapping.eanColumn >= 0 ? String(cells[mapping.eanColumn]?.text ?? "").trim() : "",
+        warehouses: safeWarehouseValues(cells, mapping.warehouseColumns || {}),
+      },
     };
-  }).filter(row => row.rawCode || row.rawPrice);
+  }).filter(row => row.rawPrice.trim() !== ""); // No PVP2PROMO means no promotion.
   if (!rows.length || rows.length > MAX_IMPORT_ROWS) throw new Error(`Importe entre 1 e ${MAX_IMPORT_ROWS} linhas de cada vez.`);
   return rows;
-}
-
-// Prefer explicit promotional prices. A blank PVP2PROMO is NOT a zero-price
-// promotion and must not enter the campaign. Preserve original sheet/row
-// coordinates for audit, even when several worksheets are combined.
-export function projectPromotionRows(sheet, mapping) {
-  validateMapping(mapping, sheet);
-  const rows = [];
-  let skippedNoPromo = 0;
-  const headers = headerLabels(sheet, mapping.headerRow);
-  for (let i = mapping.headerRow + 1; i < sheet.rows.length; i += 1) {
-    const cells = sheet.rows[i];
-    const codeCell = cells[mapping.codeColumn];
-    const promoCell = cells[mapping.priceColumn];
-    const rawPrice = String(promoCell?.text ?? "").trim();
-    if (!rawPrice) { skippedNoPromo += 1; continue; }
-    const rawCode = String(codeCell?.text ?? "").trim();
-    // Tables such as BOSE repeat the same header between product groups.
-    if (normalizedHeader(rawCode) === normalizedHeader(headers[mapping.codeColumn]) &&
-        normalizedHeader(rawPrice) === normalizedHeader(headers[mapping.priceColumn])) continue;
-    const originalCell = mapping.originalColumn >= 0 ? cells[mapping.originalColumn] : null;
-    const originalRaw = String(originalCell?.text ?? "").trim();
-    rows.push({
-      line: i + 1, sourceLine: i + 1, sourceSheet: sheet.name,
-      code: codeCell?.unsafe ? "" : rawCode,
-      rawCode, rawPrice,
-      cents: promoCell?.unsafe ? null : priceInCents(promoCell?.number ?? promoCell?.text),
-      originalRawPrice: originalRaw,
-      originalCents: originalCell?.unsafe || !originalRaw ? null : priceInCents(originalCell?.number ?? originalCell?.text),
-      warning: [codeCell?.unsafe, promoCell?.unsafe, originalCell?.unsafe].filter(Boolean).join(" · "),
-    });
-    if (rows.length > MAX_IMPORT_ROWS) throw new Error(`A folha ${sheet.name} tem mais de ${MAX_IMPORT_ROWS} promoções. Divida a importação.`);
-  }
-  return { rows, skippedNoPromo };
-}
-
-// Returns a single bounded batch for all confidently mapped worksheets.
-// Row numbers are unique within a batch; original coordinates remain intact.
-export function collectPromotionRows(sheets, selectedIndexes, mappings) {
-  const result = [], details = [];
-  for (const index of selectedIndexes) {
-    const sheet = sheets[index], mapping = mappings[index];
-    if (!sheet || !mapping) throw new Error("Há folhas sem mapeamento. Reveja as colunas antes de continuar.");
-    const projected = projectPromotionRows(sheet, mapping);
-    details.push({ sheet: sheet.name, totalPromotions: projected.rows.length,
-      skippedNoPromo: projected.skippedNoPromo, mapping: { ...mapping, headers: headerLabels(sheet, mapping.headerRow) } });
-    for (const row of projected.rows) {
-      result.push({ ...row, line: result.length + 1 });
-      if (result.length > MAX_IMPORT_ROWS) throw new Error(`Há mais de ${MAX_IMPORT_ROWS} promoções selecionadas. Divida a importação.`);
-    }
-  }
-  if (!result.length) throw new Error("As folhas selecionadas não contêm preços promocionais preenchidos.");
-  return { rows: result, details };
 }
 
 export function mappingMatches(template, sheet, headerRow) {

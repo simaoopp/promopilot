@@ -7,6 +7,8 @@ export const TABLE_COLUMNS = [
   { key: "atual", label: "PVP2 ATUAL", tipo: "number" },
   { key: "pv3", label: "PV3" },
   { key: "estado", label: "ESTADO", tipo: "text" },
+  { key: "af", label: "AF", tipo: "number" },
+  { key: "a1", label: "A1", tipo: "number" },
   { key: "ae", label: "AE", tipo: "number" },
   { key: "aea", label: "AEA", tipo: "number" },
   { key: "aev", label: "AEV", tipo: "number" },

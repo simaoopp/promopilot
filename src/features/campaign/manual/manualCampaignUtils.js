@@ -18,6 +18,8 @@ export const FILTROS_INICIAIS = {
   pn: { contains: "", equals: "" },
   estado: { contains: "", equals: "" },
   info: { contains: "", equals: "" },
+  af: { op: "", valor: "" },
+  a1: { op: "", valor: "" },
   ae: { op: "", valor: "" },
   aea: { op: "", valor: "" },
   aev: { op: "", valor: "" },

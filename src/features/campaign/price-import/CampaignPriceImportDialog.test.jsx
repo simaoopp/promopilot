@@ -36,7 +36,13 @@ async function click(element){await act(async()=>element.click());}
 const button=text=>[...host.querySelectorAll("button")].find(el=>el.textContent.includes(text));
 const select=label=>[...host.querySelectorAll("label")].find(el=>el.textContent.startsWith(label)).querySelector("select");
 async function source(){await change(host.querySelector("textarea"),"Code\tCost\tPromo\n001\t50\t299,99");await click(button("Ler tabela"));}
-async function mapping(){await change(select("Código do artigo"),"0");await change(select("PVP2 Atual"),"2");await click(host.querySelector('.price-import-confirm-column input'));}
+async function mapping(){
+ // Recognized Code + Promo headers no longer require manual dropdown selection.
+ if (host.querySelector('label select') && host.textContent.includes('Código do artigo') && !host.textContent.includes('identificados automaticamente')) {
+   await change(select("Código do artigo"),"0");await change(select("PVP2 Atual"),"2");
+ }
+ await click(host.querySelector('.price-import-confirm-column input'));
+}
 async function review(){await source();await mapping();await click(button("Consultar PVP2"));}
 
 test.each(["manual","excel"])("%s complete flow requires price mapping, shows catalogue snapshot and saves selected rows",async mode=>{

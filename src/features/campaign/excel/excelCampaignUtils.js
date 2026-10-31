@@ -17,6 +17,8 @@ export const CAMPANHA_TABLE_COLUMNS = [
   { key: "atual", label: "PVP2 ATUAL", tipo: "number" },
   { key: "pv3", label: "PV3" },
   { key: "estado", label: "ESTADO", tipo: "text" },
+  { key: "af", label: "AF", tipo: "number" },
+  { key: "a1", label: "A1", tipo: "number" },
   { key: "ae", label: "AE", tipo: "number" },
   { key: "aea", label: "AEA", tipo: "number" },
   { key: "aev", label: "AEV", tipo: "number" },
@@ -66,6 +68,7 @@ export const PRECOS_PROMOCIONAIS_TABLE_COLUMNS = [
   { key: "descricao", label: "DESCRIÇÃO", tipo: "text" },
   { key: "ean", label: "EAN" },
   { key: "estado", label: "ESTADO", tipo: "text" },
+  ...["AF", "A1", "A1E", "AE", "AEA", "A10", "AEV"].map(code => ({ key: code.toLowerCase(), label: code, tipo: "number" })),
   { key: "antes", label: "PVP2", tipo: "number" },
   { key: "atual", label: "PVP2P", tipo: "number" },
   { key: "dataInicio", label: "DATA INÍCIO" },
@@ -335,12 +338,16 @@ export function detetarFormatoExcel(rows = []) {
     normalizarCabecalho(key),
   );
 
-  const temNossoCodigo = cabecalhos.includes("NOSSO CODIGO");
+  const temNossoCodigo = ["NOSSO CODIGO", "CODIGO", "CODIGO ARTIGO", "CODIGO DE ARTIGO", "ARTIGO", "REFERENCIA", "SKU"].some(h => cabecalhos.includes(h));
   const temPvp2 = cabecalhos.includes("PVP2");
   const temPvp2Promocional =
     cabecalhos.includes("PVP2P") ||
     cabecalhos.includes("PVP2 P") ||
     cabecalhos.includes("PVP2 PROMO") ||
+    cabecalhos.includes("PVP2PROMO") ||
+    cabecalhos.includes("PVP2 ATUAL") ||
+    cabecalhos.includes("PRECO PROMO") ||
+    cabecalhos.includes("PRECO PROMOCIONAL") ||
     cabecalhos.includes("PVP PROMOCIONAL");
 
   const temCabecalhoShopping =
@@ -393,6 +400,8 @@ export function mapearLinhaExcelCampanha(row, index) {
     ),
     pv3: obterValor(normalizado, ["PV3"], ""),
     estado: obterValor(normalizado, ["ESTADO"], ""),
+    af: obterValor(normalizado, ["AF"], ""),
+    a1: obterValor(normalizado, ["A1"], ""),
     ae: obterValor(normalizado, ["AE"], ""),
     aea: obterValor(normalizado, ["AEA"], ""),
     aev: obterValor(normalizado, ["AEV"], ""),
@@ -458,6 +467,8 @@ export function mapearLinhaExcelShopping(row, index) {
     atual: 0,
     pv3: "",
     estado: "",
+    af: 0,
+    a1: 0,
     ae: 0,
     aea: 0,
     aev: 0,
@@ -492,7 +503,7 @@ export function mapearLinhaExcelPrecosPromocionais(row, index) {
     id: `excel-precos-promocionais-${index}`,
     tipo_registo: EXCEL_FORMATS.PRECOS_PROMOCIONAIS,
     codigo: normalizarCodigoTexto(
-      obterValor(normalizado, ["NOSSO CODIGO", "NOSSO CÓDIGO", "CODIGO", "CÓDIGO", "ARTIGO"], ""),
+      obterValor(normalizado, ["NOSSO CODIGO", "CODIGO", "CODIGO ARTIGO", "CODIGO DE ARTIGO", "ARTIGO", "REFERENCIA", "SKU"], ""),
     ),
     descricao: obterValor(
       normalizado,
@@ -507,17 +518,19 @@ export function mapearLinhaExcelPrecosPromocionais(row, index) {
     atual: parseNumero(
       obterValor(
         normalizado,
-        ["PVP2P", "PVP2 P", "PVP2 PROMO", "PVP PROMOCIONAL", "PRECO PROMOCIONAL", "PREÇO PROMOCIONAL", "ATUAL"],
+        ["PVP2PROMO", "PVP2P", "PVP2 P", "PVP2 PROMO", "PVP2 ATUAL", "PRECO PROMO", "PVP PROMOCIONAL", "PRECO PROMOCIONAL", "ATUAL"],
         0,
       ),
     ),
     pv3: obterValor(normalizado, ["PV3", "PVP3"], ""),
     estado: obterValor(normalizado, ["ESTADO"], ""),
-    ae: 0,
-    aea: 0,
-    aev: 0,
-    a10: 0,
-    a1e: 0,
+    af: obterValor(normalizado, ["AF"], ""),
+    a1: obterValor(normalizado, ["A1"], ""),
+    ae: obterValor(normalizado, ["AE"], ""),
+    aea: obterValor(normalizado, ["AEA"], ""),
+    aev: obterValor(normalizado, ["AEV"], ""),
+    a10: obterValor(normalizado, ["A10"], ""),
+    a1e: obterValor(normalizado, ["A1E"], ""),
     data: "",
     dataInicio: obterValor(
       normalizado,

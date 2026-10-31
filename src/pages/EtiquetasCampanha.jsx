@@ -267,6 +267,8 @@ export default function EtiquetasPage() {
       const estadoOk = aplicarFiltroTexto(item.estado, filtros.estado);
       const infoOk = aplicarFiltroTexto(item.info, filtros.info);
 
+      const afOk = compararNumero(item.af, filtros.af.op, filtros.af.valor);
+      const a1Ok = compararNumero(item.a1, filtros.a1.op, filtros.a1.valor);
       const aeOk = compararNumero(item.ae, filtros.ae.op, filtros.ae.valor);
       const aeaOk = compararNumero(item.aea, filtros.aea.op, filtros.aea.valor);
       const aevOk = compararNumero(item.aev, filtros.aev.op, filtros.aev.valor);
@@ -279,6 +281,8 @@ export default function EtiquetasPage() {
         pnOk &&
         estadoOk &&
         infoOk &&
+        afOk &&
+        a1Ok &&
         aeOk &&
         aeaOk &&
         aevOk &&
@@ -693,6 +697,8 @@ export default function EtiquetasPage() {
         atual: precoAtual,
         pv3: artigo.pvp3 || (emLista ? precoAntes : campanhaAntes) || "",
         estado: "",
+        af: "",
+        a1: "",
         ae: artigo.stock || "",
         aea: "",
         aev: "",

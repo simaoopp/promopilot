@@ -85,6 +85,8 @@ export default function EtiquetasExcelPage() {
     estado: { contains: "", equals: "" },
     info: { contains: "", equals: "" },
     comparacao: { contains: "", equals: "" },
+    af: { op: "", valor: "" },
+    a1: { op: "", valor: "" },
     ae: { op: "", valor: "" },
     aea: { op: "", valor: "" },
     aev: { op: "", valor: "" },
@@ -409,6 +411,8 @@ export default function EtiquetasExcelPage() {
       const estadoOk = aplicarFiltroTexto(item.estado, filtros.estado);
       const infoOk = aplicarFiltroTexto(item.info, filtros.info);
 
+      const afOk = compararNumero(item.af, filtros.af.op, filtros.af.valor);
+      const a1Ok = compararNumero(item.a1, filtros.a1.op, filtros.a1.valor);
       const aeOk = compararNumero(item.ae, filtros.ae.op, filtros.ae.valor);
       const aeaOk = compararNumero(item.aea, filtros.aea.op, filtros.aea.valor);
       const aevOk = compararNumero(item.aev, filtros.aev.op, filtros.aev.valor);
@@ -421,6 +425,8 @@ export default function EtiquetasExcelPage() {
         pnOk &&
         estadoOk &&
         infoOk &&
+        afOk &&
+        a1Ok &&
         aeOk &&
         aeaOk &&
         aevOk &&
