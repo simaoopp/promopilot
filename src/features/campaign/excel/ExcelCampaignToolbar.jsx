@@ -89,8 +89,9 @@ export default function ExcelCampaignToolbar({
       </div>
 
       <div className="input-group">
-        <span>Importar ficheiro Excel</span>
+        <span>Importar ficheiro Excel / Shopping</span>
         <input type="file" accept=".xlsx,.xls,.xlsb,.csv,.ods" onChange={carregarExcel} />
+        <small>Tabelas de campanha abrem a revisão de PVP2. O formato Shopping mantém a comparação existente.</small>
         {nomeFicheiro ? <small>Ficheiro: {nomeFicheiro}</small> : null}
         {loading ? <small>A carregar Excel...</small> : null}
       </div>

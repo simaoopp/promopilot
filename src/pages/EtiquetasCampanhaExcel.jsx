@@ -1,5 +1,5 @@
-import CampaignImportLauncher from "../features/campaign/import/CampaignImportLauncher";
 import CampaignReview from "../features/campaign/common/CampaignReview";
+import CampaignPriceImport from "../features/campaign/price-import/CampaignPriceImport";
 import { validarItensCampanha } from "../shared/campaign-label/campaignValidation";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
@@ -55,6 +55,7 @@ export default function EtiquetasExcelPage() {
   const [loading, setLoading] = useState(false);
   const [nomeFicheiro, setNomeFicheiro] = useState("");
   const [importacaoPendente, setImportacaoPendente] = useState(null);
+  const [supplierSource, setSupplierSource] = useState(null);
   const [formatoEtiqueta, setFormatoEtiqueta] = useState("a6");
   const [formatoAutomaticoAtivo, setFormatoAutomaticoAtivo] = useState(false);
   const [promocaoFontePreco, setPromocaoFontePreco] = useState(PROMOTION_PRICE_SOURCES.PVP2);
@@ -277,6 +278,7 @@ export default function EtiquetasExcelPage() {
       const file = event.target.files?.[0];
       if (!file) return;
 
+      if (file.size > 10 * 1024 * 1024) throw new Error("Ficheiro demasiado grande.");
       setLoading(true);
 
 
@@ -291,6 +293,11 @@ export default function EtiquetasExcelPage() {
       const sheet = workbook.Sheets[nomeSheet];
       const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
       const formatoExcel = detetarFormatoExcel(rows);
+      if (formatoExcel !== EXCEL_FORMATS.SHOPPING) {
+        if (process.env.REACT_APP_CAMPAIGN_PRICE_IMPORT_ENABLED === "0") { toast.warning("A importação de tabelas está temporariamente desativada."); return; }
+        setSupplierSource({ file });
+        return;
+      }
 
       const linhas = rows
         .map((row, index) => {
@@ -728,12 +735,9 @@ export default function EtiquetasExcelPage() {
           </div>
         </div>
 
-        <CampaignImportLauncher existing={dados} onAdd={items => {
-          setDados(current => {
-            const codes = new Set(current.map(item => String(item.codigo)));
-            return [...current, ...items.filter(item => !codes.has(String(item.codigo)))];
-          });
-        }} />
+        <CampaignPriceImport mode="excel" items={dados} onItems={setDados} title={titulo} year={anoValidade} format={formatoEtiqueta}
+          dates={{ dataInicio: campanhaSemDatas ? "" : formatarDataInputDiaMes(dataInicioCampanhaGeral), dataFim: campanhaSemDatas ? "" : formatarDataInputDiaMes(dataFimCampanhaGeral) }}
+          initialSource={supplierSource} onSourceConsumed={setSupplierSource} />
 
         <ExcelCampaignToolbar
           titulo={titulo}

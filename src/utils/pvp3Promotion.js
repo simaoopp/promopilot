@@ -1,11 +1,13 @@
 import { parseNumero } from "./formatters";
 import { isPvpUpdatePromotionInfo } from "../shared/campaign-label/promotionInfoRules";
+import { isPriceImport } from "../shared/campaign-price-import/model";
 
 export function parsePrecoComparacao(valor) {
   return parseNumero(valor);
 }
 
 export function artigoElegivelComparacaoPvp3(item) {
+  if (isPriceImport(item)) return false;
   if (isPvpUpdatePromotionInfo(item)) return false;
 
   const pvpAtual = parsePrecoComparacao(item?.atual);
@@ -25,6 +27,7 @@ export function criarIdsComparacaoPvp3(artigos, idsSelecionados) {
 }
 
 export function aplicarComparacaoPvp3NoArtigo(item) {
+  if (isPriceImport(item)) return { ...item };
   if (isPvpUpdatePromotionInfo(item)) return { ...item, selecionado: false };
   return {
     ...item,

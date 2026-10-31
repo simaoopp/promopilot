@@ -1,4 +1,5 @@
 import { formatarEuro, parseNumero } from "./formatters.js";
+import { isPriceImport } from "../campaign-price-import/model.js";
 
 const CENTS_EPSILON = 0.00001;
 const MAX_REASONABLE_PRICE = 50000;
@@ -71,7 +72,7 @@ function obterPvp3Valido(item = {}) {
 }
 
 export function obterPrecoSemPromocaoParaImpressao(item = {}, fonte = PROMOTION_PRICE_SOURCES.PVP2) {
-  if (item.importacao?.version === 1 && Number.isSafeInteger(item.importacao.beforeCents)) return item.importacao.beforeCents / 100;
+  if (isPriceImport(item)) return item.campaignPriceImport.beforeCents / 100;
   if (fonte === PROMOTION_PRICE_SOURCES.PVP3) {
     const pvp3 = obterPvp3Valido(item);
 
@@ -84,6 +85,7 @@ export function obterPrecoSemPromocaoParaImpressao(item = {}, fonte = PROMOTION_
 }
 
 export function obterPrecoPromocaoParaImpressao(item = {}) {
+  if (isPriceImport(item)) return item.campaignPriceImport.afterCents / 100;
   return parseNumero(item.atual);
 }
 
@@ -97,7 +99,7 @@ export function prepararItemPromocionalParaImpressao(item = {}, fonte = PROMOTIO
     ...item,
     antes: precoSemPromocao,
     atual: precoPromocao,
-    precoSemPromocaoFonte: fonte,
+    precoSemPromocaoFonte: isPriceImport(item) ? PROMOTION_PRICE_SOURCES.PVP2 : fonte,
   };
 }
 

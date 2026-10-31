@@ -1,6 +1,5 @@
-import CampaignImportLauncher from "../features/campaign/import/CampaignImportLauncher";
-import CampaignReview from "../features/campaign/common/CampaignReview";
-import { validarItensCampanha, resumirRevisaoCampanha } from "../shared/campaign-label/campaignValidation";
+import CampaignPriceImport from "../features/campaign/price-import/CampaignPriceImport";
+import { validarItensCampanha } from "../shared/campaign-label/campaignValidation";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -19,7 +18,6 @@ import {
   pesquisarNoCatalogoRemoto,
 } from "../services/catalogoPesquisaService";
 import EditableCampaignDate from "../components/EditableCampaignDate";
-import { obterDataInputCampanha } from "../utils/campaignDates";
 import { campanhaSemDataDefinida, limparDatasCampanhaItem } from "../utils/campaignTitleRules";
 import "../styles/styles.css";
 import {
@@ -30,7 +28,6 @@ import { aplicarFiltroTexto, compararNumero } from "../utils/filters";
 import { formatarEuro, parseNumero } from "../utils/formatters";
 import { PROMOTION_PRICE_SOURCES } from "../utils/promotionPricing";
 import { preservarOrigemCampanha, getPromotionInfoText, isPvpUpdatePromotionInfo } from "../shared/campaign-label/promotionInfoRules";
-import { parseTabelaColada } from "../utils/parsers";
 import ManualCampaignToolbar from "../features/campaign/manual/ManualCampaignToolbar";
 import ManualCampaignTable from "../features/campaign/manual/ManualCampaignTable";
 import ManualCreateCampaignModal from "../features/campaign/manual/ManualCreateCampaignModal";
@@ -43,7 +40,6 @@ import {
   converterPreco,
   formatarDataDiaMes,
   formatarDataInputParaDiaMes,
-  itemTabelaInvalido,
   normalizarTexto,
   obterFormatoAutomaticoEtiqueta,
   obterFormatoEtiquetaItem,
@@ -59,7 +55,7 @@ export default function EtiquetasPage() {
 
   const [titulo, setTitulo] = useState(CAMPANHA_TITULO_DEFAULT);
   const [textoColado, setTextoColado] = useState("");
-  const [revisaoTabela, setRevisaoTabela] = useState(null);
+  const [supplierSource, setSupplierSource] = useState(null);
   const [anoValidade, setAnoValidade] = useState(new Date().getFullYear());
   const [dataInicioGeral, setDataInicioGeral] = useState("");
   const [dataFimGeral, setDataFimGeral] = useState("");
@@ -387,22 +383,6 @@ export default function EtiquetasPage() {
     }));
   }
 
-  function extrairPrimeiraDataCampanha(linhas, campo) {
-    const itemComData = linhas.find((item) => String(item?.[campo] || "").trim());
-    return itemComData ? obterDataInputCampanha(itemComData[campo], anoValidade) : "";
-  }
-
-  function aplicarDatasGeraisEmLinhas(linhas, dataInicioIso, dataFimIso) {
-    const dataInicioFormatada = formatarDataInputParaDiaMes(dataInicioIso);
-    const dataFimFormatada = formatarDataInputParaDiaMes(dataFimIso);
-
-    return linhas.map((item) => ({
-      ...item,
-      dataInicio: dataInicioFormatada || item.dataInicio || "",
-      dataFim: dataFimFormatada || item.dataFim || "",
-    }));
-  }
-
   function atualizarDataGeral(campo, valor) {
     if (campanhaSemDatas) return;
 
@@ -423,57 +403,9 @@ export default function EtiquetasPage() {
   }
 
   function carregarTextoColado() {
-    try {
-      if (!textoColado.trim()) {
-        throw new Error("Sem conteúdo");
-      }
-
-      const linhas = parseTabelaColada(textoColado);
-      if (!linhas.length) {
-        throw new Error("Sem linhas válidas");
-      }
-
-      const linhasNormalizadas = campanhaSemDatas
-        ? linhas.map(limparDatasCampanhaItem)
-        : linhas;
-
-      const revisao = validarItensCampanha(linhasNormalizadas, { permitirComparacaoPvp3: true });
-      setRevisaoTabela(resumirRevisaoCampanha(revisao.linhas.map((linha) =>
-        linha.estado === "valido" && itemTabelaInvalido(linha.item, anoValidade)
-          ? { ...linha, estado: "bloqueado", motivo: "Verifica descrição, EAN, preços e formato das datas da linha." }
-          : linha,
-      )));
-    } catch {
-      toast.error("Verifica se os dados inseridos estão corretos.");
-    }
-  }
-
-  function confirmarTabelaColada() {
-    const linhasNormalizadas = revisaoTabela?.validos || [];
-    if (!linhasNormalizadas.length) return;
-    if (campanhaSemDatas) {
-      setDataInicioGeral("");
-      setDataFimGeral("");
-      setDados(linhasNormalizadas);
-      setRevisaoTabela(null);
-      return;
-    }
-
-    const dataInicioCapturada = extrairPrimeiraDataCampanha(linhasNormalizadas, "dataInicio");
-    const dataFimCapturada = extrairPrimeiraDataCampanha(linhasNormalizadas, "dataFim");
-    const dataInicioBase = dataInicioGeral || dataInicioCapturada;
-    const dataFimBase = dataFimGeral || dataFimCapturada;
-
-    if (!dataInicioGeral && dataInicioCapturada) {
-      setDataInicioGeral(dataInicioCapturada);
-    }
-
-    if (!dataFimGeral && dataFimCapturada) {
-      setDataFimGeral(dataFimCapturada);
-    }
-
-    setDados(aplicarDatasGeraisEmLinhas(linhasNormalizadas, dataInicioBase, dataFimBase));
-    setRevisaoTabela(null);
+    if (process.env.REACT_APP_CAMPAIGN_PRICE_IMPORT_ENABLED === "0") { toast.warning("A importação de tabelas está temporariamente desativada."); return; }
+    if (!textoColado.trim()) { toast.warning("Cole uma tabela para continuar."); return; }
+    setSupplierSource({ text: textoColado });
   }
 
   async function guardarCampanhaNoHistorico(origem = "manual", itensOverride = null) {
@@ -801,12 +733,9 @@ export default function EtiquetasPage() {
           </p>
         </div>
 
-        <CampaignImportLauncher existing={dados} onAdd={items => {
-          setDados(current => {
-            const codes = new Set(current.map(item => String(item.codigo)));
-            return [...current, ...items.filter(item => !codes.has(String(item.codigo)))];
-          });
-        }} />
+        <CampaignPriceImport mode="manual" items={dados} onItems={setDados} title={titulo} year={anoValidade} format={formatoEtiqueta}
+          dates={{ dataInicio: campanhaSemDatas ? "" : formatarDataInputParaDiaMes(dataInicioGeral), dataFim: campanhaSemDatas ? "" : formatarDataInputParaDiaMes(dataFimGeral) }}
+          initialSource={supplierSource} onSourceConsumed={setSupplierSource} />
 
         <ManualCampaignToolbar
           titulo={titulo}
@@ -853,8 +782,6 @@ export default function EtiquetasPage() {
         />
       </div>
 
-      <CampaignReview resultado={revisaoTabela} modal substituiTabela
-        onConfirm={confirmarTabelaColada} onCancel={() => setRevisaoTabela(null)} />
 
       {popupCriarCampanhaAberto && <ManualCreateCampaignModal
         aberto={popupCriarCampanhaAberto}

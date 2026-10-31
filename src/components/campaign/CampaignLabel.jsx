@@ -5,6 +5,7 @@ import expertLabelLogo from "../../assets/expert-label-logo.png";
 import { formatarEuro, parseNumero } from "../../utils/formatters";
 import { formatarEuroPromocional, ajustarPrecoPromocionalParaImpressao } from "../../utils/promotionPricing";
 import { useAutoFontSize } from "../../utils/useAutoFontSize";
+import { isPriceImport } from "../../shared/campaign-price-import/model";
 
 export const DEFAULT_PROMOTION_NOTE =
   "VÁLIDO ENQUANTO DURAR O STOCK. Limitado ao stock existente e não acumulável com outras promoções.";
@@ -38,10 +39,10 @@ function DescricaoAuto({ texto, formatoEtiqueta }) {
   );
 }
 
-function PrecoAntesAuto({ valor, formatoEtiqueta }) {
+function PrecoAntesAuto({ valor, formatoEtiqueta, exact = false }) {
   return (
     <AutoText
-      texto={`${formatarEuroPromocional(valor)}€`}
+      texto={`${exact ? formatarEuro(valor) : formatarEuroPromocional(valor)}€`}
       className="antes"
       min={formatoEtiqueta === "a5" ? 44 : 38}
       max={formatoEtiqueta === "a5" ? 54 : 46}
@@ -60,10 +61,10 @@ function DescontoAuto({ valor, formatoEtiqueta }) {
   );
 }
 
-function PrecoAtualAuto({ valor, formatoEtiqueta }) {
+function PrecoAtualAuto({ valor, formatoEtiqueta, exact = false }) {
   return (
     <AutoText
-      texto={`${formatarEuroPromocional(valor)}€`}
+      texto={`${exact ? formatarEuro(valor) : formatarEuroPromocional(valor)}€`}
       className="atual"
       min={formatoEtiqueta === "a5" ? 62 : 48}
       max={formatoEtiqueta === "a5" ? 88 : 68}
@@ -80,8 +81,9 @@ function CampaignLabelContent({
   shoppingIndicatorClass = "",
   note = DEFAULT_PROMOTION_NOTE,
 }) {
-  const precoAntesImpressao = ajustarPrecoPromocionalParaImpressao(item?.antes);
-  const precoAtualImpressao = ajustarPrecoPromocionalParaImpressao(item?.atual);
+  const exact = isPriceImport(item);
+  const precoAntesImpressao = exact ? item.campaignPriceImport.beforeCents / 100 : ajustarPrecoPromocionalParaImpressao(item?.antes);
+  const precoAtualImpressao = exact ? item.campaignPriceImport.afterCents / 100 : ajustarPrecoPromocionalParaImpressao(item?.atual);
   const desconto = Math.max(0, parseNumero(precoAntesImpressao) - parseNumero(precoAtualImpressao));
   const mostrarValidade = Boolean(String(textoValidade || "").trim());
   const mostrarRodapeExtra = mostrarValidade || showShoppingIndicator;
@@ -101,7 +103,7 @@ function CampaignLabelContent({
 
         <div className="precos">
           <div className="linha-preco">
-            <PrecoAntesAuto valor={item?.antes} formatoEtiqueta={formatoAtual} />
+            <PrecoAntesAuto valor={precoAntesImpressao} formatoEtiqueta={formatoAtual} exact={exact} />
           </div>
 
           <div className="linha-preco desconto-linha">
@@ -109,7 +111,7 @@ function CampaignLabelContent({
           </div>
 
           <div className="linha-preco">
-            <PrecoAtualAuto valor={item?.atual} formatoEtiqueta={formatoAtual} />
+            <PrecoAtualAuto valor={precoAtualImpressao} formatoEtiqueta={formatoAtual} exact={exact} />
           </div>
         </div>
 
@@ -137,6 +139,8 @@ function CampaignLabelContent({
 
 export function CampaignLabel(props) {
   if (isPvpUpdatePromotionInfo(props.item)) return null;
+  if (isPriceImport(props.item) && !(props.item.campaignPriceImport.afterCents > 0 &&
+      props.item.campaignPriceImport.afterCents < props.item.campaignPriceImport.beforeCents)) return null;
   const { formatoAtual } = props;
   const etiquetaClassName = `label ${formatoAtual === "a5" ? "label-a5" : "label-a6"}`;
 

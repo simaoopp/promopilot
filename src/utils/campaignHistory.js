@@ -165,10 +165,10 @@ export async function loadCampaignHistory(store) {
   return Array.isArray(data) ? data.map(mapRowToCampaign) : [];
 }
 
-export async function addCampaignToHistory(snapshot) {
+export async function addCampaignToHistory(snapshot, { cleanup = true } = {}) {
   const normalized = normalizeCampaignSnapshot(snapshot);
 
-  await cleanupExpiredCampaignHistory(normalized.store);
+  if (cleanup) await cleanupExpiredCampaignHistory(normalized.store);
 
   const row = mapSnapshotToRow(normalized);
 
