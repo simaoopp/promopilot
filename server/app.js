@@ -19,6 +19,7 @@ import { registerArticleDatabaseSyncRoutes } from "./routes/articleDatabaseSync.
 import { registerCampaignEndNotificationRoutes } from "./routes/campaignEndNotifications.js";
 import { registerCampaignLifecycleRoutes } from "./routes/campaignLifecycle.js";
 import { requirePermission } from "./services/platform/accessService.js";
+import { registerCampaignImportRoutes } from "./routes/campaignImports.js";
 import { registerPlatformRoutes } from "./routes/platform.js";
 import { isAiEnabled } from "./services/aiProdutoService.js";
 import { installBodyParsers, dossierBodyParser } from "./middleware/payloadLimits.js";
@@ -44,6 +45,7 @@ export function createApp() {
   registerHealthRoutes(app, { aiEnabled: isAiEnabled() });
   const authStack = [requireAuth, attachTenantContext];
   registerPlatformRoutes(app, { authStack, requireAdmin });
+  registerCampaignImportRoutes(app, { authStack });
 
   registerArticleRoutes(app, { requireAuth: [...authStack, requirePermission("products.read")] });
   registerAiProdutoRoutes(app, {

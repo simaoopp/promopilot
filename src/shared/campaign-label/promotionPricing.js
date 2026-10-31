@@ -71,6 +71,7 @@ function obterPvp3Valido(item = {}) {
 }
 
 export function obterPrecoSemPromocaoParaImpressao(item = {}, fonte = PROMOTION_PRICE_SOURCES.PVP2) {
+  if (item.importacao?.version === 1 && Number.isSafeInteger(item.importacao.beforeCents)) return item.importacao.beforeCents / 100;
   if (fonte === PROMOTION_PRICE_SOURCES.PVP3) {
     const pvp3 = obterPvp3Valido(item);
 

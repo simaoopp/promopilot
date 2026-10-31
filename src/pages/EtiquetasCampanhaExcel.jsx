@@ -1,3 +1,4 @@
+import CampaignImportLauncher from "../features/campaign/import/CampaignImportLauncher";
 import CampaignReview from "../features/campaign/common/CampaignReview";
 import { validarItensCampanha } from "../shared/campaign-label/campaignValidation";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -726,6 +727,13 @@ export default function EtiquetasExcelPage() {
             </p>
           </div>
         </div>
+
+        <CampaignImportLauncher existing={dados} onAdd={items => {
+          setDados(current => {
+            const codes = new Set(current.map(item => String(item.codigo)));
+            return [...current, ...items.filter(item => !codes.has(String(item.codigo)))];
+          });
+        }} />
 
         <ExcelCampaignToolbar
           titulo={titulo}

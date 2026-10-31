@@ -1,0 +1,532 @@
+.ci-launcher,
+.ci-dialog {
+  --ci-ink: #182a34;
+  --ci-muted: #526572;
+  --ci-accent: #076e67;
+  --ci-line: #dbe5e8;
+  color: var(--ci-ink);
+  font-family: inherit;
+}
+.ci-launcher {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  padding: 22px 24px;
+  margin: 16px 0 24px;
+  border: 1px solid #d5e4df;
+  border-radius: 18px;
+  background: linear-gradient(110deg, #f0faf5, #f6f9ff);
+}
+.ci-launcher strong,
+.ci-launcher span {
+  display: block;
+}
+.ci-launcher strong {
+  font-size: 17px;
+}
+.ci-launcher span {
+  margin-top: 6px;
+  color: #526572;
+  font-size: 14px;
+}
+.ci-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid #c6d5db !important;
+  border-radius: 10px;
+  padding: 10px 15px;
+  background: white;
+  color: #243d49;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  line-height: 1.4;
+}
+.ci-primary {
+  background: #076e67 !important;
+  color: white !important;
+  border-color: #076e67 !important;
+}
+.ci-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.ci-button:focus-visible,
+.ci-close:focus-visible,
+.ci-dialog input:focus-visible,
+.ci-dialog select:focus-visible,
+.ci-dialog textarea:focus-visible,
+.ci-dialog summary:focus-visible {
+  outline: 3px solid #e4ab42;
+  outline-offset: 3px;
+}
+.ci-overlay {
+  position: fixed;
+  inset: 0;
+  background: #0d2334b8;
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.ci-dialog {
+  background: #fff;
+  border-radius: 24px;
+  box-shadow: 0 30px 90px #06162355;
+  max-width: 1280px;
+  width: 100%;
+  height: min(900px, 94dvh);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: ci-enter 0.18s ease-out;
+}
+.ci-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px 30px 16px;
+}
+.ci-header h2 {
+  margin: 7px 0 0;
+  font-size: 25px;
+  letter-spacing: -0.6px;
+}
+.ci-eyebrow {
+  font-size: 11px;
+  letter-spacing: 1.6px;
+  font-weight: 800;
+  color: #076e67;
+}
+.ci-close {
+  border: 0;
+  background: #eff4f5;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  font-size: 28px;
+  cursor: pointer;
+}
+.ci-steps {
+  display: flex;
+  list-style: none;
+  padding: 16px 30px;
+  margin: 0;
+  gap: 22px;
+  border-bottom: 1px solid #dbe5e8;
+  overflow: auto;
+}
+.ci-steps li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  color: #637681;
+  font-size: 13px;
+}
+.ci-steps li span {
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  width: 25px;
+  height: 25px;
+  background: #edf2f4;
+  font-weight: 700;
+}
+.ci-steps li[aria-current] {
+  color: #075d57;
+  font-weight: 700;
+}
+.ci-steps li[aria-current] span {
+  background: #076e67;
+  color: white;
+}
+.ci-body {
+  padding: 24px 30px;
+  overflow: auto;
+  flex: 1;
+}
+.ci-fields {
+  padding: 0;
+  border: 0;
+  margin: 0;
+  min-width: 0;
+}
+.ci-dialog label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  min-width: 0;
+}
+.ci-dialog input,
+.ci-dialog select,
+.ci-dialog textarea {
+  box-sizing: border-box;
+  border: 1px solid #c6d5db;
+  border-radius: 9px;
+  padding: 10px 12px;
+  font: inherit;
+  color: #182a34;
+  background: #fff;
+  max-width: 100%;
+}
+.ci-dialog select {
+  width: 100%;
+  min-height: 41px;
+}
+.ci-dialog textarea {
+  resize: vertical;
+  width: 100%;
+  font-family: monospace;
+}
+.ci-dialog .ci-check {
+  flex-direction: row;
+  align-items: center;
+  font-weight: 500;
+}
+.ci-check input {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  accent-color: #076e67;
+}
+.ci-inline {
+  display: flex;
+  gap: 14px;
+  align-items: end;
+  flex-wrap: wrap;
+  margin: 16px 0;
+}
+.ci-inline label {
+  flex: 1;
+  min-width: 140px;
+}
+.ci-inline .ci-check {
+  min-width: 250px;
+}
+.ci-dialog small {
+  display: block;
+  color: #586e7a;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+.ci-drop {
+  text-align: center;
+  background: #f8fbfc;
+  border: 1.5px dashed #b6ced0;
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 22px;
+}
+.ci-drop-active {
+  background: #e9f7f0;
+  border-color: #076e67;
+}
+.ci-drop h3 {
+  font-size: 23px;
+  letter-spacing: -0.4px;
+  margin: 6px 0;
+}
+.ci-drop p {
+  font-size: 14px;
+  color: #526572;
+}
+.ci-drop .ci-button {
+  display: inline-flex;
+  margin: 5px auto 12px;
+  position: relative;
+  overflow: hidden;
+}
+.ci-drop input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.ci-file-icon {
+  font-size: 35px;
+  color: #076e67;
+}
+.ci-source {
+  max-width: 780px;
+  margin: auto;
+}
+.ci-dialog details {
+  margin: 18px 0;
+}
+.ci-dialog summary {
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+}
+.ci-recent {
+  padding: 0;
+  list-style: none;
+}
+.ci-recent li {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  border-bottom: 1px solid #dbe5e8;
+  padding: 12px 0;
+  font-size: 13px;
+}
+.ci-mapping-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+.ci-callout {
+  padding: 16px;
+  border: 1px solid #cde5de;
+  background: #f0faf6;
+  border-radius: 12px;
+  font-size: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 20px;
+}
+.ci-callout span {
+  display: block;
+}
+.ci-price-confirm {
+  padding: 16px;
+  background: #f4f7f9;
+  border-radius: 12px;
+  margin: 20px 0;
+}
+.ci-template {
+  border-top: 1px solid #dbe5e8;
+  padding-top: 18px;
+}
+.ci-table-scroll {
+  overflow: auto;
+  margin: 20px 0;
+  border: 1px solid #dbe5e8;
+  border-radius: 12px;
+}
+.ci-dialog table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+  text-align: left;
+  min-width: 680px;
+}
+.ci-dialog th,
+.ci-dialog td {
+  padding: 13px 14px;
+  border-bottom: 1px solid #e3eaed;
+  vertical-align: top;
+  max-width: 300px;
+  overflow-wrap: anywhere;
+}
+.ci-dialog th {
+  background: #f6f9fa;
+  font-size: 12px;
+  color: #4a626d;
+}
+.ci-dialog caption {
+  text-align: left;
+  padding: 12px 14px;
+  font-weight: 600;
+  color: #526572;
+}
+.ci-muted-row {
+  color: #75868e;
+  background: #f7f9fa;
+}
+.ci-note {
+  font-size: 13px;
+  color: #526572;
+}
+.ci-row-editor {
+  padding: 10px;
+  background: #f6f9fa;
+  border-radius: 12px;
+}
+.ci-row-editor ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 28px;
+  padding-left: 20px;
+}
+.ci-warning {
+  color: #976211 !important;
+}
+.ci-error {
+  border: 1px solid #f0c7c5;
+  border-radius: 10px;
+  background: #fff3f2;
+  color: #992b2b;
+  padding: 14px 16px;
+  margin-bottom: 18px;
+  font-size: 14px;
+}
+.ci-notice {
+  background: #eef5fc;
+  color: #25526d;
+  border-radius: 10px;
+  padding: 12px 16px;
+  font-size: 14px;
+}
+.ci-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.ci-count {
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+  gap: 4px;
+  padding: 12px 16px;
+  border: 1px solid #dbe5e8;
+  border-radius: 12px;
+  background: white;
+  color: #526572;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.ci-count strong {
+  font-size: 23px;
+  color: #182a34;
+}
+.ci-count-active {
+  border-color: #076e67;
+  background: #eff9f6;
+}
+.ci-status {
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: #fff2da;
+  color: #80571e;
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+}
+.ci-status-valid {
+  background: #e4f5ec;
+  color: #166741;
+}
+.ci-status-ignored {
+  background: #eef1f4;
+  color: #5a6c76;
+}
+.ci-status-missing,
+.ci-status-price {
+  background: #ffedeb;
+  color: #9d4038;
+}
+.ci-footer {
+  padding: 12px 30px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid #dbe5e8;
+  gap: 16px;
+}
+.ci-footer > span {
+  font-size: 13px;
+  color: #526572;
+}
+.ci-footer .ci-inline {
+  margin: 6px 0;
+}
+.ci-finish {
+  text-align: center;
+  max-width: 520px;
+  margin: 40px auto;
+}
+.ci-finish > span {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  background: #e4f5ec;
+  color: #076e67;
+  border-radius: 50%;
+  font-size: 30px;
+  margin: auto;
+}
+.ci-finish h3 {
+  font-size: 28px;
+  letter-spacing: -0.5px;
+}
+.ci-finish p {
+  color: #526572;
+  line-height: 1.6;
+}
+.ci-loading {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: #173b43;
+  color: white;
+  padding: 16px 22px;
+  border-radius: 12px;
+  z-index: 3001;
+}
+@keyframes ci-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ci-dialog {
+    animation: none;
+  }
+}
+@media (max-width: 700px) {
+  .ci-overlay {
+    padding: 0;
+  }
+  .ci-dialog {
+    height: 100dvh;
+    border-radius: 0;
+  }
+  .ci-header,
+  .ci-body {
+    padding: 20px;
+  }
+  .ci-steps {
+    padding: 12px 20px;
+    gap: 16px;
+  }
+  .ci-steps li {
+    font-size: 12px;
+  }
+  .ci-mapping-grid {
+    grid-template-columns: 1fr;
+  }
+  .ci-launcher {
+    align-items: stretch;
+    flex-direction: column;
+    padding: 20px;
+  }
+  .ci-footer {
+    padding: 12px 20px;
+    align-items: end;
+  }
+  .ci-footer .ci-inline {
+    justify-content: flex-end;
+  }
+  .ci-header h2 {
+    font-size: 21px;
+  }
+}
