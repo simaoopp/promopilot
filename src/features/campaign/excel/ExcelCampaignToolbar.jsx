@@ -26,6 +26,10 @@ export default function ExcelCampaignToolbar({
   atualizarDatasShopping,
   filtradosTotal,
   selecionadosTotal,
+  etiquetasA5,
+  etiquetasA6,
+  paginasA5,
+  paginasA6,
   selecionarTodosFiltrados,
   desmarcarTodosFiltrados,
   limparSelecao,
@@ -187,6 +191,8 @@ export default function ExcelCampaignToolbar({
         <ResumoCard label="Filtrados" value={filtradosTotal} />
         <ResumoCard label="Selecionados" value={selecionadosTotal} />
         <ResumoCard label="Modo formato" value={formatoAutomaticoAtivo ? "Automático" : "Manual"} />
+        <ResumoCard label="A5 (etiquetas / folhas)" value={`${etiquetasA5} / ${paginasA5}`} />
+        <ResumoCard label="A6 (etiquetas / folhas)" value={`${etiquetasA6} / ${paginasA6}`} />
       </div>
 
       <div className="toolbar-actions">

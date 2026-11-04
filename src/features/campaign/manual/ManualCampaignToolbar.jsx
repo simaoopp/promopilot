@@ -27,6 +27,10 @@ export default function ManualCampaignToolbar({
   totalFiltrados,
   totalSelecionados,
   modoImpressaoTexto,
+  paginasA5,
+  paginasA6,
+  etiquetasA5,
+  etiquetasA6,
   promocaoFontePreco,
   setPromocaoFontePreco,
 }) {
@@ -192,6 +196,8 @@ export default function ManualCampaignToolbar({
         <ResumoCard label="Filtrados" value={totalFiltrados} />
         <ResumoCard label="Selecionados" value={totalSelecionados} />
         <ResumoCard label="Modo de impressão" value={modoImpressaoTexto} />
+        <ResumoCard label="A5 (etiquetas / folhas)" value={`${etiquetasA5} / ${paginasA5}`} />
+        <ResumoCard label="A6 (etiquetas / folhas)" value={`${etiquetasA6} / ${paginasA6}`} />
       </div>
     </div>
   );

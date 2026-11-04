@@ -768,6 +768,10 @@ export default function EtiquetasPage() {
           totalFiltrados={dadosFiltrados.length}
           totalSelecionados={selecionados.length}
           modoImpressaoTexto={modoImpressaoTexto}
+          paginasA5={paginasImpressao.filter((page) => page.layout === "a5").length}
+          paginasA6={paginasImpressao.filter((page) => page.layout === "a6").length}
+          etiquetasA5={paginasImpressao.filter((page) => page.layout === "a5").reduce((sum, page) => sum + page.items.length, 0)}
+          etiquetasA6={paginasImpressao.filter((page) => page.layout === "a6").reduce((sum, page) => sum + page.items.length, 0)}
           promocaoFontePreco={promocaoFontePreco}
           setPromocaoFontePreco={setPromocaoFontePreco}
         />

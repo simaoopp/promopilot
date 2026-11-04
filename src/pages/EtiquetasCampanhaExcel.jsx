@@ -768,6 +768,10 @@ export default function EtiquetasExcelPage() {
           atualizarDatasShopping={atualizarDatasShopping}
           filtradosTotal={dadosFiltrados.length}
           selecionadosTotal={selecionados.length}
+          etiquetasA5={selecionadosA5.length}
+          etiquetasA6={selecionadosA6.length}
+          paginasA5={paginasA5.length}
+          paginasA6={paginasA6.length}
           selecionarTodosFiltrados={selecionarTodosFiltrados}
           desmarcarTodosFiltrados={desmarcarTodosFiltrados}
           limparSelecao={limparSelecao}

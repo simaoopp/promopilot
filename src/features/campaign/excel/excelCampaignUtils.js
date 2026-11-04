@@ -1,4 +1,5 @@
 import { preservarOrigemCampanha } from "../../../shared/campaign-label/promotionInfoRules";
+import { obterFormatoAutomaticoEtiqueta as obterFormatoAutomaticoEtiquetaPartilhado } from "../../../shared/campaign-label/formatRules";
 import { campanhaSemDataDefinida } from "../../../utils/campaignTitleRules";
 import { formatarEuro, parseNumero } from "../../../utils/formatters";
 
@@ -551,76 +552,9 @@ export function mapearLinhaExcel(row, index, formato) {
   return preservarOrigemCampanha(item, { tipo: "excel", linha: index + 2 }, row);
 }
 
+// Manual, Excel and automatic PDF campaigns must use the same A5/A6 rule.
 export function obterFormatoAutomaticoEtiqueta(descricao = "") {
-  const texto = normalizarTexto(descricao);
-
-  const palavrasA5 = [
-    "máq. lavar loiça",
-    "máq. lavar louça",
-    "máq. secar roupa",
-    "máq. secar",
-    "máq. lavar roupa",
-    "máq. lavar",
-    "maquina de lavar",
-    "maquinas de lavar",
-    "máquina de lavar",
-    "máquinas de lavar",
-    "maquina de secar",
-    "maquinas de secar",
-    "máquina de secar",
-    "máquinas de secar",
-    "lavar e secar",
-    "maquina de lavar e secar",
-    "maquinas de lavar e secar",
-    "máquina de lavar e secar",
-    "máquinas de lavar e secar",
-    "maquina de lavar loica",
-    "maquinas de lavar loica",
-    "máquina de lavar loiça",
-    "máquinas de lavar loiça",
-    "lava loica",
-    "lava loiça",
-    "televisao",
-    "televisoes",
-    "televisão",
-    "televisões",
-    "tv",
-    "smart tv",
-    "qled",
-    "oled",
-    "monitor",
-    "monitores",
-    "frigorifico",
-    "frigorificos",
-    "frigorífico",
-    "frigoríficos",
-    "combinado",
-    "combinados",
-    "cadeira",
-    "cadeiras",
-    "mesa",
-    "mesas",
-    "fogao",
-    "fogoes",
-    "fogão",
-    "fogões",
-    "arca",
-    "arcas",
-    "chamine",
-    "chamines",
-    "chaminé",
-    "chaminés",
-    "exaustor",
-    "exaustores",
-    "cave de vinho",
-    "caves de vinho",
-    "cave vinho",
-    "garrafeira",
-    "garrafeiras",
-  ];
-
-  const isA5 = palavrasA5.some((palavra) => texto.includes(palavra));
-  return isA5 ? "a5" : "a6";
+  return obterFormatoAutomaticoEtiquetaPartilhado(descricao);
 }
 
 export function obterTextoValidade(item, anoValidade, tituloCampanha) {
