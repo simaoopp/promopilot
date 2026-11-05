@@ -84,7 +84,8 @@ export default function CampaignPriceImportDialog({ mode, store, items, initialS
     setSheets(result); setSheetIndex(choice?.index ?? 0);
     setMapping(choice?.mapping || EMPTY_MAPPING); setDetected(Boolean(choice?.recognized));
     setColumnConfirmed(false);
-    setSource({ name: (file?.name || "Tabela colada").slice(0,240), sha256, parser: "campaign-pvp2-v1" });
+    setSource({ name: (file?.name || "Tabela colada").slice(0,240), sha256, parser: "campaign-pvp2-v1",
+      priceBaseline: mode === "manual" ? "supplier-table" : "catalog" });
     preparedRequest.current = null; confirmation.current = null; setBatch(null); setLocked(false);
     originalsByLine.current = new Map();
     setStep(2);
@@ -105,7 +106,8 @@ export default function CampaignPriceImportDialog({ mode, store, items, initialS
     } else {
       const guessed = detectSimpleColumns(sheets[sheetIndex]);
       setError(""); setMapping({ ...model.mapping,
-        originalColumn: model.mapping.originalColumn ?? guessed?.mapping.originalColumn ?? -1,
+         originalColumn: (Number.isInteger(model.mapping.originalColumn) && model.mapping.originalColumn >= 0)
+           ? model.mapping.originalColumn : guessed?.mapping.originalColumn ?? -1,
         descriptionColumn: model.mapping.descriptionColumn ?? guessed?.mapping.descriptionColumn ?? -1,
         eanColumn: model.mapping.eanColumn ?? guessed?.mapping.eanColumn ?? -1,
         warehouseColumns: model.mapping.warehouseColumns ?? guessed?.mapping.warehouseColumns ?? {},
@@ -115,12 +117,14 @@ export default function CampaignPriceImportDialog({ mode, store, items, initialS
   async function saveModel(update) {
     const headers = validateMapping(mapping, sheets[sheetIndex]);
     if (!columnConfirmed) throw new Error("Confirme a coluna do PVP2 Atual antes de guardar o modelo.");
+    if (mode === "manual" && !(Number.isInteger(mapping.originalColumn) && mapping.originalColumn >= 0)) throw new Error("Para campanhas manuais, selecione também PVP2 Antes da tabela.");
     const result = await request("save_model", { ...(update ? { id: modelId } : {}), name: modelName, mapping: { ...mapping, headers } });
     if (!alive.current) return;
     setModelId(result.id); await loadModels(modelOffset); setNotice("Modelo guardado para esta organização.");
   }
   async function prepare() {
     if (!columnConfirmed) throw new Error("Confirme a coluna do PVP2 Atual.");
+    if (mode === "manual" && !(Number.isInteger(mapping.originalColumn) && mapping.originalColumn >= 0)) throw new Error("A campanha manual precisa das colunas PVP2 Antes e PVP2 Atual na tabela. Nunca será usado o PVP2 do catálogo.");
     if (!preparedRequest.current) {
       const sheet = sheets[sheetIndex];
       const rows = projectRows(sheet, mapping);
@@ -169,7 +173,7 @@ export default function CampaignPriceImportDialog({ mode, store, items, initialS
   }
 
   return <dialog ref={dialog} className="price-import-dialog" aria-labelledby="price-import-title" onCancel={e => { if (busy) e.preventDefault(); }} onClose={onClose}>
-    <header className="price-import-header"><div><span className="price-import-eyebrow">Campanha {mode === "manual" ? "manual" : "Excel"}</span><h2 id="price-import-title">Encontrar produtos na tabela</h2><p>PVP2 Antes → PVP2 Atual. O catálogo mantém-se intacto.</p></div><button type="button" className="price-import-close" aria-label="Fechar importação" disabled={busy} onClick={onClose}>×</button></header>
+    <header className="price-import-header"><div><span className="price-import-eyebrow">Campanha {mode === "manual" ? "manual" : "Excel"}</span><h2 id="price-import-title">Encontrar produtos na tabela</h2><p>{mode === "manual" ? "Os dois preços vêm exclusivamente da tabela. O catálogo serve apenas para identificar os artigos." : "PVP2 Antes do catálogo → PVP2 Atual da tabela. O catálogo mantém-se intacto."}</p></div><button type="button" className="price-import-close" aria-label="Fechar importação" disabled={busy} onClick={onClose}>×</button></header>
     <ol className="price-import-steps" aria-label="Progresso">{["Tabela", "Colunas", "Rever preços"].map((label,index)=><li key={label} aria-current={step===index+1?"step":undefined}><span>{index+1}</span>{label}</li>)}</ol>
     <fieldset className="price-import-body" disabled={busy} aria-busy={busy}>
       {error && <p className="price-import-error" role="alert">{error}</p>}
@@ -187,18 +191,18 @@ export default function CampaignPriceImportDialog({ mode, store, items, initialS
           <label>Nome do modelo<input value={modelName} maxLength={120} onChange={e=>setModelName(e.target.value)} placeholder="Fornecedor · tabela promocional" /></label>
           <div className="price-import-model-actions"><button type="button" disabled={busy||!modelName.trim()||!columnConfirmed} onClick={()=>run(()=>saveModel(false))}>Guardar novo modelo</button>{modelId&&<><button type="button" disabled={busy||!modelName.trim()||!columnConfirmed} onClick={()=>run(()=>saveModel(true))}>Atualizar modelo</button><button type="button" disabled={busy} onClick={()=>run(async()=>{await request("delete_model",{id:modelId});if(alive.current){setModelId("");await loadModels(modelOffset);setNotice("Modelo eliminado. As importações anteriores mantêm a origem.");}})}>Eliminar modelo</button></>}</div>
         </details>
-        <ImportMapping sheets={sheets} sheetIndex={sheetIndex} mapping={mapping} autoDetected={detected} confirmed={columnConfirmed} onConfirmed={setColumnConfirmed} onMapping={updateMapping} onSheet={index=>{ const found=detectSimpleColumns(sheets[index]);setSheetIndex(index);setModelId("");setMapping(found?.mapping||EMPTY_MAPPING);setDetected(Boolean(found?.recognized));setColumnConfirmed(false);preparedRequest.current=null; }} />
+        <ImportMapping mode={mode} sheets={sheets} sheetIndex={sheetIndex} mapping={mapping} autoDetected={detected} confirmed={columnConfirmed} onConfirmed={setColumnConfirmed} onMapping={updateMapping} onSheet={index=>{ const found=detectSimpleColumns(sheets[index]);setSheetIndex(index);setModelId("");setMapping(found?.mapping||EMPTY_MAPPING);setDetected(Boolean(found?.recognized));setColumnConfirmed(false);preparedRequest.current=null; }} />
       </>}
       {step===3 && <>
-        <p className="price-import-note">{batch.rows.length} artigos encontrados · {selected.length} selecionados. A comparação principal utiliza sempre o PVP2 do catálogo. Quando a tabela indica um preço anterior diferente, mostramos ambos e pedimos revisão antes de incluir.</p>
-        <ImportReview batch={batch} edits={edits} originalsByLine={originalsByLine.current} existingCodes={existingCodes} disabled={busy||locked} onEdit={(id,patch)=>setEdits(previous=>({...previous,[id]:{...previous[id],...patch}}))} />
+        <p className="price-import-note">{batch.rows.length} artigos encontrados · {selected.length} selecionados. {mode === "manual" ? "PVP2 Antes e PVP2 Atual são exclusivamente os valores da tabela; o PVP2 do catálogo não entra no cálculo nem substitui valores em falta." : "A comparação principal utiliza o PVP2 do catálogo. As divergências com o preço anterior da tabela exigem revisão."}</p>
+        <ImportReview mode={mode} batch={batch} edits={edits} originalsByLine={originalsByLine.current} existingCodes={existingCodes} disabled={busy||locked} onEdit={(id,patch)=>setEdits(previous=>({...previous,[id]:{...previous[id],...patch}}))} />
       </>}
     </fieldset>
     <footer className="price-import-footer">
       <button type="button" disabled={busy} onClick={onClose}>Cancelar</button>
       {step===2&&<button type="button" disabled={busy} onClick={()=>setStep(1)}>Mudar tabela</button>}
-      {step===3&&!locked&&<button type="button" disabled={busy} onClick={()=>{setStep(2);preparedRequest.current=null;setColumnConfirmed(false);setNotice("Ao rever novamente, será capturado um novo PVP2 do catálogo.");}}>Corrigir colunas</button>}
-      <button type="button" className="price-import-primary" disabled={busy||(step===1&&!file&&!text.trim())||(step===2&&!columnConfirmed)||(step===3&&!selected.length&&!locked)} onClick={()=>run(step===1?readSource:step===2?prepare:apply)}>{busy?"A processar…":step===1?"Ler tabela":step===2?"Consultar PVP2 e rever":locked?"Repetir confirmação e guardar":`Aplicar e guardar ${selected.length} artigos`}</button>
+      {step===3&&!locked&&<button type="button" disabled={busy} onClick={()=>{setStep(2);preparedRequest.current=null;setColumnConfirmed(false);setNotice(mode === "manual" ? "Os preços continuarão a ser lidos apenas da tabela." : "Ao rever novamente, será capturado um novo PVP2 do catálogo.");}}>Corrigir colunas</button>}
+      <button type="button" className="price-import-primary" disabled={busy||(step===1&&!file&&!text.trim())||(step===2&&!columnConfirmed)||(step===3&&!selected.length&&!locked)} onClick={()=>run(step===1?readSource:step===2?prepare:apply)}>{busy?"A processar…":step===1?"Ler tabela":step===2?(mode === "manual" ? "Rever preços da tabela" : "Consultar PVP2 e rever"):locked?"Repetir confirmação e guardar":`Aplicar e guardar ${selected.length} artigos`}</button>
     </footer>
   </dialog>;
 }
