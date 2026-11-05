@@ -40,6 +40,23 @@ export function money(cents) {
   return Number.isInteger(cents) ? new Intl.NumberFormat("pt-PT", { style: "currency", currency: "EUR" }).format(cents / 100) : "—";
 }
 
+// Compare the verified catalogue snapshot and the supplier-provided old price
+// separately. An apparent discount in Excel may be an increase vs the catalogue.
+export function sourceComparison(row, original, currentCents) {
+  const catalogDelta = Number.isInteger(row.beforeCents) && Number.isInteger(currentCents)
+    ? currentCents - row.beforeCents : null;
+  const sourceDelta = Number.isInteger(original?.cents) && Number.isInteger(currentCents)
+    ? currentCents - original.cents : null;
+  return {
+    catalogDelta,
+    sourceDelta,
+    differs: Number.isInteger(original?.cents) && Number.isInteger(row.beforeCents) &&
+      original.cents !== row.beforeCents,
+    contradicts: catalogDelta !== null && sourceDelta !== null &&
+      (catalogDelta < 0) !== (sourceDelta < 0),
+  };
+}
+
 export function headerLabels(sheet, headerRow) {
   const width = Math.max(0, ...sheet.rows.map(row => row.length));
   return Array.from({ length: width }, (_, index) => headerRow >= 0
@@ -55,6 +72,7 @@ const AUTO_ALIASES = {
   code: ["artigo", "codigo", "codigo artigo", "codigo de artigo", "nosso codigo", "codigo interno", "referencia", "ref", "sku", "code", "item code", "product code"],
   description: ["descricao", "designacao", "produto", "nome", "nome produto", "description", "product"],
   ean: ["ean", "ean13", "ean 13", "codigo barras", "codigo de barras", "barcode", "gtin", "gtin13"],
+  original: ["pvp2 antes", "pvp 2 antes", "pvp antes", "pvp2 anterior", "pvp anterior", "preco antes", "preco anterior", "preco normal", "preco original", "pvp2", "pvp 2"],
   promo: ["pvp2promo", "pvp2 promo", "pvp2p", "pvp 2 p", "pvp2 atual", "pvp atual", "preco promo", "preco promocional", "preco de campanha", "preco campanha", "preco black friday", "promo", "promocao", "sale price"],
 };
 const autoHeader = text => String(text ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
@@ -82,6 +100,7 @@ export function detectSimpleColumns(sheet) {
   if (!winner) return null;
   return {...winner, recognized:winner.essential===2&&winner.fields.code!==winner.fields.promo,
     mapping:{version:1,headerRow:winner.headerRow,codeColumn:winner.fields.code??-1,priceColumn:winner.fields.promo??-1,
+      originalColumn:winner.fields.original !== winner.fields.code && winner.fields.original !== winner.fields.promo ? (winner.fields.original??-1) : -1,
       descriptionColumn:winner.fields.description??-1,eanColumn:winner.fields.ean??-1,warehouseColumns:winner.warehouses}};
 }
 export function safeWarehouseValues(cells, mapping={}) {
@@ -101,7 +120,9 @@ export function validateMapping(mapping, sheet) {
   if (!Number.isInteger(mapping.headerRow) || mapping.headerRow < -1 || mapping.headerRow >= sheet.rows.length ||
       !Number.isInteger(mapping.codeColumn) || !Number.isInteger(mapping.priceColumn) ||
       mapping.codeColumn < 0 || mapping.priceColumn < 0 || mapping.codeColumn >= labels.length ||
-      mapping.priceColumn >= labels.length || mapping.codeColumn === mapping.priceColumn) {
+      mapping.priceColumn >= labels.length || mapping.codeColumn === mapping.priceColumn ||
+      (Number.isInteger(mapping.originalColumn) && mapping.originalColumn >= 0 &&
+       (mapping.originalColumn >= labels.length || mapping.originalColumn === mapping.codeColumn || mapping.originalColumn === mapping.priceColumn))) {
     throw new Error("Escolha duas colunas distintas: código do artigo e PVP2 Atual.");
   }
   return labels;
@@ -112,13 +133,20 @@ export function projectRows(sheet, mapping) {
   const rows = sheet.rows.slice(mapping.headerRow + 1).map((cells, index) => {
     const codeCell = cells[mapping.codeColumn];
     const priceCell = cells[mapping.priceColumn];
+    const originalCell = Number.isInteger(mapping.originalColumn) && mapping.originalColumn >= 0
+      ? cells[mapping.originalColumn] : null;
     return {
       line: mapping.headerRow + index + 2,
       code: codeCell?.unsafe ? "" : String(codeCell?.text ?? "").trim(),
       rawCode: String(codeCell?.text ?? ""),
       rawPrice: String(priceCell?.text ?? ""),
       cents: priceCell?.unsafe ? null : priceInCents(priceCell?.number ?? priceCell?.text),
-      warning: [codeCell?.unsafe, priceCell?.unsafe].filter(Boolean).join(" · "),
+      // Evidence from the supplier table, NEVER the catalog baseline. The SQL
+      // import validates a mismatch and requires explicit human review.
+      originalRawPrice: String(originalCell?.text ?? ""),
+      originalCents: originalCell?.unsafe || !String(originalCell?.text ?? "").trim()
+        ? null : priceInCents(originalCell?.number ?? originalCell?.text),
+      warning: [codeCell?.unsafe, priceCell?.unsafe, originalCell?.unsafe].filter(Boolean).join(" · "),
       extra: {
         description: mapping.descriptionColumn >= 0 ? String(cells[mapping.descriptionColumn]?.text ?? "").trim() : "",
         ean: mapping.eanColumn >= 0 ? String(cells[mapping.eanColumn]?.text ?? "").trim() : "",

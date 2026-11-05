@@ -37,6 +37,7 @@ export default function CampaignPriceImportDialog({ mode, store, items, initialS
   const [edits, setEdits] = useState({});
   const [locked, setLocked] = useState(false);
   const extraByCode = useRef(new Map());
+  const originalsByLine = useRef(new Map());
   const existingCodes = useMemo(() => new Set(items.map(i => String(i.codigo ?? i.artigo ?? "").trim())), [items]);
 
   useEffect(() => {
@@ -85,6 +86,7 @@ export default function CampaignPriceImportDialog({ mode, store, items, initialS
     setColumnConfirmed(false);
     setSource({ name: (file?.name || "Tabela colada").slice(0,240), sha256, parser: "campaign-pvp2-v1" });
     preparedRequest.current = null; confirmation.current = null; setBatch(null); setLocked(false);
+    originalsByLine.current = new Map();
     setStep(2);
     await loadModels(0);
   }
@@ -103,6 +105,7 @@ export default function CampaignPriceImportDialog({ mode, store, items, initialS
     } else {
       const guessed = detectSimpleColumns(sheets[sheetIndex]);
       setError(""); setMapping({ ...model.mapping,
+        originalColumn: model.mapping.originalColumn ?? guessed?.mapping.originalColumn ?? -1,
         descriptionColumn: model.mapping.descriptionColumn ?? guessed?.mapping.descriptionColumn ?? -1,
         eanColumn: model.mapping.eanColumn ?? guessed?.mapping.eanColumn ?? -1,
         warehouseColumns: model.mapping.warehouseColumns ?? guessed?.mapping.warehouseColumns ?? {},
@@ -122,6 +125,9 @@ export default function CampaignPriceImportDialog({ mode, store, items, initialS
       const sheet = sheets[sheetIndex];
       const rows = projectRows(sheet, mapping);
       extraByCode.current = new Map(rows.map(row => [row.code, row.extra]));
+      originalsByLine.current = new Map(rows.map(row => [row.line, {
+        raw: row.originalRawPrice, cents: row.originalCents,
+      }]));
       preparedRequest.current = { id: crypto.randomUUID(), mode,
         source: { ...source, sheet: sheet.name, mapping: { ...mapping, headers: headerLabels(sheet, mapping.headerRow) }, modelId: modelId || null },
         rows };
@@ -184,8 +190,8 @@ export default function CampaignPriceImportDialog({ mode, store, items, initialS
         <ImportMapping sheets={sheets} sheetIndex={sheetIndex} mapping={mapping} autoDetected={detected} confirmed={columnConfirmed} onConfirmed={setColumnConfirmed} onMapping={updateMapping} onSheet={index=>{ const found=detectSimpleColumns(sheets[index]);setSheetIndex(index);setModelId("");setMapping(found?.mapping||EMPTY_MAPPING);setDetected(Boolean(found?.recognized));setColumnConfirmed(false);preparedRequest.current=null; }} />
       </>}
       {step===3 && <>
-        <p className="price-import-note">{batch.rows.length} linhas · {selected.length} selecionadas. Preços iguais e aumentos exigem seleção individual e não geram etiquetas de desconto.</p>
-        <ImportReview batch={batch} edits={edits} existingCodes={existingCodes} disabled={busy||locked} onEdit={(id,patch)=>setEdits(previous=>({...previous,[id]:{...previous[id],...patch}}))} />
+        <p className="price-import-note">{batch.rows.length} artigos encontrados · {selected.length} selecionados. A comparação principal utiliza sempre o PVP2 do catálogo. Quando a tabela indica um preço anterior diferente, mostramos ambos e pedimos revisão antes de incluir.</p>
+        <ImportReview batch={batch} edits={edits} originalsByLine={originalsByLine.current} existingCodes={existingCodes} disabled={busy||locked} onEdit={(id,patch)=>setEdits(previous=>({...previous,[id]:{...previous[id],...patch}}))} />
       </>}
     </fieldset>
     <footer className="price-import-footer">

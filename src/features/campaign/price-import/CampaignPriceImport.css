@@ -34,3 +34,43 @@
 .price-import-sheet-option { display: flex; align-items: baseline; gap: .6rem; padding: .5rem .7rem; border: 1px solid var(--border-color, #d4d4d4); border-radius: .5rem; flex-wrap: wrap; }
 .price-import-sheet-option small { color: var(--text-muted, #666); margin-left: auto; }
 .price-import-sheets > strong { font-size: .94rem; }
+
+/* Import review: fixed, readable columns instead of fragmented stacked values. */
+.price-import-review-table{min-width:1020px;table-layout:fixed;border-collapse:separate;border-spacing:0;line-height:1.45}
+.price-import-review-table col.price-import-col-include{width:6%}
+.price-import-review-table col.price-import-col-product{width:30%}
+.price-import-review-table col.price-import-col-before{width:16%}
+.price-import-review-table col.price-import-col-current{width:18%}
+.price-import-review-table col.price-import-col-delta{width:14%}
+.price-import-review-table col.price-import-col-status{width:16%}
+.price-import-review-table th,.price-import-review-table td{min-width:0;overflow-wrap:anywhere;padding:14px 12px;vertical-align:top}
+.price-import-review-table thead th{position:sticky;top:0;z-index:1;background:#f1f5fb;color:#233858}
+.price-import-review-table th small{display:block;font-weight:400;color:#62758d;white-space:normal}
+.price-import-review-table tbody tr:nth-child(even){background:#fbfcff}
+.price-import-review-table tbody tr.price-import-row-discrepancy{box-shadow:inset 3px 0 #d99733}
+.price-import-review-table .price-import-cell-include{text-align:center}
+.price-import-review-table .price-import-cell-product{min-width:0}
+.price-import-review-table .price-import-code{display:block;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.91rem;overflow-wrap:anywhere;letter-spacing:.005em}
+.price-import-review-table .price-import-description{display:block;margin:5px 0 6px;line-height:1.5;font-weight:400;color:#253951;overflow-wrap:anywhere}
+.price-import-review-table .price-import-source{display:block;font-size:.75rem;color:#63748b}
+.price-import-review-table .price-import-raw-details{margin-top:6px;font-size:.77rem}
+.price-import-review-table .price-import-raw-details p{margin:6px 0 0}
+.price-import-review-table .price-import-cell-money{font-variant-numeric:tabular-nums;text-align:right;white-space:normal}
+.price-import-review-table .price-import-amount{display:block;font-size:.94rem;font-weight:700;white-space:nowrap;overflow-wrap:normal}
+.price-import-review-table .price-import-source-price{display:block;margin-top:6px;font-size:.75rem;color:#60748d;line-height:1.5}
+.price-import-review-table .price-import-price-differs{color:#875016;font-weight:600}
+.price-import-review-table .price-import-discount-value{color:#13674f}
+.price-import-review-table .price-import-increase-value{color:#934927}
+.price-import-review-table .price-import-cell-edit input:not([type=checkbox]){width:100%;max-width:150px;margin:0;text-align:right;font-variant-numeric:tabular-nums;min-height:38px}
+.price-import-review-table .price-import-cell-edit .price-import-warning{font-size:.75rem;margin-top:10px;overflow-wrap:anywhere}
+.price-import-review-table .price-import-cell-edit .price-import-warning input[type=checkbox]{margin-right:5px}
+.price-import-review-table .price-import-cell-status .price-import-warning{margin-top:7px;font-size:.75rem}
+.price-import-review-table .price-import-status{white-space:normal;max-width:100%}
+.price-import-status.increase{color:#923d25;background:#fff0e9}
+.price-import-discrepancy{margin:14px 0;padding:12px 15px;border:1px solid #e9cf9e;background:#fff9ed;color:#624616;border-radius:9px;line-height:1.5}
+.price-import-table-wrap:focus-visible{outline:3px solid #4889e5;outline-offset:2px}
+@media(max-width:700px){.price-import-review-table{min-width:980px}.price-import-review-table th,.price-import-review-table td{padding:11px 10px}.price-import-dialog .price-import-review-tools{gap:8px}}
+
+.price-import-price-editor{display:flex;align-items:center;gap:5px;max-width:166px}
+.price-import-price-editor span{font-size:.88rem;font-weight:650;color:#465a72}
+.price-import-review-table .price-import-cell-status .price-import-source-price{margin-top:8px}
