@@ -92,18 +92,18 @@ export function obterTextoValidade(item, anoValidadeAtual, tituloCampanha) {
   } A ${dataFim || "-"}${dataFim ? `/${anoValidadeAtual}` : ""}`;
 }
 
-export function obterFormatoAutomaticoEtiqueta(descricao = "") {
-  return obterFormatoAutomaticoEtiquetaPartilhado(descricao);
+export function obterFormatoAutomaticoEtiqueta(descricao = "", rules) {
+  return obterFormatoAutomaticoEtiquetaPartilhado(descricao, rules);
 }
 
 
-export function obterFormatoEtiquetaItem(item, modoAutomatico, formatoManual) {
-  return obterFormatoEtiquetaItemPartilhado(item, modoAutomatico, formatoManual);
+export function obterFormatoEtiquetaItem(item, modoAutomatico, formatoManual, rules) {
+  return obterFormatoEtiquetaItemPartilhado(item, modoAutomatico, formatoManual, rules);
 }
 
 
-export function construirPaginasImpressao(itens, modoAutomatico, formatoManual) {
-  return buildManualCampaignPrintPages(itens, modoAutomatico, formatoManual);
+export function construirPaginasImpressao(itens, modoAutomatico, formatoManual, rules) {
+  return buildManualCampaignPrintPages(itens, modoAutomatico, formatoManual, rules);
 }
 
 

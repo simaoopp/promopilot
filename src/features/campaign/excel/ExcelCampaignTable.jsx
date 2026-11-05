@@ -50,6 +50,7 @@ function ExcelTableRows({
   renderTableCell,
   formatoAutomaticoAtivo,
   formatoEtiqueta,
+  labelRules,
   emptyMessage,
   calculaFormatoPrevisto,
 }) {
@@ -65,7 +66,7 @@ function ExcelTableRows({
 
   return dadosFiltrados.map((item) => {
     const formatoPrevisto = calculaFormatoPrevisto
-      ? obterFormatoFinalEtiqueta(item, formatoAutomaticoAtivo, formatoEtiqueta)
+      ? obterFormatoFinalEtiqueta(item, formatoAutomaticoAtivo, formatoEtiqueta, labelRules)
       : "";
 
     return (
@@ -103,6 +104,7 @@ function ExcelTable({
   renderTableCell,
   formatoAutomaticoAtivo,
   formatoEtiqueta,
+  labelRules,
   calculaFormatoPrevisto,
 }) {
   return (
@@ -135,6 +137,7 @@ function ExcelTable({
           renderTableCell={renderTableCell}
           formatoAutomaticoAtivo={formatoAutomaticoAtivo}
           formatoEtiqueta={formatoEtiqueta}
+          labelRules={labelRules}
           calculaFormatoPrevisto={calculaFormatoPrevisto}
           emptyMessage="Importa um ficheiro Excel para carregar os artigos."
         />
@@ -160,6 +163,7 @@ export default function ExcelCampaignTable({
   renderTableCell,
   formatoAutomaticoAtivo,
   formatoEtiqueta,
+  labelRules,
 }) {
   const commonProps = {
     dadosFiltrados,
@@ -174,6 +178,7 @@ export default function ExcelCampaignTable({
     renderTableCell,
     formatoAutomaticoAtivo,
     formatoEtiqueta,
+    labelRules,
   };
 
   return (

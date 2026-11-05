@@ -1,6 +1,7 @@
 import React, { Suspense, lazy, useMemo, useState } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { PermissionProvider, usePermissions } from "./context/PermissionContext";
+import { CampaignLabelRulesProvider } from "./context/CampaignLabelRulesContext";
 import FeatureRoute from "./components/FeatureRoute";
 import Sidebar from "./components/Sidebar";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -27,7 +28,7 @@ function PageFallback() {
 }
 
 export default function App() {
-  return <PermissionProvider><AppContent /></PermissionProvider>;
+  return <PermissionProvider><CampaignLabelRulesProvider><AppContent /></CampaignLabelRulesProvider></PermissionProvider>;
 }
 
 function AppContent() {

@@ -11,6 +11,7 @@ import {
   obterCodigosParaCopiar,
 } from "../utils/pvp3Promotion";
 import { useAuth } from "../context/AuthContext";
+import { useCampaignLabelRules } from "../context/CampaignLabelRulesContext";
 import { useToast } from "../components/ToastProvider";
 import "../styles/styles.css";
 import { parseNumero } from "../utils/formatters";
@@ -49,6 +50,8 @@ import {
 export default function EtiquetasExcelPage() {
   const { user, profile } = useAuth();
   const toast = useToast();
+  const { rules: labelRules, loading: labelRulesLoading, error: labelRulesError } = useCampaignLabelRules();
+  const [fallbackConfirmado, setFallbackConfirmado] = useState(false);
   const [titulo, setTitulo] = useState("PROMO");
   const [anoValidade, setAnoValidade] = useState(new Date().getFullYear());
   const [dados, setDados] = useState([]);
@@ -443,6 +446,8 @@ export default function EtiquetasExcelPage() {
     [dados],
   );
 
+  useEffect(() => { setFallbackConfirmado(false); }, [selecionados, labelRulesError, labelRulesLoading, formatoAutomaticoAtivo]);
+
   const selecionadosComFormato = useMemo(() => {
     return selecionados.map((item) => ({
       ...item,
@@ -450,9 +455,10 @@ export default function EtiquetasExcelPage() {
         item,
         formatoAutomaticoAtivo,
         formatoEtiqueta,
+        labelRules,
       ),
     }));
-  }, [selecionados, formatoAutomaticoAtivo, formatoEtiqueta]);
+  }, [selecionados, formatoAutomaticoAtivo, formatoEtiqueta, labelRules]);
 
   const selecionadosA5 = useMemo(
     () => selecionadosComFormato.filter((item) => item.formato_final === "a5"),
@@ -645,6 +651,12 @@ export default function EtiquetasExcelPage() {
   }
 
   async function imprimirSelecionados() {
+    if (formatoAutomaticoAtivo && (labelRulesLoading || labelRulesError) && !fallbackConfirmado) {
+      setFallbackConfirmado(true);
+      toast.warning("As regras personalizadas não estão disponíveis. Confirma o resumo A5/A6 e clica novamente em Imprimir para usar apenas as regras base.");
+      return;
+    }
+
     if (selecionados.length === 0) {
       toast.warning("Seleciona pelo menos um artigo.");
       return;
@@ -745,6 +757,7 @@ export default function EtiquetasExcelPage() {
           dates={{ dataInicio: campanhaSemDatas ? "" : formatarDataInputDiaMes(dataInicioCampanhaGeral), dataFim: campanhaSemDatas ? "" : formatarDataInputDiaMes(dataFimCampanhaGeral) }}
           initialSource={supplierSource} onSourceConsumed={setSupplierSource} />
 
+        {formatoAutomaticoAtivo && labelRulesError && <p role="alert" className="campaign-format-notice">{labelRulesError}</p>}
         <ExcelCampaignToolbar
           titulo={titulo}
           setTitulo={setTitulo}
@@ -797,6 +810,7 @@ export default function EtiquetasExcelPage() {
           renderTableCell={renderTableCell}
           formatoAutomaticoAtivo={formatoAutomaticoAtivo}
           formatoEtiqueta={formatoEtiqueta}
+          labelRules={labelRules}
         />
       </div>
 

@@ -6,6 +6,7 @@ import { formatarPvpTriplo, normalizarValorPvp } from "../../../utils/articlePri
 import { obterFormatoAutomaticoEtiqueta } from "./manualCampaignUtils";
 
 export default function ManualCreateCampaignModal({
+  labelRules,
   aberto,
   codigosExistentes,
   adicionarListaCampanha,
@@ -310,7 +311,7 @@ export default function ManualCreateCampaignModal({
                       <div className="campanha-resumo-item">
                         <span>Formato auto</span>
                         <strong>
-                          {obterFormatoAutomaticoEtiqueta(artigoCampanhaSelecionado.descricao).toUpperCase()}
+                          {obterFormatoAutomaticoEtiqueta(artigoCampanhaSelecionado.descricao, labelRules).toUpperCase()}
                         </strong>
                       </div>
                     </div>

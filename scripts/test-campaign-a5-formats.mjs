@@ -34,8 +34,22 @@ const A5 = [
   'BC AQS 200L', 'B.C. AQS 300L', 'HEAT PUMP 200L',
   // Keep existing large-label categories working.
   'TV SAMSUNG 65 QLED', 'TELEVISÃO OLED LG 55',
-  'MONITOR 32 POLEGADAS', 'MESA DE JANTAR', 'FOGÃO 5 BOCAS',
-  'ARCA CONGELADORA', 'EXAUSTOR 60CM', 'GARRAFEIRA 35 GARRAFAS',
+  // TVs: SmartTV junto, abreviaturas e tecnologias de ecra.
+  'Televisor LG 55 Polegadas', 'TELEV. 4K TCL', 'TELEVIS. 43P',
+  'LG LED SmartTV FullHD 32LQ630B6LA', 'SAMSUNG SmartTV 4K 65',
+  'LG MiniLED SmartTV 55', 'LG QNED 65QNED', 'HISENSE ULED 55U7',
+  'LG NanoCell AI 55', 'TV LCD 32', 'LED TV 40', 'TVs 55 Samsung',
+  // Jatos de agua e lavadoras de alta pressao.
+  'Jato de Água 140 Bar', 'JATOS ÁGUA 120 BAR', 'Jato Água Bosch',
+  'Jato de pressão Karcher', 'Jat. Agua 140 BAR', 'JAT. DE AGUA 160 BAR',
+  'Lavadora Alta Pressão Kärcher K4',
+  'Lavadora de Alta Pressão 160 BAR', 'Lavadora a Pressão 120 BAR',
+  'Máquina de Lavar Alta Pressão 1600W', 'Maq. Lav. Pressão 2000W',
+  'Maq. Alta Pressão 120 Bar', 'Hidrolavadora 140 bar',
+  'Hidro Lavadora Bosch', 'Lava-Jato 120 Bar',
+  'Pressure Washer 2000W', 'Jet Washer 140 Bar', 'Lavadora AP 150 Bar',
+  'Lav. A. Pressao Kärcher', 'MLAP 2000W', 'M.L.A.P. 150 BAR',
+  'FOGÃO 5 BOCAS', 'Fogões a gás 4 bocas', 'FOG. ELÉTRICO',
 ];
 
 const A6 = [
@@ -46,6 +60,17 @@ const A6 = [
   'BOMBA DE AGUA DE JARDIM', 'BOMBA DE CIRCULAÇÃO',
   'SECADOR DE CABELO', 'MÁQUINA DE CAFÉ EXPRESSO',
   'AUSCULTADORES SEM FIOS', 'SMARTPHONE TVAX', '',
+  'BICO P/ JATO DE AGUA', 'Lança jato de água',
+  'Pistola p/ lavadora alta pressão', 'Mangueira de lavadora alta pressão',
+  'Filtro Lavadora de Alta Pressão', 'Suporte SmartTV de parede',
+  'TV Box Android 4K', 'BOX ANDROID TV 4K',
+  'Stick TV 4K', 'Fire TV Stick 4K',
+  'Lâmpada LED 9W', 'Jato de tinta impressora',
+  'FORNO DE ENCASTRE 60 CM', 'Forno encastrar Bosch', 'FORNO COMBINADO',
+  'PLACA DE COZINHA', 'Placa de indução 60 cm', 'Placa vitrocerâmica',
+  'MONITOR OLED 27', 'Monitor QLED 32', 'MESA DE JANTAR',
+  'ARCA CONGELADORA', 'CONGELADOR VERTICAL', 'EXAUSTOR 60CM',
+  'GARRAFEIRA 35 GARRAFAS', 'CADEIRA GAMING', 'CHAMINÉ 90CM',
 ];
 
 for (const description of A5) {
@@ -70,4 +95,13 @@ test('auto groups A6 first (4/sheet) then A5 (2/sheet)', () => {
     [['a6', 1], ['a5', 2], ['a5', 2]]);
   assert.equal(applyAutomaticFormatRules({descricao: 'M.L.L.'}, 'automatico')._formato, 'a5');
   assert.deepEqual(buildManualCampaignPrintPages(items, false, 'a6').map(page => page.items.length), [4, 1]);
+});
+
+// O modo manual continua a prevalecer; as regras da administração são explícitas.
+test('forno/placa podem ser configurados no admin, mas são A6 por defeito', () => {
+  assert.equal(obterFormatoAutomaticoEtiqueta('FORNO DE ENCASTRE'), 'a6');
+  assert.equal(obterFormatoAutomaticoEtiqueta('PLACA DE INDUÇÃO'), 'a6');
+  assert.equal(obterFormatoAutomaticoEtiqueta('FORNO DE ENCASTRE', {a5:['forno de encastre'], a6:[]}), 'a5');
+  assert.equal(applyAutomaticFormatRules({descricao:'FORNO DE ENCASTRE'},'a5')._formato,'a5');
+  assert.equal(applyAutomaticFormatRules({descricao:'FOGÃO'},'a6')._formato,'a6');
 });

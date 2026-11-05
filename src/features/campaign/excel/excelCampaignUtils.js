@@ -1,5 +1,5 @@
 import { preservarOrigemCampanha } from "../../../shared/campaign-label/promotionInfoRules";
-import { obterFormatoAutomaticoEtiqueta as obterFormatoAutomaticoEtiquetaPartilhado } from "../../../shared/campaign-label/formatRules";
+import { obterFormatoAutomaticoEtiqueta as formatoA5Partilhado } from "../../../shared/campaign-label/formatRules";
 import { campanhaSemDataDefinida } from "../../../utils/campaignTitleRules";
 import { formatarEuro, parseNumero } from "../../../utils/formatters";
 
@@ -553,8 +553,8 @@ export function mapearLinhaExcel(row, index, formato) {
 }
 
 // Manual, Excel and automatic PDF campaigns must use the same A5/A6 rule.
-export function obterFormatoAutomaticoEtiqueta(descricao = "") {
-  return obterFormatoAutomaticoEtiquetaPartilhado(descricao);
+export function obterFormatoAutomaticoEtiqueta(descricao = "", rules) {
+  return formatoA5Partilhado(descricao, rules);
 }
 
 export function obterTextoValidade(item, anoValidade, tituloCampanha) {
@@ -587,7 +587,8 @@ export function obterFormatoFinalEtiqueta(
   item,
   formatoAutomaticoAtivo,
   formatoManual,
+  rules,
 ) {
   if (!formatoAutomaticoAtivo) return formatoManual;
-  return obterFormatoAutomaticoEtiqueta(item.descricao);
+  return obterFormatoAutomaticoEtiqueta(item.descricao, rules);
 }

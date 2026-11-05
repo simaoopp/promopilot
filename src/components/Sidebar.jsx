@@ -9,6 +9,7 @@ import { PROMOPILOT_BRAND } from "../brand/promopilot";
 import { getPasswordValidationMessage, isValidPassword } from "../utils/validators";
 import ArticleDatabaseSyncPanel from "./admin/ArticleDatabaseSyncPanel";
 import UserManagementPanel from "./admin/UserManagementPanel";
+import CampaignLabelRulesPanel from "./admin/CampaignLabelRulesPanel";
 
 export default function Sidebar({
   menuAberto,
@@ -37,6 +38,7 @@ export default function Sidebar({
   const [sucessoPassword, setSucessoPassword] = useState("");
   const [articleDbPanelOpen, setArticleDbPanelOpen] = useState(false);
   const [userManagementOpen, setUserManagementOpen] = useState(false);
+  const [labelRulesOpen, setLabelRulesOpen] = useState(false);
 
   const contaMenuRef = useRef(null);
   const menuButtonRef = useRef(null);
@@ -265,6 +267,12 @@ export default function Sidebar({
                 </button>
               )}
 
+              {can("campaigns.manage") && (
+                <button type="button" className="topbar-account-menu-item" onClick={() => { setMenuContaAberto(false); setLabelRulesOpen(true); }}>
+                  Administrar regras A5/A6
+                </button>
+              )}
+
               {can("products.manage") && (
                 <button
                   type="button"
@@ -354,6 +362,7 @@ export default function Sidebar({
         </nav>
       </aside>
 
+      <CampaignLabelRulesPanel open={labelRulesOpen && can("campaigns.manage")} onClose={() => setLabelRulesOpen(false)} />
       <ArticleDatabaseSyncPanel user={user} open={articleDbPanelOpen && can("products.manage")} onClose={() => setArticleDbPanelOpen(false)} />
 
       <UserManagementPanel

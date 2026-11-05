@@ -1,69 +1,12 @@
 import { isPvpUpdatePromotionInfo } from "./promotionInfoRules.js";
-import { normalizarTexto } from "./formatters.js";
 
 export const CAMPAIGN_A5_KEYWORDS = [
-  "Máq. Lavar Loiça",
-  "Máq. Lavar Louça",
-  "Máq. Secar Roupa",
-  "Máq. Secar",
-  "Máq. Lavar Roupa",
-  "Máq. Lavar",
-  "maquina de lavar",
-  "maquinas de lavar",
-  "máquina de lavar",
-  "máquinas de lavar",
-  "maquina de secar",
-  "maquinas de secar",
-  "máquina de secar",
-  "máquinas de secar",
-  "lavar e secar",
-  "maquina de lavar e secar",
-  "maquinas de lavar e secar",
-  "máquina de lavar e secar",
-  "máquinas de lavar e secar",
-  "maquina de lavar loica",
-  "maquinas de lavar loica",
-  "máquina de lavar loiça",
-  "máquinas de lavar loiça",
-  "lava loica",
-  "lava loiça",
-  "televisao",
-  "televisoes",
-  "televisão",
-  "televisões",
-  "tv",
-  "smart tv",
-  "qled",
-  "oled",
-  "monitor",
-  "monitores",
-  "frigorifico",
-  "frigorificos",
-  "frigorífico",
-  "frigoríficos",
-  "combinado",
-  "combinados",
-  "cadeira",
-  "cadeiras",
-  "mesa",
-  "mesas",
-  "fogao",
-  "fogoes",
-  "fogão",
-  "fogões",
-  "arca",
-  "arcas",
-  "chamine",
-  "chamines",
-  "chaminé",
-  "chaminés",
-  "exaustor",
-  "exaustores",
-  "cave de vinho",
-  "caves de vinho",
-  "cave vinho",
-  "garrafeira",
-  "garrafeiras",
+  // Apenas as categorias pedidas: marcas, modelos e polegadas são irrelevantes.
+  "TV", "SmartTV", "Televisão", "Televisor",
+  "Máquina de lavar roupa", "Máquina de lavar loiça", "Máquina de secar roupa",
+  "Máquina de lavar e secar roupa", "Máquina de lavar alta pressão",
+  "Frigorífico", "Combinado", "Side by Side",
+  "Fogão", "Esquentador", "Termoacumulador", "Bomba de calor", "Jato de água",
 ];
 
 export function dividirEmPaginas(items = [], size = 4) {
@@ -89,72 +32,104 @@ export function normalizeCampaignFormat(format = "automatico") {
   return "automatico";
 }
 
-// Canonical names and abbreviations used by Portuguese appliance catalogues.
-// Dots, slashes and hyphens in "M.L.R.", "B/CALOR" and "SIDE-BY-SIDE"
-// are normalized before matching. Do not match short fragments inside words.
-const A5_ABBREVIATIONS = [
-  "M.L.R.", "MLR", "M.L.L.", "MLL", "M.S.R.", "MSR", "M.L.S.", "MLS",
-  "Máq. Lav. Roupa", "Máq. Lav. Loiça", "Máq. Lav. Louça",
-  "Máq. Sec. Roupa", "Máq. Lavar/Secar", "Máq. Lavar e Secar",
-  "Frig.", "Frigo", "Frigor.", "Frigorif.", "Comb.", "Combin.",
-  "Side by Side", "Side-by-Side", "SBS", "S.B.S.", "SxS", "Americano",
-  "Esquentador", "Esquentadores", "Esquent.", "Esquentad.",
-  "ESQ. ESTQ.", "ESQ. Estanque", "ESQ. Ventilado", "ESQ. Atmosférico",
-  "Termoacumulador", "Termoacumuladores", "Termoac.", "Termoacum.",
-  "Termo Acumulador", "T. Acum.", "Termo Elétrico",
-  "Bomba de Calor", "Bombas de Calor", "Bomba Calor", "B. Calor",
-  "B/Calor", "BC AQS", "B.C. AQS", "Heat Pump",
-];
-
-function normalizarDescricaoFormato(value) {
-  return normalizarTexto(value)
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim()
-    .replace(/\s+/g, " ");
+// Classificação por TIPO de produto, nunca por marca, modelo, tamanho ou preço.
+// A6 é o formato de segurança para tudo o que não corresponde a uma categoria A5.
+// Regra independente de catálogos, para funcionar nas campanhas manual e Excel.
+export function normalizarTermoEtiqueta(value) {
+  return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
 }
 
-const A5_TERMS = [...new Set([...CAMPAIGN_A5_KEYWORDS, ...A5_ABBREVIATIONS]
-  .map(normalizarDescricaoFormato).filter(Boolean))];
-
-// Flexible spelling of abbreviated product names without relying on model IDs.
-const A5_PRODUCT_PATTERNS = [
-  /\b(?:maq(?:uina)?s?\s+(?:de\s+)?lav(?:ar|a)?\s+(?:de\s+)?(?:roupa|r|loica|louca|loica[s]?|louca[s]?))\b/,
-  /\b(?:maq(?:uina)?s?\s+(?:de\s+)?sec(?:ar|a)?\s+(?:de\s+)?roupa)\b/,
-  /\b(?:maq(?:uina)?s?\s+(?:de\s+)?lav(?:ar|a)?\s+(?:e\s+)?sec(?:ar|a)?(?:\s+roupa)?)\b/,
-  /\b(?:lavadora(?:s)?\s+(?:de\s+)?(?:roupa|loica|louca))\b/,
-  /\b(?:secador(?:es)?\s+(?:de\s+)?roupa|secadora(?:s)?\s+(?:de\s+)?roupa)\b/,
-  /\b(?:frigorific[oa]s?|frigorif|frigor|frigo|frig)\b/,
-  /\b(?:combinad[oa]s?|combin|comb|combi)\b/,
-  /\b(?:side\s+(?:by\s+)?side|s\s*b\s*s|s\s*x\s*s)\b/,
-  /\b(?:esquentador(?:es)?|esquentad|esquent)\b/,
-  // "ESQ." alone often means "esquerdo" (e.g. a left-hand spare part).
-  /\besq\s+(?:gn|gpl|gas|natural|butano|propano|\d{1,2}\s*l)\b/,
-  /\b(?:termo\s*acum(?:ulador(?:es)?)?|t\s+acum(?:ulador(?:es)?)?|termo\s+eletric[oa]s?)\b/,
+// A5: categorias inteiras, com singulares/plurais e abreviaturas correntes.
+// Limites de palavra evitam que "TV" classifique "ATV", ou "comb" classifique
+// "combustível". As peças são excluídas antes de aplicar qualquer categoria.
+const CATEGORY_PATTERNS = Object.freeze([
+  // Televisões de qualquer fabricante, tamanho e tecnologia.
+  /\b(?:tvs?|smart\s*tv|televis(?:ao|oes|or(?:es)?|or[a]?)?|television(?:s)?|telev(?:isor(?:es)?)?|qled|oled|qned|uled|nanocell|mini\s*led\s+(?:tv|smart)|led\s+(?:smart\s*)?tv)\b/,
+  // Máquinas completas para lavar roupa/loiça, secar e lavar/secar.
+  /\b(?:maquinas?|maq|maqs)\s+(?:de\s+)?(?:lav(?:ar|a)?|sec(?:ar|a)?|lavadora|secar)\b|\b(?:mlr|mll|msr|mls|m\s*l\s*[rls]|m\s*s\s*r|lava\s*loi(?:ca|s)|lava\s*loucas?|lavadora(?:s)?\s+(?:de\s+)?(?:loica|louca|roupa)|secadora(?:s)?\s+(?:de\s+)?roupa)\b/,
+  /\b(?:secador(?:es)?\s+(?:de\s+)?roupa|lavar\s+e\s+secar|lavar\s+secar)\b/,
+  // Frigoríficos, combinados e side by side (não arcas isoladas).
+  /\b(?:frigorific[oa]s?|frigorif|frigor|frigo|frig|combinad[oa]s?|combin|comb|combi|side\s+(?:by\s+)?side|s\s*b\s*s|s\s*x\s*s|refrigerador(?:es)?)\b/,
+  // Fogões. Fornos de encastre e placas NÃO são abrangidos.
+  /\b(?:fog(?:ao|oes)|fog)\b/,
+  // Esquentadores, termoacumuladores e bombas de calor.
+  /\b(?:esquentador(?:es)?|esquentad|esquent|esq\s+(?:gn|gpl|gas|natural|butano|propano|estq|estanque|ventilado|\d{1,2}\s*l))\b/,
+  /\b(?:termo\s*acum(?:ulador(?:es)?)?|termoac|termoacum|t\s+acum(?:ulador(?:es)?)?|termo\s+eletric[oa]s?)\b/,
   /\b(?:bomba(?:s)?\s+(?:de\s+)?calor|b\s+(?:de\s+)?calor|bcalor|b\s*c\s+aqs|bc\s+aqs|heat\s+pump)\b/,
-];
+  // Jatos de água e lavadoras de alta pressão.
+  /\b(?:jatos?|jat)\s+(?:de\s+|d\s+)?(?:agua|pressao)\b|\b(?:hidro\s*lavadora(?:s)?|lava\s+jato|pressure\s+washer|jet\s+washer|mlap|m\s*l\s*a\s*p)\b/,
+  /\b(?:lavadoras?|limpadoras?|lav)\s+(?:de\s+|a\s+)?(?:alta\s+|a\s+)?pressao\b|\blavadora\s+ap\b|\b(?:maq|maquina)\s+(?:de\s+)?alta\s+pressao\b/,
+]);
 
-// Parts for the appliances should not consume a full-size A5 label just
-// because the description says "FILTRO P/ M.L.L." or "MOTOR FRIG.".
-const ACCESSORY_PREFIX = /^(?:(?:[a-z0-9]{2,20})\s+)?(?:acessorios?|pecas?|filtros?|resistencias?|mangueiras?|borrachas?|juntas?|motor(?:es)?|modulos?|cestos?|gavetas?|dobradicas?|puxadores?|portas?|valvulas?|tubos?|termostatos?|prateleiras?|vedantes?|correias?|escovas?|rolamentos?|cabos?|suportes?|comandos?|telecomandos?|carregadores?|adaptadores?|sensor(?:es)?|kits?|painel|paineis|pressostatos?)\b/;
+// A designação "combinado" também é usada em fornos e micro-ondas;
+// OLED/QLED também aparece em monitores. Só o equipamento pedido recebe A5.
+const OTHER_EQUIPMENT = /\b(?:fornos?|micro\s*ondas|microondas|placas?|monitor(?:es)?|ecras?|displays?|arcas?|congeladores?|exaustor(?:es)?|chamines?|cadeiras?|mesas?|garrafeiras?|caves?\s+(?:de\s+)?vinho)\b/;
+const EXPLICIT_REQUESTED_EQUIPMENT = /\b(?:tvs?|smart\s*tv|televis(?:ao|oes|or(?:es)?|or[a]?)?|television(?:s)?|telev(?:isor(?:es)?)?|frigorific[oa]s?|frigorif|frigor|frigo|frig|fog(?:ao|oes)|fog|(?:maquinas?|maq|maqs)\s+(?:de\s+)?(?:lav(?:ar|a)?|sec(?:ar|a)?)|esquentador(?:es)?|termoac|termo\s+acum|bomba(?:s)?\s+(?:de\s+)?calor|jatos?\s+(?:de\s+)?(?:agua|pressao)|hidro\s*lavadora)\b/;
 
-export function obterFormatoAutomaticoEtiqueta(descricao = "") {
-  const texto = normalizarDescricaoFormato(descricao);
-  if (!texto || ACCESSORY_PREFIX.test(texto)) return "a6";
-  const padded = ` ${texto} `;
-  const isA5 = A5_TERMS.some((term) => padded.includes(` ${term} `)) ||
-    A5_PRODUCT_PATTERNS.some((pattern) => pattern.test(texto));
-  return isA5 ? "a5" : "a6";
+// Excluir peças e acessórios mesmo quando têm a palavra "TV", "Máquina",
+// "Fogão" ou "Frigorífico" no título. Prefixos comerciais também são frequentes.
+const ACCESSORY_LEADING = /^(?:(?:[a-z0-9]{2,22})\s+)?(?:acessorios?|pecas?|suportes?|cabos?|comandos?|telecomandos?|adaptadores?|carregadores?|bicos?|lancas?|pistolas?|ponteiras?|filtros?|mangueiras?|borrachas?|juntas?|resistencias?|modulos?|motor(?:es)?|cestos?|gavetas?|dobradicas?|puxadores?|valvulas?|tubos?|termostatos?|prateleiras?|vedantes?|correias?|escovas?|rolamentos?|sensor(?:es)?|kits?|painel|paineis|pressostatos?|pedestais?|parafusos?)\b/;
+const NOT_A_TV = /\b(?:tv\s+box|box\s+(?:tv|android\s+tv)|stick\s+(?:tv|streaming)|fire\s+tv\s+stick)\b/;
+
+export const DEFAULT_LABEL_RULES = Object.freeze({ a5: [], a6: [] });
+
+export function validarTermosEtiquetas(terms) {
+  if (!Array.isArray(terms) || terms.length > 100) throw new Error("Máximo de 100 expressões por lista.");
+  const normalized = terms.map(term => String(term ?? "").trim()).filter(Boolean);
+  if (normalized.some(term => term.length > 80 || normalizarTermoEtiqueta(term).length < 2)) {
+    throw new Error("Cada expressão deve ter entre 2 e 80 caracteres úteis.");
+  }
+  const unique = new Set(normalized.map(normalizarTermoEtiqueta));
+  if (unique.size !== normalized.length) throw new Error("Existem expressões repetidas.");
+  return normalized;
 }
 
-export function obterFormatoEtiquetaItem(item, modoAutomatico, formatoManual) {
+function containsTerm(text, term) {
+  const token = normalizarTermoEtiqueta(term);
+  return !!token && (` ${text} `).includes(` ${token} `);
+}
+
+export function explicarFormatoAutomaticoEtiqueta(descricao = "", rules = DEFAULT_LABEL_RULES) {
+  const text = normalizarTermoEtiqueta(descricao);
+  if (!text) return { formato: "a6", motivo: "Sem descrição" };
+  // O técnico pode mencionar um suporte ou cabo na descrição de uma TV real;
+  // o prefixo de peça / acessório é mais fiável do que excluir essa palavra sempre.
+  const accessoryAtStart = ACCESSORY_LEADING.test(text);
+  const accessoryExplicit = /\b(?:pecas?|acessorios?|de\s+reposicao|para\s+(?:reparacao|substituicao))\b/.test(text);
+  const isTvBox = NOT_A_TV.test(text) && !/\btelevisor(?:es)?\b/.test(text);
+  if (accessoryAtStart || accessoryExplicit || isTvBox) return { formato: "a6", motivo: "Peça/acessório ou TV Box" };
+  if (Array.isArray(rules?.a6) && rules.a6.some(term => containsTerm(text, term))) {
+    return { formato: "a6", motivo: "Exceção A6 definida pelo administrador" };
+  }
+  if (Array.isArray(rules?.a5) && rules.a5.some(term => containsTerm(text, term))) {
+    return { formato: "a5", motivo: "Expressão A5 definida pelo administrador" };
+  }
+  // Ex.: "forno combinado" ou "monitor OLED" não se tornam A5
+  // por partilharem uma palavra com frigoríficos ou televisões.
+  if (OTHER_EQUIPMENT.test(text) && !EXPLICIT_REQUESTED_EQUIPMENT.test(text)) {
+    return { formato: "a6", motivo: "Categoria não definida como A5" };
+  }
+  if (CATEGORY_PATTERNS.some(pattern => pattern.test(text))) {
+    return { formato: "a5", motivo: "Categoria de equipamento A5" };
+  }
+  // Descrição não reconhecida = A6, nunca inferir tamanho por marca ou polegadas.
+  return { formato: "a6", motivo: "Restantes artigos (A6)" };
+}
+
+export function obterFormatoAutomaticoEtiqueta(descricao = "", rules = DEFAULT_LABEL_RULES) {
+  return explicarFormatoAutomaticoEtiqueta(descricao, rules).formato;
+}
+
+export function obterFormatoEtiquetaItem(item, modoAutomatico, formatoManual, rules = DEFAULT_LABEL_RULES) {
   if (!modoAutomatico) return formatoManual;
-  return obterFormatoAutomaticoEtiqueta(item?.descricao || "");
+  return obterFormatoAutomaticoEtiqueta(item?.descricao || "", rules);
 }
 
-export function applyAutomaticFormatRules(item = {}, format = "automatico") {
+export function applyAutomaticFormatRules(item = {}, format = "automatico", rules = DEFAULT_LABEL_RULES) {
   const normalizedFormat = normalizeCampaignFormat(format);
   const formato = isAutomaticFormatMode(normalizedFormat)
-    ? obterFormatoAutomaticoEtiqueta(item.descricao)
+    ? obterFormatoAutomaticoEtiqueta(item.descricao, rules)
     : normalizedFormat;
 
   return {
@@ -166,13 +141,13 @@ export function applyAutomaticFormatRules(item = {}, format = "automatico") {
   };
 }
 
-export function applyAutomaticFormatRulesToItems(items = [], format = "automatico") {
-  return (Array.isArray(items) ? items : []).map((item) => applyAutomaticFormatRules(item, format));
+export function applyAutomaticFormatRulesToItems(items = [], format = "automatico", rules = DEFAULT_LABEL_RULES) {
+  return (Array.isArray(items) ? items : []).map((item) => applyAutomaticFormatRules(item, format, rules));
 }
 
-export function buildAutomaticPrintPages(items = [], format = "automatico") {
+export function buildAutomaticPrintPages(items = [], format = "automatico", rules = DEFAULT_LABEL_RULES) {
   const normalizedFormat = normalizeCampaignFormat(format);
-  const formattedItems = applyAutomaticFormatRulesToItems(items, normalizedFormat)
+  const formattedItems = applyAutomaticFormatRulesToItems(items, normalizedFormat, rules)
     .filter((item) => !isPvpUpdatePromotionInfo(item));
 
   if (!isAutomaticFormatMode(normalizedFormat)) {
@@ -201,7 +176,7 @@ export function buildAutomaticPrintPages(items = [], format = "automatico") {
   ];
 }
 
-export function buildManualCampaignPrintPages(items = [], modoAutomatico = true, formatoManual = "a6") {
+export function buildManualCampaignPrintPages(items = [], modoAutomatico = true, formatoManual = "a6", rules = DEFAULT_LABEL_RULES) {
   items = items.filter((item) => !isPvpUpdatePromotionInfo(item));
   if (!modoAutomatico) {
     const etiquetasPorPagina = formatoManual === "a5" ? 2 : 4;
@@ -211,7 +186,7 @@ export function buildManualCampaignPrintPages(items = [], modoAutomatico = true,
     }));
   }
 
-  return buildAutomaticPrintPages(items, "automatico");
+  return buildAutomaticPrintPages(items, "automatico", rules);
 }
 
 export function countAutomaticFormats(items = []) {

@@ -3,6 +3,7 @@ import { validarItensCampanha } from "../shared/campaign-label/campaignValidatio
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useCampaignLabelRules } from "../context/CampaignLabelRulesContext";
 import { useToast } from "../components/ToastProvider";
 import { printDocument } from "../utils/print";
 import {
@@ -52,6 +53,8 @@ export default function EtiquetasPage() {
   const location = useLocation();
   const { user, profile } = useAuth();
   const toast = useToast();
+  const { rules: labelRules, loading: labelRulesLoading, error: labelRulesError } = useCampaignLabelRules();
+  const [fallbackConfirmado, setFallbackConfirmado] = useState(false);
 
   const [titulo, setTitulo] = useState(CAMPANHA_TITULO_DEFAULT);
   const [textoColado, setTextoColado] = useState("");
@@ -299,6 +302,8 @@ export default function EtiquetasPage() {
     [dados],
   );
 
+  useEffect(() => { setFallbackConfirmado(false); }, [selecionados, labelRulesError, labelRulesLoading, modoFormatoAutomatico]);
+
   const itensParaImpressao = useMemo(
     () =>
       selecionados.map((item) => ({
@@ -307,9 +312,10 @@ export default function EtiquetasPage() {
           item,
           modoFormatoAutomatico,
           formatoEtiqueta,
+          labelRules,
         ),
       })),
-    [selecionados, modoFormatoAutomatico, formatoEtiqueta],
+    [selecionados, modoFormatoAutomatico, formatoEtiqueta, labelRules],
   );
 
   const paginasImpressao = useMemo(
@@ -318,8 +324,9 @@ export default function EtiquetasPage() {
         itensParaImpressao,
         modoFormatoAutomatico,
         formatoEtiqueta,
+        labelRules,
       ),
-    [itensParaImpressao, modoFormatoAutomatico, formatoEtiqueta],
+    [itensParaImpressao, modoFormatoAutomatico, formatoEtiqueta, labelRules],
   );
 
   const modoImpressaoTexto = modoFormatoAutomatico
@@ -597,6 +604,12 @@ export default function EtiquetasPage() {
   }
 
   async function imprimirSelecionados() {
+    if (modoFormatoAutomatico && (labelRulesLoading || labelRulesError) && !fallbackConfirmado) {
+      setFallbackConfirmado(true);
+      toast.warning("As regras personalizadas não estão disponíveis. Confirma o resumo A5/A6 e clica novamente em Imprimir para usar apenas as regras base.");
+      return;
+    }
+
     if (!selecionados.length) {
       toast.warning("Seleciona pelo menos um artigo.");
       return;
@@ -710,7 +723,7 @@ export default function EtiquetasPage() {
         alterado: "CAMPANHA",
         info: [getPromotionInfoText(artigo), `Desconto ${formatarEuro(precoAntes - precoAtual)}€`].filter(Boolean).join(" | "),
         selecionado: true,
-        formato_auto: obterFormatoAutomaticoEtiqueta(artigo.descricao || ""),
+        formato_auto: obterFormatoAutomaticoEtiqueta(artigo.descricao || "", labelRules),
       };
     });
 
@@ -743,6 +756,7 @@ export default function EtiquetasPage() {
           dates={{ dataInicio: campanhaSemDatas ? "" : formatarDataInputParaDiaMes(dataInicioGeral), dataFim: campanhaSemDatas ? "" : formatarDataInputParaDiaMes(dataFimGeral) }}
           initialSource={supplierSource} onSourceConsumed={setSupplierSource} />
 
+        {modoFormatoAutomatico && labelRulesError && <p role="alert" className="campaign-format-notice">{labelRulesError}</p>}
         <ManualCampaignToolbar
           titulo={titulo}
           setTitulo={setTitulo}
@@ -794,6 +808,7 @@ export default function EtiquetasPage() {
 
 
       {popupCriarCampanhaAberto && <ManualCreateCampaignModal
+        labelRules={labelRules}
         aberto={popupCriarCampanhaAberto}
         codigosExistentes={dados.map((item) => item.codigo)}
         adicionarListaCampanha={adicionarArtigoCampanha}
