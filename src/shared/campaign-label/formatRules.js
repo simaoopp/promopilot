@@ -104,6 +104,18 @@ const A5_ABBREVIATIONS = [
   "Termo Acumulador", "T. Acum.", "Termo Elétrico",
   "Bomba de Calor", "Bombas de Calor", "Bomba Calor", "B. Calor",
   "B/Calor", "BC AQS", "B.C. AQS", "Heat Pump",
+  // Televisores — a designacao comercial nem sempre escreve "TV" separado.
+  "SmartTV", "Smart TV", "Televisor", "Televisores", "Telev.",
+  "Televis.", "TV LED", "LED TV", "TV LCD", "LCD TV",
+  "MiniLED SmartTV", "QNED", "ULED", "NanoCell",
+  // Jatos de agua e lavadoras de alta pressao.
+  "Jato de Agua", "Jatos de Agua", "Jato Agua", "Jatos Agua",
+  "Jato d'Agua", "Jat. Agua", "Jat. de Agua", "Jato de Pressao", "Lavadora Alta Pressao",
+  "Lavadora de Alta Pressao", "Lavadora a Pressao", "Lavadoras Pressao",
+  "Maquina de Lavar Alta Pressao", "Maquina Lavar a Pressao",
+  "Maq. Lav. Pressao", "Maq. Alta Pressao", "Hidrolavadora",
+  "Hidro Lavadora", "Lava Jato", "Lava-Jato", "Pressure Washer",
+  "Jet Washer", "Lavadora AP", "Lav. Alta Pressao", "Lav. A. Pressao", "M.L.A.P.", "MLAP",
 ];
 
 function normalizarDescricaoFormato(value) {
@@ -131,15 +143,23 @@ const A5_PRODUCT_PATTERNS = [
   /\besq\s+(?:gn|gpl|gas|natural|butano|propano|\d{1,2}\s*l)\b/,
   /\b(?:termo\s*acum(?:ulador(?:es)?)?|t\s+acum(?:ulador(?:es)?)?|termo\s+eletric[oa]s?)\b/,
   /\b(?:bomba(?:s)?\s+(?:de\s+)?calor|b\s+(?:de\s+)?calor|bcalor|b\s*c\s+aqs|bc\s+aqs|heat\s+pump)\b/,
+  // TVs (SmartTV junto, televisor, QNED e ULED).
+  /\b(?:televis(?:ao|oes|or(?:es)?|)|telev|smart\s*tv|tvs|tv\s*\d{2,3}|qned|uled|nanocell)\b/,
+  // Jatos de agua, maquinas / lavadoras de alta pressao.
+  /\b(?:jatos?\s+(?:de\s+|d\s+)?(?:agua|pressao)|jatos?\s+de\s+alta\s+pressao|hidro\s*lavadoras?|lava\s+jato|pressure\s+washer|jet\s+washer)\b/,
+  /\b(?:lavadoras?|limpadoras?)\s+(?:de\s+|a\s+)?(?:alta\s+)?pressao\b/,
+  /\b(?:maq(?:uina)?s?\s+(?:de\s+)?lav(?:ar|a)?|maquinas?\s+(?:de\s+)?lavar)\s+(?:a\s+|de\s+)?(?:alta\s+)?pressao\b/,
 ];
 
 // Parts for the appliances should not consume a full-size A5 label just
 // because the description says "FILTRO P/ M.L.L." or "MOTOR FRIG.".
-const ACCESSORY_PREFIX = /^(?:(?:[a-z0-9]{2,20})\s+)?(?:acessorios?|pecas?|filtros?|resistencias?|mangueiras?|borrachas?|juntas?|motor(?:es)?|modulos?|cestos?|gavetas?|dobradicas?|puxadores?|portas?|valvulas?|tubos?|termostatos?|prateleiras?|vedantes?|correias?|escovas?|rolamentos?|cabos?|suportes?|comandos?|telecomandos?|carregadores?|adaptadores?|sensor(?:es)?|kits?|painel|paineis|pressostatos?)\b/;
+const ACCESSORY_PREFIX = /^(?:(?:[a-z0-9]{2,20})\s+)?(?:acessorios?|pecas?|bicos?|lancas?|pistolas?|ponteiras?|filtros?|resistencias?|mangueiras?|borrachas?|juntas?|motor(?:es)?|modulos?|cestos?|gavetas?|dobradicas?|puxadores?|portas?|valvulas?|tubos?|termostatos?|prateleiras?|vedantes?|correias?|escovas?|rolamentos?|cabos?|suportes?|comandos?|telecomandos?|carregadores?|adaptadores?|sensor(?:es)?|kits?|painel|paineis|pressostatos?)\b/;
 
 export function obterFormatoAutomaticoEtiqueta(descricao = "") {
   const texto = normalizarDescricaoFormato(descricao);
   if (!texto || ACCESSORY_PREFIX.test(texto)) return "a6";
+  // Caixas de streaming nao sao televisores.
+  if (/^(?:tv\s+box|box\s+(?:tv|android\s+tv)|stick\s+(?:tv|streaming)|fire\s+tv\s+stick)\b/.test(texto)) return "a6";
   const padded = ` ${texto} `;
   const isA5 = A5_TERMS.some((term) => padded.includes(` ${term} `)) ||
     A5_PRODUCT_PATTERNS.some((pattern) => pattern.test(texto));
