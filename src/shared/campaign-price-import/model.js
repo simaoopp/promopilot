@@ -1,3 +1,5 @@
+import { classifyTableRows } from "./tableSections.js";
+
 export const MAX_IMPORT_ROWS = 2000;
 export const MAX_PRICE_CENTS = 999999999;
 export const IMPORT_KIND = "catalog-pvp2-v1";
@@ -69,39 +71,56 @@ export function headerLabels(sheet, headerRow) {
 // confusing PVP2 with PVP2PROMO would create misleading discounts.
 export const WAREHOUSE_CODES = Object.freeze(["AF", "A1", "A1E", "AE", "AEA", "A10", "AEV"]);
 const AUTO_ALIASES = {
-  code: ["artigo", "codigo", "codigo artigo", "codigo de artigo", "nosso codigo", "codigo interno", "referencia", "ref", "sku", "code", "item code", "product code"],
+  code: ["artigo", "codigo", "cod artigo", "cod de artigo", "codigo artigo", "codigo de artigo", "nosso codigo", "codigo interno", "referencia", "ref", "referencia artigo", "sku", "code", "item code", "product code"],
   description: ["descricao", "designacao", "produto", "nome", "nome produto", "description", "product"],
   ean: ["ean", "ean13", "ean 13", "codigo barras", "codigo de barras", "barcode", "gtin", "gtin13"],
   original: ["pvp2 antes", "pvp 2 antes", "pvp antes", "pvp2 anterior", "pvp anterior", "preco antes", "preco anterior", "preco normal", "preco original", "pvp2", "pvp 2"],
-  promo: ["pvp2promo", "pvp2 promo", "pvp2p", "pvp 2 p", "pvp2 atual", "pvp atual", "preco promo", "preco promocional", "preco de campanha", "preco campanha", "preco black friday", "promo", "promocao", "sale price"],
+  promo: ["pvp2promo", "pvp2 promo", "pvp 2 promo", "pvp 2 atual", "pvp2p", "pvp2 p", "pvp 2 p", "pvp2 atual", "pvp atual", "preco promo", "preco promocional", "preco de campanha", "preco campanha", "preco black friday", "promo", "promocao", "sale price"],
+  start: ["data inicio", "data de inicio", "inicio", "de", "desde", "start"],
+  end: ["data fim", "data de fim", "fim", "ate", "validade", "end"],
+  information: ["info", "informacao", "informacoes", "tipo de alteracao", "tipo alteracao", "observacoes", "motivo"],
 };
 const autoHeader = text => String(text ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
   .toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
-export function detectSimpleColumns(sheet) {
+export function detectSimpleColumns(sheet, requestedHeaderRow) {
   let winner = null;
-  for (let headerRow=0;headerRow<Math.min(40,sheet.rows.length);headerRow++) {
-    const labels = headerLabels(sheet,headerRow);
-    const normalized = labels.map(autoHeader);
-    const find = aliases => normalized.flatMap((name, i) => aliases.includes(name) ? [i] : []);
-    const fields = {};
-    for (const [key,aliases] of Object.entries(AUTO_ALIASES)) {
-      const found = find(aliases);
-      if (found.length===1) fields[key]=found[0];
+  const width = Math.max(0, ...sheet.rows.map(row => row.length));
+  const indices = Number.isInteger(requestedHeaderRow) ? [requestedHeaderRow] : sheet.rows.map((_, index) => index);
+  for (const headerRow of indices) {
+    const normalized = Array.from({ length: width }, (_, i) =>
+      autoHeader(sheet.rows[headerRow]?.[i]?.text).replace(/\s+(?:eur|euros)$/, ""));
+    const candidates = {}, fields = {}, warehouses = {};
+    for (const [key, aliases] of Object.entries(AUTO_ALIASES)) {
+      candidates[key] = normalized.flatMap((name, i) => aliases.includes(name) ? [i] : []);
+      if (candidates[key].length === 1) fields[key] = candidates[key][0];
     }
-    const warehouses = {};
-    for(const code of WAREHOUSE_CODES) {
-      const found = find([autoHeader(code)]);
-      if(found.length===1) warehouses[code.toLowerCase()]=found[0];
+    // A dotted internal code is useful evidence; a numeric EAN is never a SKU guess.
+    if (!candidates.code.length) {
+      const sample = sheet.rows.slice(Math.max(0, headerRow + 1), headerRow + 21);
+      const found = Array.from({ length: width }, (_, i) => i).filter(i => {
+        if (normalized[i] && !/^coluna \d+$/.test(normalized[i])) return false;
+        const values = sample.map(row => row[i]).filter(cell => cell?.text?.trim());
+        return values.length >= 2 && values.every(cell => !cell.unsafe && /^\d{2}\.\d{3}\.\d{3}\.\d{5}$/.test(cell.text.trim()));
+      });
+      if (found.length === 1) { fields.code = found[0]; candidates.code = found; }
     }
-    const essential = Number(fields.code!==undefined)+Number(fields.promo!==undefined);
-    const score = essential*20 + Object.keys(fields).length*3 + Object.keys(warehouses).length;
-    if(!winner||score>winner.score)winner={headerRow,fields,warehouses,score,essential};
+    for (const code of WAREHOUSE_CODES) {
+      const found = normalized.flatMap((name, i) => name === autoHeader(code) ? [i] : []);
+      if (found.length === 1) warehouses[code.toLowerCase()] = found[0];
+    }
+    const essential = Number(fields.code !== undefined) + Number(fields.promo !== undefined);
+    const score = essential * 20 + Number(candidates.code.length > 0) * 8 +
+      Number(candidates.promo.length > 0) * 8 + Object.keys(fields).length * 3 + Object.keys(warehouses).length;
+    if (!winner || score > winner.score) winner = { headerRow, fields, warehouses, candidates, score, essential };
   }
   if (!winner) return null;
-  return {...winner, recognized:winner.essential===2&&winner.fields.code!==winner.fields.promo,
-    mapping:{version:1,headerRow:winner.headerRow,codeColumn:winner.fields.code??-1,priceColumn:winner.fields.promo??-1,
-      originalColumn:winner.fields.original !== winner.fields.code && winner.fields.original !== winner.fields.promo ? (winner.fields.original??-1) : -1,
-      descriptionColumn:winner.fields.description??-1,eanColumn:winner.fields.ean??-1,warehouseColumns:winner.warehouses}};
+  const { fields } = winner;
+  return { ...winner, recognized: winner.essential === 2 && fields.code !== fields.promo,
+    mapping: { version: 1, headerRow: winner.headerRow, codeColumn: fields.code ?? -1,
+      priceColumn: fields.promo ?? -1, originalColumn: fields.original ?? -1,
+      descriptionColumn: fields.description ?? -1, eanColumn: fields.ean ?? -1,
+      startColumn: fields.start ?? -1, endColumn: fields.end ?? -1,
+      informationColumn: fields.information ?? -1, warehouseColumns: winner.warehouses } };
 }
 export function safeWarehouseValues(cells, mapping={}) {
   const out={};
@@ -125,18 +144,24 @@ export function validateMapping(mapping, sheet) {
        (mapping.originalColumn >= labels.length || mapping.originalColumn === mapping.codeColumn || mapping.originalColumn === mapping.priceColumn))) {
     throw new Error("Escolha duas colunas distintas: código do artigo e PVP2 Atual.");
   }
+  const keys = ["codeColumn", "priceColumn", "originalColumn", "descriptionColumn", "eanColumn", "startColumn", "endColumn", "informationColumn"];
+  const selected = keys.map(key => mapping[key]).filter(value => value !== undefined && value !== -1);
+  if (selected.some(value => !Number.isInteger(value) || value < 0 || value >= labels.length) ||
+      new Set(selected).size !== selected.length) throw new Error("Cada campo precisa de uma coluna distinta e válida.");
   return labels;
 }
 
 export function projectRows(sheet, mapping) {
   validateMapping(mapping, sheet);
-  const rows = sheet.rows.slice(mapping.headerRow + 1).map((cells, index) => {
+  const rows = classifyTableRows(sheet, mapping).map(({ cells, line, classification, reason }) => {
     const codeCell = cells[mapping.codeColumn];
     const priceCell = cells[mapping.priceColumn];
     const originalCell = Number.isInteger(mapping.originalColumn) && mapping.originalColumn >= 0
       ? cells[mapping.originalColumn] : null;
     return {
-      line: mapping.headerRow + index + 2,
+      line,
+      classification,
+      reason,
       code: codeCell?.unsafe ? "" : String(codeCell?.text ?? "").trim(),
       rawCode: String(codeCell?.text ?? ""),
       rawPrice: String(priceCell?.text ?? ""),
@@ -151,9 +176,11 @@ export function projectRows(sheet, mapping) {
         description: mapping.descriptionColumn >= 0 ? String(cells[mapping.descriptionColumn]?.text ?? "").trim() : "",
         ean: mapping.eanColumn >= 0 ? String(cells[mapping.eanColumn]?.text ?? "").trim() : "",
         warehouses: safeWarehouseValues(cells, mapping.warehouseColumns || {}),
+        startCell: mapping.startColumn >= 0 ? cells[mapping.startColumn] : null,
+        endCell: mapping.endColumn >= 0 ? cells[mapping.endColumn] : null,
       },
     };
-  }).filter(row => row.rawPrice.trim() !== ""); // No PVP2PROMO means no promotion.
+  }); // Missing prices remain visible for review; they never use a catalogue fallback.
   if (!rows.length || rows.length > MAX_IMPORT_ROWS) throw new Error(`Importe entre 1 e ${MAX_IMPORT_ROWS} linhas de cada vez.`);
   return rows;
 }

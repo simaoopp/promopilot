@@ -344,7 +344,7 @@ export default function Sidebar({
 
         <nav className="sidebar-body" aria-label="Navegação principal">
           <div className="sidebar-section-label">O seu espaço</div>
-          {(context?.pages || []).filter(page => page.show_in_navigation !== false).map(page => <Link key={page.page_key} to={page.path}
+          {(context?.pages || []).filter(page => page.show_in_navigation !== false && page.page_key !== "excel" && String(page.path || "").replace(/\/$/, "").toLowerCase() !== "/etiquetascampanhaexcel").map(page => <Link key={page.page_key} to={page.path}
             aria-current={isActive(page.path) ? "page" : undefined}
             className={`sidebar-link ${isActive(page.path) ? "active" : ""}`} onClick={fecharTudo}>{page.name}</Link>)}
           {context?.platformAdmin && <Link className="sidebar-link" to="/ceo" onClick={fecharTudo}>Administração CEO <span aria-hidden="true">↗</span></Link>}

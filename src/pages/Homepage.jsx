@@ -286,7 +286,6 @@ export default function HomePage() {
         onOpenArticles={() => navigate("/Etiquetas")}
         onOpenScan={() => navigate("/Etiquetas?mode=scan")}
         onOpenDossiers={() => navigate("/OrcamentosDossiers")}
-        onOpenExcel={() => navigate("/EtiquetasCampanhaExcel")}
       />
 
       {((canCampaigns && historyState.manual === "loading") || (canAutomations && historyState.automatic === "loading")) && <p role="status">A carregar os resumos da homepage…</p>}

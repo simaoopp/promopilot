@@ -7,7 +7,6 @@ function ActionIcon({ name }) {
     articles: <><path d="m12 3 9 5-9 5-9-5 9-5Zm-9 5v9l9 5 9-5V8M12 13v9M7.5 5.5l9 5" /></>,
     scan: <><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5M7 8v8m4-8v8m3-8v8m3-8v8" /></>,
     dossiers: <><path d="M3 7V5h7l2 2h9v14H3V7Zm5 6h8m-8 4h5" /></>,
-    excel: <><path d="M5 3h10l4 4v14H5V3Zm9 0v5h5M8 12h8m-8 4h8m-4-4v8" /></>,
   };
   return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
 }
@@ -16,7 +15,7 @@ const ACTIONS = [
   {
     key: "campaign",
     title: "Criar campanha",
-    subtitle: "Escolher artigos, confirmar preços e preparar etiquetas.",
+    subtitle: "Criar manualmente ou importar Excel/ODS e preparar etiquetas.",
     tone: "primary",
     action: "onOpenCampaign",
   },
@@ -41,29 +40,21 @@ const ACTIONS = [
     tone: "violet",
     action: "onOpenDossiers",
   },
-  {
-    key: "excel",
-    title: "Importação Excel",
-    subtitle: "Criar etiquetas em lote a partir de uma folha Excel.",
-    tone: "slate",
-    action: "onOpenExcel",
-  },
+
 ];
 
 export default function HomeQuickActions({
   onOpenCampaign,
   onOpenArticles,
   onOpenScan,
-  onOpenExcel,
   onOpenDossiers,
 }) {
   const { hasPage } = usePermissions();
-  const pageForAction = { campaign: "manual", articles: "catalog", scan: "catalog", dossiers: "dossiers", excel: "excel" };
+  const pageForAction = { campaign: "manual", articles: "catalog", scan: "catalog", dossiers: "dossiers" };
   const handlers = {
     onOpenCampaign,
     onOpenArticles,
     onOpenScan,
-    onOpenExcel,
     onOpenDossiers,
   };
 

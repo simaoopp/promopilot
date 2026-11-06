@@ -75,3 +75,17 @@
 .price-import-price-editor{display:flex;align-items:center;gap:5px;max-width:166px}
 .price-import-price-editor span{font-size:.88rem;font-weight:650;color:#465a72}
 .price-import-review-table .price-import-cell-status .price-import-source-price{margin-top:8px}
+
+/* Analysis and review scroll inside the dialog; actions keep their own row. */
+.price-import-detection-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 20px;margin:14px 0}
+.price-import-detection-summary div{padding:10px 12px;background:#f5f8fc;border-radius:8px;overflow-wrap:anywhere}
+.price-import-detection-summary dt{font-weight:650}.price-import-detection-summary dd{margin:4px 0 0;font-size:.86rem;color:#52647b}
+.price-import-date-panel,.price-import-exclusions{margin:18px 0;padding:16px;border:1px solid #dce3ee;border-radius:10px}
+.price-import-date-panel h3,.price-import-exclusions h3{margin:0 0 10px;font-size:1rem}
+.price-import-date-help{font-size:.85rem;color:#52647b}.price-import-exclusions{background:#fff9ed;border-color:#ead2a6}
+.price-import-excluded-list{max-height:220px;overflow:auto;overflow-wrap:anywhere}
+.price-import-exclusions input{font-family:ui-monospace,monospace}
+.price-import-table-wrap{max-height:440px;overscroll-behavior:contain}
+.price-import-row-dates{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:8px;font-size:.76rem}
+.price-import-dialog .price-import-row-dates input:not([type=checkbox]){width:100%;min-width:0;padding:6px;font-size:.78rem}
+@media(max-width:650px){.price-import-detection-summary{grid-template-columns:1fr}.price-import-date-panel,.price-import-exclusions{padding:12px}}

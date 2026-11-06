@@ -1,4 +1,4 @@
-import { construirPaginasImpressao } from "./manualCampaignUtils";
+import { construirPaginasImpressao, obterTextoValidade } from "./manualCampaignUtils";
 
 describe("construirPaginasImpressao", () => {
   test("agrupa duas etiquetas A5 por folha em modo automático", () => {
@@ -44,4 +44,19 @@ describe("construirPaginasImpressao", () => {
     expect(paginas[1].items.map((item) => item.id)).toEqual(["2", "4"]);
   });
 
+});
+
+test("datas completas importadas preservam anos diferentes sem acrescentar outro ano", () => {
+ expect(obterTextoValidade({dataInicio:"15/12/2026",dataFim:"15/01/2027"},2026,"PROMO")).toBe("VÁLIDO DE 15/12/2026 A 15/01/2027");
+ expect(obterTextoValidade({dataInicio:"01/11",dataFim:"15/11"},2026,"PROMO")).toBe("VÁLIDO DE 01/11/2026 A 15/11/2026");
+});
+
+test("campanhas Excel antigas mantêm dados e formatos ao voltar a imprimir", () => {
+ const old=Object.freeze({id:"old-excel",origem:"excel",anoValidade:2026,formatoEtiqueta:"a5",dados:Object.freeze([
+   Object.freeze({id:"old-row",codigo:"00001",descricao:"Frigorífico",antes:350,atual:300,dataInicio:"01/11",dataFim:"15/11"}),
+ ])});
+ const pages=construirPaginasImpressao(old.dados,false,old.formatoEtiqueta);
+ expect(pages[0].layout).toBe("a5");expect(pages[0].items[0]).toEqual(old.dados[0]);
+ expect(obterTextoValidade(pages[0].items[0],old.anoValidade,"PROMO")).toBe("VÁLIDO DE 01/11/2026 A 15/11/2026");
+ expect(old.origem).toBe("excel");
 });

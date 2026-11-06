@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { validateImportPeriod } from "../../../shared/campaign-price-import/tableDates";
 import { money, priceInCents, priceState, sourceComparison } from "../../../shared/campaign-price-import/model";
 
 const PROBLEMS = {
@@ -10,26 +11,27 @@ const PROBLEMS = {
   missing_table_before: "Falta PVP2 Antes na tabela. Corrija a origem; não será usado o catálogo.",
   invalid_table_before: "O PVP2 Antes da tabela é inválido. Corrija a origem; não será usado o catálogo.",
 };
-export function reviewRow(row, edit, existingCodes) {
+export function reviewRow(row, edit, existingCodes, requireDates = false) {
   const cents = priceInCents(edit?.price ?? "");
-  const error = PROBLEMS[row.problem] || (existingCodes.has(row.code) ? "Este artigo já está na campanha." :
+  const error = PROBLEMS[row.problem] || (row.problem ? "Artigo pendente de validação. Reveja a origem." : "") || (existingCodes.has(row.code) ? "Este artigo já está na campanha." :
     cents === null ? "Introduza um preço válido, com até duas casas decimais." :
-      row.warning && !edit?.reviewed ? "Confirme a revisão do valor original." : "");
+      row.warning && !edit?.reviewed ? "Confirme a revisão da informação original." :
+        requireDates ? validateImportPeriod(edit?.start, edit?.end) : "");
   return { cents, error, state: error ? "Pendente" : priceState(row.beforeCents, cents) };
 }
 
-export default function ImportReview({ mode = "excel", batch, edits, originalsByLine = new Map(), onEdit, existingCodes, disabled }) {
+export default function ImportReview({ mode = "excel", batch, edits, originalsByLine = new Map(), onEdit, existingCodes, disabled, requireDates = false }) {
   const isManual = mode === "manual";
   const [page, setPage] = useState(0);
   const [onlyProblems, setOnlyProblems] = useState(false);
-  const rows = batch.rows.filter(row => !onlyProblems || reviewRow(row, edits[row.id], existingCodes).error);
+  const rows = batch.rows.filter(row => !onlyProblems || reviewRow(row, edits[row.id], existingCodes, requireDates).error);
   const pageCount = Math.max(1, Math.ceil(rows.length / 50));
   const currentPage = Math.min(page, pageCount - 1);
   const mismatchCount = isManual ? 0 : batch.rows.filter(row => sourceComparison(row, originalsByLine.get(Number(row.line)), row.currentCents).differs).length;
   return <>
     <div className="price-import-review-tools">
       <label><input type="checkbox" checked={onlyProblems} onChange={e => { setOnlyProblems(e.target.checked); setPage(0); }} /> Mostrar apenas pendentes</label>
-      <span>{isManual ? "Valores recolhidos da tabela" : "Catálogo consultado"}: {new Date(batch.capturedAt).toLocaleString("pt-PT")}</span>
+      {batch.capturedAt && <span>{isManual ? "Valores recolhidos da tabela" : "Catálogo consultado"}: {new Date(batch.capturedAt).toLocaleString("pt-PT")}</span>}
     </div>
     {mismatchCount > 0 && <p className="price-import-discrepancy" role="status">
       <strong>{mismatchCount} {mismatchCount === 1 ? "artigo tem" : "artigos têm"} preços anteriores diferentes.</strong>{" "}
@@ -49,7 +51,7 @@ export default function ImportReview({ mode = "excel", batch, edits, originalsBy
         </tr></thead>
         <tbody>{rows.slice(currentPage * 50, currentPage * 50 + 50).map(row => {
           const edit = edits[row.id] || {};
-          const review = reviewRow(row, edit, existingCodes);
+          const review = reviewRow(row, edit, existingCodes, requireDates);
           const original = originalsByLine.get(Number(row.line));
           const comparison = sourceComparison(row, original, review.cents);
           const status = review.state === "Aumento" && !isManual ? "Aumento vs catálogo" : review.state;
@@ -60,6 +62,10 @@ export default function ImportReview({ mode = "excel", batch, edits, originalsBy
               <strong className="price-import-code">{row.code || "Sem código"}</strong>
               <span className="price-import-description">{row.description || "—"}</span>
               <small className="price-import-source">{row.sourceSheet ? `${row.sourceSheet} · linha ${row.sourceLine || row.line}` : `Tabela · linha ${row.line}`}</small>
+              {requireDates && <div className="price-import-row-dates">
+                <label>Início<input type="date" aria-label={`Início de ${row.code || row.line}`} value={edit.start || ""} disabled={disabled} onChange={event => onEdit(row.id, { start: event.target.value, datesEdited: true, selected: false })} /></label>
+                <label>Fim<input type="date" aria-label={`Fim de ${row.code || row.line}`} value={edit.end || ""} disabled={disabled} onChange={event => onEdit(row.id, { end: event.target.value, datesEdited: true, selected: false })} /></label>
+              </div>}
               <details className="price-import-raw-details"><summary>Ver informação original</summary><p>Código: {row.rawCode || "—"}<br/>PVP2 Atual: {row.rawPrice || "—"}{original?.raw ? <> <br/>PVP2 Antes: {original.raw}</> : null}</p></details>
             </td>
             <td className="price-import-cell-money">
@@ -70,7 +76,7 @@ export default function ImportReview({ mode = "excel", batch, edits, originalsBy
             </td>
             <td className="price-import-cell-edit">
               <div className="price-import-price-editor"><input inputMode="decimal" aria-label={`PVP2 Atual de ${row.code || row.line}`} value={edit.price ?? ""} disabled={disabled || Boolean(row.problem)} onChange={e => onEdit(row.id, { price: e.target.value, selected: false })} /><span aria-hidden="true">€</span></div>
-              {row.warning && <label className="price-import-warning"><input type="checkbox" checked={Boolean(edit.reviewed)} disabled={disabled} onChange={e => onEdit(row.id, { reviewed: e.target.checked, selected: false })} /> Confirmei a divergência. {row.warning}</label>}
+              {row.warning && <label className="price-import-warning"><input type="checkbox" checked={Boolean(edit.reviewed)} disabled={disabled} onChange={e => onEdit(row.id, { reviewed: e.target.checked, selected: false })} /> Revi a informação original. {row.warning}</label>}
             </td>
             <td className="price-import-cell-money">
               <strong className={`price-import-amount ${comparison.catalogDelta !== null && comparison.catalogDelta < 0 ? "price-import-discount-value" : comparison.catalogDelta > 0 ? "price-import-increase-value" : ""}`}>

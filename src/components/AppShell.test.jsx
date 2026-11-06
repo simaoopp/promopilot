@@ -4,7 +4,7 @@ import { MemoryRouter, useLocation } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import AppLoading from "./AppLoading";
 
-jest.mock("../context/PermissionContext", () => ({ usePermissions: () => ({ context: { pages: [{page_key:"home",path:"/Homepage",name:"Início"},{page_key:"manual",path:"/EtiquetasCampanha",name:"Campanha manual"}] }, can: () => false }) }));
+jest.mock("../context/PermissionContext", () => ({ usePermissions: () => ({ context: { pages: [{page_key:"home",path:"/Homepage",name:"Início"},{page_key:"manual",path:"/EtiquetasCampanha",name:"Campanha manual"},{page_key:"excel",path:"/EtiquetasCampanhaExcel",name:"Campanha Excel"}] }, can: () => false }) }));
 jest.mock("../context/AuthContext", () => ({ useAuth: () => ({ user: { id: "qa", email: "qa@example.test" }, profile: { first_name: "Teste", store: "Loja de teste", role: "store_user" } }) }));
 jest.mock("./admin/ArticleDatabaseSyncPanel", () => () => null);
 jest.mock("./admin/UserManagementPanel", () => () => null);
@@ -19,3 +19,8 @@ test("loading is accessible and has no raster logo or invented percentage", asyn
 test("topbar brand navigates to the workspace homepage", async () => { await renderShell(); const logo = container.querySelector('.topbar-site .pp-brand-home-link'); expect(logo.getAttribute("href")).toBe("/Homepage"); await act(async () => logo.click()); expect(container.querySelector("output").textContent).toBe("/Homepage"); });
 test("drawer focuses close button, traps Tab and restores focus on Escape", async () => { await renderShell(); const trigger = container.querySelector('.menu-button'); trigger.focus(); await act(async () => trigger.click()); const drawer = container.querySelector('#sidebar-navigation'); expect(drawer.hasAttribute("inert")).toBe(false); expect(document.activeElement).toBe(drawer.querySelector('.close-sidebar')); const links = drawer.querySelectorAll('a[href],button:not([disabled])'); links[links.length - 1].focus(); await act(async () => document.dispatchEvent(new KeyboardEvent('keydown', {key:'Tab',bubbles:true,cancelable:true}))); expect(document.activeElement).toBe(links[0]); await act(async () => window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))); expect(drawer.hasAttribute('inert')).toBe(true); expect(document.activeElement).toBe(trigger); expect(document.body.style.overflow).toBe(''); });
 test("account control exposes expanded state and closes on Escape", async () => { await renderShell(); const button=container.querySelector('.topbar-account-button'); await act(async () => button.click()); expect(button.getAttribute('aria-expanded')).toBe('true'); container.querySelector('.topbar-account-menu-item').focus(); await act(async () => window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))); expect(button.getAttribute('aria-expanded')).toBe('false'); expect(document.activeElement).toBe(button); });
+
+test("menu omits legacy Excel entry while retaining manual campaigns", async () => {
+ await renderShell(); expect(container.querySelector('a[href="/EtiquetasCampanhaExcel"]')).toBeNull();
+ expect(container.querySelector('a[href="/EtiquetasCampanha"]')).not.toBeNull();
+});

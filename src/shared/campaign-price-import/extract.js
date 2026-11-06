@@ -72,7 +72,14 @@ function workbookSheets(workbook) {
       if (cell.t === "e") unsafe = "Erro na célula de origem.";
       if (cell.t === "d" || (cell.t === "n" && XLSX.SSF.is_date(cell.z || ""))) unsafe = "Célula interpretada como data.";
       if (cell.t === "n" && (!Number.isFinite(cell.v) || Math.abs(cell.v) >= 1e15)) unsafe = "Precisão do código não garantida. Use texto.";
-      return { text: cell.t === "n" ? XLSX.utils.format_cell(cell) : String(cell.v ?? ""),
+      let date = "";
+      if (!cell.f && cell.t === "n" && XLSX.SSF.is_date(cell.z || "")) {
+        const parts = XLSX.SSF.parse_date_code(cell.v, { date1904: Boolean(workbook.Workbook?.WBProps?.date1904) });
+        if (parts && parts.y >= 2000 && parts.y <= 2200) {
+          date = `${parts.y}-${String(parts.m).padStart(2, "0")}-${String(parts.d).padStart(2, "0")}`;
+        }
+      }
+      return { ...(date ? { date } : {}), text: cell.t === "n" ? XLSX.utils.format_cell(cell) : String(cell.v ?? ""),
         ...(cell.t === "n" ? { number: cell.v } : {}), ...(unsafe ? { unsafe } : {}) };
     }));
     return { name, rows };

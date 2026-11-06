@@ -87,9 +87,11 @@ export function obterTextoValidade(item, anoValidadeAtual, tituloCampanha) {
     )}/${hoje.getFullYear()} A ${formatarDataDiaMes(fim)}/${fim.getFullYear()}`;
   }
 
-  return `VÁLIDO DE ${dataInicio || "-"}${
-    dataInicio ? `/${anoValidadeAtual}` : ""
-  } A ${dataFim || "-"}${dataFim ? `/${anoValidadeAtual}` : ""}`;
+  const dataCompleta = value => {
+    const iso = normalizeCampaignDate(value, anoValidadeAtual);
+    return iso ? iso.split("-").reverse().join("/") : value || "-";
+  };
+  return `VÁLIDO DE ${dataCompleta(dataInicio)} A ${dataCompleta(dataFim)}`;
 }
 
 export function obterFormatoAutomaticoEtiqueta(descricao = "", rules) {

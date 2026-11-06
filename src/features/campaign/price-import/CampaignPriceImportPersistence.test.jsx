@@ -32,3 +32,13 @@ test("failed persistence leaves existing UI campaign unchanged",async()=>{
  await act(async()=>expect(mockApply(incoming,{id:"batch",store:"Praia"})).rejects.toThrow("offline"));
  expect(onItems).not.toHaveBeenCalled();
 });
+
+test("row-specific imported dates survive parent defaults and old Excel campaigns remain untouched", async () => {
+ const existing = [{codigo:"old",dataInicio:"01/08",dataFim:"15/08",antes:20,atual:10}], onItems=jest.fn(), onDatesDetected=jest.fn();
+ const dated=incoming.map(item=>({...item,dataInicio:"15/12/2026",dataFim:"15/01/2027"}));
+ await act(async()=>root.render(<CampaignPriceImport mode="manual" items={existing} onItems={onItems} onDatesDetected={onDatesDetected} title="PROMO" year={2026} format="a6" dates={{dataInicio:"01/11",dataFim:"15/11"}}/>));
+ await act(async()=>host.querySelector("button").click()); await act(async()=>mockApply(dated,{id:"batch",store:"Praia"}));
+ expect(addCampaignToHistory.mock.calls[0][0].dados).toEqual([...existing,...dated]);
+ expect(addCampaignToHistory.mock.calls[0][1]).toEqual({cleanup:false});
+ expect(onDatesDetected).toHaveBeenCalledWith({dataInicio:"2026-12-15",dataFim:"2027-01-15"});
+});

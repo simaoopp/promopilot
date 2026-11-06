@@ -30,9 +30,9 @@ test("review shows fixed Before, editable After, differences, origins and pendin
  expect(reviewRow(row,{price:"299,99"},new Set([row.code])).error).toContain("já está");
  expect(reviewRow({...row,warning:"Formula"},{price:"299,99"},new Set()).state).toBe("Pendente");
 });
-test("unknown mapping requires explicit price choice and confirmation",()=>{
+test("unknown mapping exposes only missing fields before final review",()=>{
  const html=renderToStaticMarkup(<ImportMapping sheets={[{name:"Data",rows:[[{text:"Code"},{text:"Cost"},{text:"Promotion"}],[{text:"001"},{text:"100"},{text:"299,99"}]]}]} sheetIndex={0} mapping={{headerRow:0,codeColumn:-1,priceColumn:-1}} confirmed={false} />);
- expect(html).toContain("Escolher coluna do novo preço");expect(html).toContain("Confirmo que a coluna escolhida");expect(html).toContain("PVP2 Antes vem sempre do catálogo");
+ expect(html).toContain("Escolher coluna do novo preço");expect(html).toContain("Confirme apenas os campos por identificar");expect(html).not.toContain("Confirmo que a coluna escolhida");
 });
 test.each(["manual","excel"])("same importer is available in %s campaigns",mode=>{
  const html=renderToStaticMarkup(<CampaignPriceImport mode={mode} items={[]} onItems={()=>{}} title="Promo" year={2026} format="a6" />);

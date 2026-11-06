@@ -747,13 +747,18 @@ export default function EtiquetasPage() {
         <div className="page-header">
           <h1 className="page-title">Etiquetas de Campanha</h1>
           <p className="page-subtitle">
-            Cola a tabela recebida por email, valida os artigos, aplica filtros
-            e imprime apenas as etiquetas selecionadas.
+            Crie a campanha manualmente ou importe uma tabela Excel/ODS.
+            Reveja os artigos, as datas e os preços antes de imprimir.
           </p>
         </div>
 
         <CampaignPriceImport mode="manual" items={dados} onItems={setDados} title={titulo} year={anoValidade} format={formatoEtiqueta}
-          dates={{ dataInicio: campanhaSemDatas ? "" : formatarDataInputParaDiaMes(dataInicioGeral), dataFim: campanhaSemDatas ? "" : formatarDataInputParaDiaMes(dataFimGeral) }}
+          dates={{ dataInicio: campanhaSemDatas ? "" : dataInicioGeral, dataFim: campanhaSemDatas ? "" : dataFimGeral }}
+          onDatesDetected={({ dataInicio, dataFim }) => {
+            if (campanhaSemDatas) return;
+            setDataInicioGeral(previous => previous || dataInicio);
+            setDataFimGeral(previous => previous || dataFim);
+          }}
           initialSource={supplierSource} onSourceConsumed={setSupplierSource} />
 
         {modoFormatoAutomatico && labelRulesError && <p role="alert" className="campaign-format-notice">{labelRulesError}</p>}
