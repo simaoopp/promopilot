@@ -1,6 +1,7 @@
 import { extractCustomerFromQuoteText } from "./quoteDossierCustomerService.js";
 function normalizeText(value = "") {
   return String(value || "")
+    .normalize("NFC")
     .replace(/\r/g, "\n")
     .replace(/\u00a0/g, " ")
     .replace(/[ \t]+/g, " ")
@@ -175,6 +176,10 @@ function inferReference(description = "", brand = "") {
 
   text = text.replace(/^\s*-\s*/, "").trim();
 
+  // Some models separate the letter prefix from a numeric model number.
+  const spacedModel = text.match(/(?:^|\s)([A-Z]{2,10})\s+(\d{3,6}[A-Z/-]*)$/i);
+  if (spacedModel) return `${spacedModel[1]} ${spacedModel[2]}`;
+
   const tokens = text
     .split(/\s+/)
     .map((token) => token.replace(/[;,.:]+$/g, ""))
@@ -185,18 +190,26 @@ function inferReference(description = "", brand = "") {
   return referenceTokens.slice(-2).join(" ") || tokens.slice(-3).join(" ");
 }
 
-function inferCategory(description = "") {
+export function inferCategory(description = "") {
   const text = String(description || "").toLowerCase();
 
-  if (/micro|microondas|micro-ondas/.test(text)) return "Micro-ondas de encastre";
-  if (/chamin[eé]|exaustor|camp[âa]nula|iq700\s+lc/.test(text)) return "Chaminé/exaustor de parede";
-  if (/forno/.test(text)) return "Forno multifunções";
-  if (/placa|ind[.\s]?/.test(text)) return "Placa de indução";
-  if (/m[áa]q.*lavar.*loi[çc]a|lava.*loi[çc]a.*encastre|dishwasher/.test(text)) return "Máquina de lavar loiça de encastre";
+  // Do not infer a technology or installation type absent from the quote.
+  if (/micro|microondas|micro-ondas/.test(text)) return /encastr/.test(text) ? "Micro-ondas de encastre" : "Micro-ondas";
+  if (/chamin[eé]|exaustor|camp[âa]nula|iq700\s+lc/.test(text)) return /parede/.test(text) ? "Chaminé/exaustor de parede" : "Chaminé/exaustor";
+  if (/forno/.test(text)) return /multifun/.test(text) ? "Forno multifunções" : "Forno";
+  if (/placa/.test(text)) {
+    if (/vitrocer[aâ]mica/.test(text)) return "Placa vitrocerâmica";
+    if (/indu[çc][aã]o|\bind[.\s]/.test(text)) return "Placa de indução";
+    if (/g[aá]s/.test(text)) return "Placa a gás";
+    return "Placa de cozinha";
+  }
+  if (/m[áa]q.*lavar.*loi[çc]a|lava.*loi[çc]a.*encastre|dishwasher/.test(text)) return /encastr/.test(text) ? "Máquina de lavar loiça de encastre" : "Máquina de lavar loiça";
   if (/lava[-\s]?loi[çc]a|lava[-\s]?loica/.test(text)) return "Lava-loiça";
   if (/torneira|misturadora/.test(text)) return "Torneira misturadora";
   if (/garrafeira|winechef|wine/.test(text)) return "Garrafeira";
-  if (/side by side|french door|frigor|combinado|americano/.test(text)) return "Frigorífico americano/French Door";
+  if (/side[ -]by[ -]side|french door|americano/.test(text)) return "Frigorífico americano/French Door";
+  if (/combinado/.test(text)) return "Frigorífico combinado";
+  if (/frigor/.test(text)) return "Frigorífico";
   if (/secar roupa|secador/.test(text)) return "Máquina de secar roupa";
   if (/lavar roupa/.test(text)) return "Máquina de lavar roupa";
   if (/tv|televis/.test(text)) return "Televisor";
@@ -294,8 +307,7 @@ function buildItem({ articleCode = "", rawDescription = "", ean = "", quantity =
   };
 }
 
-function parseItemSegment(segment = "") {
-  const articleCode = segment.match(/\b\d{2}\.\d{3}\.\d{3}\.\d{5}\b/)?.[0] || "";
+function parseItemSegment(segment = "", articleCode = "") {
   if (!articleCode) return null;
 
   const ean = segment.match(/\bEAN\s*:?\s*(\d{8,14})\b/i)?.[1] || "";
@@ -323,7 +335,17 @@ function parseItemSegment(segment = "") {
 function parseItemsByArticleCode(text = "") {
   const normalized = normalizeText(text);
   const articleRegex = /\b\d{2}\.\d{3}\.\d{3}\.\d{5}\b/g;
-  const starts = [...normalized.matchAll(articleRegex)].map((match) => match.index);
+  const starts = [...normalized.matchAll(articleRegex)].map(match => ({ index: match.index, code: match[0] }));
+
+  // Primavera also uses provisional/alphanumeric codes, sometimes without an
+  // EAN. Require a complete table row, not just a token from a header/footer.
+  const rows = /^([\p{L}\p{N}][\p{L}\p{N}._/-]{2,39})[ \t]+([^\n]+)[ \t]+\d+(?:,\d+)?[ \t]+UN[ \t]+[\d .]+,\d{2,4}\b[^\n]*$/gimu;
+  for (const match of normalized.matchAll(rows)) {
+    const code = match[1];
+    if (!/\p{L}/u.test(code) || !/\d/.test(code)) continue;
+    starts.push({ index: match.index, code });
+  }
+  starts.sort((a, b) => a.index - b.index);
 
   if (!starts.length) return [];
 
@@ -332,11 +354,11 @@ function parseItemsByArticleCode(text = "") {
   const items = [];
 
   for (let index = 0; index < starts.length; index += 1) {
-    const start = starts[index];
-    const nextStart = starts[index + 1] ?? hardEndIndex;
+    const { index: start, code } = starts[index];
+    const nextStart = starts[index + 1]?.index ?? hardEndIndex;
     const end = nextStart > start ? nextStart : normalized.length;
     const segment = normalized.slice(start, end);
-    const parsed = parseItemSegment(segment);
+    const parsed = parseItemSegment(segment, code);
 
     if (parsed) items.push(parsed);
   }
@@ -449,7 +471,9 @@ function uniqueItems(items = []) {
 
 function parseItemsFromText(text = "") {
   const byArticle = parseItemsByArticleCode(text);
-  if (byArticle.length) return uniqueItems(byArticle);
+  // Each row is a quote line. Repeated provisional codes/EANs are not duplicate
+  // extraction attempts and may have different descriptions or quantities.
+  if (byArticle.length) return byArticle;
 
   const byEan = parseItemsByEanFallback(text);
   if (byEan.length) return uniqueItems(byEan);

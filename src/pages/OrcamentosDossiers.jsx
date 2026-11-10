@@ -1,5 +1,12 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { extractQuoteDossier, generateQuoteDossierPdf } from "../services/quoteDossierService";
+
+import { useAuth } from "../context/AuthContext";
+import { usePermissions } from "../context/PermissionContext";
+import { dossierDraftScope, normalizeDossierDraft } from "../features/quote-dossiers/dossierDraftStore";
+import useDossierDraft from "../features/quote-dossiers/useDossierDraft";
+import DossierErrorBoundary from "../features/quote-dossiers/DossierErrorBoundary";
+import { resizeDossierImage } from "../features/quote-dossiers/dossierImage";
 
 function arrayBufferToBase64(buffer) {
   const bytes = new Uint8Array(buffer);
@@ -19,46 +26,11 @@ async function fileToBase64(file) {
 
 function splitFeatures(value = "") {
   return String(value || "")
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
+    .split("\n");
 }
 
 function joinFeatures(features = []) {
   return Array.isArray(features) ? features.join("\n") : String(features || "");
-}
-
-function resizeImageFile(file, { maxWidth = 900, maxHeight = 520, quality = 0.78 } = {}) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-
-    reader.onload = () => {
-      const image = new Image();
-
-      image.onload = () => {
-        const ratio = Math.min(maxWidth / image.width, maxHeight / image.height, 1);
-        const width = Math.round(image.width * ratio);
-        const height = Math.round(image.height * ratio);
-
-        const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-
-        const context = canvas.getContext("2d");
-        context.fillStyle = "#ffffff";
-        context.fillRect(0, 0, width, height);
-        context.drawImage(image, 0, 0, width, height);
-
-        resolve(canvas.toDataURL("image/jpeg", quality));
-      };
-
-      image.onerror = () => reject(new Error("Não foi possível ler a imagem."));
-      image.src = reader.result;
-    };
-
-    reader.onerror = () => reject(new Error("Não foi possível carregar a imagem."));
-    reader.readAsDataURL(file);
-  });
 }
 
 function downloadBlob(blob, filename) {
@@ -97,102 +69,111 @@ function Field({ label, children }) {
 }
 
 export default function OrcamentosDossiers() {
+  const { user } = useAuth();
+  const { context } = usePermissions();
+  const scope = dossierDraftScope(user?.id, context?.organizationId, context?.storeId);
+  if (!scope) return <main className="quote-dossiers-page"><p role="alert">Seleciona uma organização autorizada para abrir o dossier.</p></main>;
+  return <DossierErrorBoundary key={scope}><DossierEditor scope={scope} /></DossierErrorBoundary>;
+}
+
+function DossierEditor({ scope }) {
   const [file, setFile] = useState(null);
-  const [dossier, setDossier] = useState(null);
-  const [items, setItems] = useState([]);
+  const { draft, status: draftStatus, restored, update: updateDraft, clear: clearDraft } = useDossierDraft(scope);
+  const { dossier, items } = draft;
   const [loadingExtract, setLoadingExtract] = useState(false);
   const [loadingGenerate, setLoadingGenerate] = useState(false);
+  const [imageLoading, setImageLoading] = useState({});
+  const [confirmAction, setConfirmAction] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [generatedPdf, setGeneratedPdf] = useState(null);
   const [generatedFilename, setGeneratedFilename] = useState("dossier-orcamento.pdf");
 
   const fileInputRef = useRef(null);
+  const alive = useRef(false), epoch = useRef(0), request = useRef(null), imageRequests = useRef(new Map());
+  useEffect(() => {
+    alive.current = true;
+    return () => { alive.current = false; request.current?.abort(); };
+  }, []);
+  function changed(updater) { setGeneratedPdf(null); updateDraft(updater); }
+  function newDossier() {
+    setConfirmAction("");
+    epoch.current++; request.current?.abort(); imageRequests.current.clear();
+    clearDraft(); setFile(null); setGeneratedPdf(null); setSuccess(""); setError("");
+    setLoadingExtract(false); setLoadingGenerate(false);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
 
   const totalItems = useMemo(() => items.length, [items]);
 
   function updateDossierField(field, value) {
-    setDossier((current) => ({
-      ...(current || {}),
-      [field]: value,
-    }));
+    changed(current => ({ ...current, dossier: { ...current.dossier, [field]: value } }));
   }
 
   function updateItem(index, field, value) {
-    setItems((current) =>
-      current.map((item, itemIndex) =>
-        itemIndex === index
-          ? {
-              ...item,
-              [field]: value,
-            }
-          : item,
-      ),
-    );
+    changed(current => ({ ...current, items: current.items.map((item, itemIndex) => itemIndex === index ? { ...item, [field]: value } : item) }));
   }
-
-  function updateItemFeatures(index, value) {
-    setItems((current) =>
-      current.map((item, itemIndex) =>
-        itemIndex === index
-          ? {
-              ...item,
-              features: splitFeatures(value),
-            }
-          : item,
-      ),
-    );
-  }
-
+  function updateItemFeatures(index, value) { updateItem(index, "features", splitFeatures(value)); }
   async function handleImageChange(index, imageFile) {
     if (!imageFile) return;
-
+    const documentVersion = epoch.current, imageRequest = {};
+    imageRequests.current.set(index, imageRequest);
+    setImageLoading(current => ({ ...current, [index]: true }));
+    const active = () => alive.current && documentVersion === epoch.current && imageRequests.current.get(index) === imageRequest;
     try {
       setError("");
-      const imageDataUrl = await resizeImageFile(imageFile);
-      updateItem(index, "imageDataUrl", imageDataUrl);
+      const imageDataUrl = await resizeDossierImage(imageFile);
+      if (active()) updateItem(index, "imageDataUrl", imageDataUrl);
     } catch (imageError) {
-      setError(imageError?.message || "Erro ao carregar fotografia.");
+      if (active()) setError(imageError?.message || "Erro ao carregar fotografia.");
+    } finally {
+      if (active()) setImageLoading(current => ({ ...current, [index]: false }));
     }
   }
+  function handleImagePaste(index, event) {
+    const entry = Array.from(event.clipboardData?.items || []).find(item => item.kind === "file" && item.type.startsWith("image/"));
+    const imageFile = entry?.getAsFile() || Array.from(event.clipboardData?.files || []).find(file => file.type.startsWith("image/"));
+    if (!imageFile) return; // Text/links keep their normal paste behavior.
+    event.preventDefault();
+    if (!loadingExtract && !loadingGenerate) handleImageChange(index, imageFile);
+  }
 
-  async function handleExtract() {
+  async function handleExtract(confirmed = false) {
     if (!file) {
       setError("Carrega primeiro o PDF do orçamento.");
       return;
     }
 
+    if (dossier && confirmed !== true) { setConfirmAction("replace"); return; }
+    setConfirmAction("");
+    const controller = new AbortController(); request.current?.abort(); request.current = controller;
+    const documentVersion = ++epoch.current;
+    const active = () => alive.current && documentVersion === epoch.current && !controller.signal.aborted;
     try {
       setLoadingExtract(true);
       setError("");
       setSuccess("");
       setGeneratedPdf(null);
 
+      if (file.size > 30 * 1024 * 1024) throw new Error("O PDF excede 30 MB. Reduz o tamanho do ficheiro.");
       const pdfBase64 = await fileToBase64(file);
+      if (!active()) return;
       const result = await extractQuoteDossier({
         filename: file.name,
         pdfBase64,
-      });
+      }, { signal: controller.signal });
+      if (!active()) return;
 
       const extractedDossier = result?.dossier || {};
       const extractedItems = Array.isArray(extractedDossier.items) ? extractedDossier.items : [];
 
-      setDossier({
-        budgetNumber: extractedDossier.budgetNumber || "",
-        customerName: extractedDossier.customerName || "",
-        date: extractedDossier.date || "",
-        total: extractedDossier.total || "",
-        notes:
-          extractedDossier.notes ||
-          "Rever fotografias, descrição, características e medidas antes de entregar ao cliente.",
-      });
-
-      setItems(extractedItems);
+      const nextDraft = normalizeDossierDraft({ dossier: extractedDossier, items: extractedItems, filename: file.name });
+      changed(nextDraft);
       setSuccess(`Orçamento extraído com ${extractedItems.length} equipamento(s). Revê os dados antes de gerar o PDF.`);
     } catch (extractError) {
-      setError(extractError?.message || "Erro ao extrair orçamento.");
+      if (active()) setError(extractError?.message || "Erro ao extrair orçamento.");
     } finally {
-      setLoadingExtract(false);
+      if (active()) setLoadingExtract(false);
     }
   }
 
@@ -202,6 +183,9 @@ export default function OrcamentosDossiers() {
       return;
     }
 
+    const controller = new AbortController(); request.current?.abort(); request.current = controller;
+    const documentVersion = epoch.current;
+    const active = () => alive.current && documentVersion === epoch.current && !controller.signal.aborted;
     try {
       setLoadingGenerate(true);
       setError("");
@@ -210,7 +194,8 @@ export default function OrcamentosDossiers() {
       const blob = await generateQuoteDossierPdf({
         dossier,
         items,
-      });
+      }, { signal: controller.signal });
+      if (!active()) return;
 
       const filename = `${safeFilename(`dossier-${dossier.budgetNumber || dossier.customerName || "orcamento"}`)}.pdf`;
 
@@ -219,9 +204,9 @@ export default function OrcamentosDossiers() {
       setSuccess("Dossier PDF gerado com sucesso.");
       openBlob(blob);
     } catch (generateError) {
-      setError(generateError?.message || "Erro ao gerar PDF.");
+      if (active()) setError(generateError?.message || "Erro ao gerar PDF.");
     } finally {
-      setLoadingGenerate(false);
+      if (active()) setLoadingGenerate(false);
     }
   }
 
@@ -230,6 +215,9 @@ export default function OrcamentosDossiers() {
     downloadBlob(generatedPdf, generatedFilename);
   }
 
+  if (draftStatus === "loading") return <main className="quote-dossiers-page"><p role="status">A recuperar o rascunho…</p></main>;
+
+  const busy = loadingExtract || loadingGenerate || Object.values(imageLoading).some(Boolean);
   return (
     <main className="quote-dossiers-page">
       <section className="quote-hero">
@@ -245,7 +233,7 @@ export default function OrcamentosDossiers() {
           type="button"
           className="btn btn-secondary"
           onClick={() => fileInputRef.current?.click()}
-          disabled={loadingExtract}
+          disabled={busy}
         >
           Escolher PDF
         </button>
@@ -257,26 +245,42 @@ export default function OrcamentosDossiers() {
             ref={fileInputRef}
             type="file"
             accept="application/pdf"
-            onChange={(event) => setFile(event.target.files?.[0] || null)}
+            disabled={busy}
+            onChange={(event) => { setFile(event.target.files?.[0] || null); setConfirmAction(""); }}
           />
 
           <div className="quote-file-info">
-            <strong>{file ? file.name : "Nenhum PDF selecionado"}</strong>
+            <strong>{file ? file.name : draft.filename || "Nenhum PDF selecionado"}</strong>
             <span>PDF original do orçamento Primavera/ORC.</span>
           </div>
 
-          <button type="button" className="btn btn-primary" onClick={handleExtract} disabled={!file || loadingExtract}>
+          <button type="button" className="btn btn-primary" onClick={() => handleExtract()} disabled={!file || busy}>
             {loadingExtract ? "A extrair..." : "Extrair orçamento"}
           </button>
         </div>
 
-        {error && <div className="quote-alert quote-alert-error">{error}</div>}
+        {dossier && <div className="quote-draft-status">
+          <p role="status">{draftStatus === "memory" ? "Não foi possível guardar neste navegador. O rascunho está em memória; evita fechar ou atualizar esta página." : draftStatus === "saving" ? "A guardar rascunho…" : restored ? "Rascunho recuperado. Podes continuar de onde paraste." : "Rascunho guardado neste separador durante 24 h."}</p>
+          <button type="button" className="btn btn-secondary" onClick={() => setConfirmAction("clear")} disabled={busy}>Novo dossier</button>
+        </div>}
+        {draftStatus === "clear_error" && <div className="quote-alert quote-alert-error" role="alert">
+          <p>Não foi possível eliminar a cópia guardada. Ao atualizar a página, o rascunho anterior poderá reaparecer.</p>
+          <button type="button" className="btn btn-secondary" onClick={clearDraft}>Repetir eliminação</button>
+        </div>}
+        {confirmAction && <div className="quote-confirm" role="alert">
+          <p>{confirmAction === "clear" ? "Eliminar este rascunho e começar um novo dossier?" : "Substituir este rascunho pelos dados do PDF selecionado?"} As edições atuais serão removidas.</p>
+          <div className="quote-confirm-actions">
+            <button type="button" className="btn btn-secondary" onClick={() => setConfirmAction("")}>Cancelar</button>
+            <button type="button" className="btn btn-primary" onClick={() => confirmAction === "clear" ? newDossier() : handleExtract(true)}>{confirmAction === "clear" ? "Eliminar rascunho" : "Substituir rascunho"}</button>
+          </div>
+        </div>}
+        {error && <div role="alert" className="quote-alert quote-alert-error">{error}</div>}
         {success && <div className="quote-alert quote-alert-success">{success}</div>}
       </section>
 
       {dossier && (
         <>
-          <section className="quote-card">
+          <fieldset className="quote-card quote-edit-fields" disabled={busy}>
             <div className="quote-section-header">
               <div>
                 <p className="eyebrow">Resumo</p>
@@ -310,16 +314,16 @@ export default function OrcamentosDossiers() {
                 onChange={(event) => updateDossierField("notes", event.target.value)}
               />
             </Field>
-          </section>
+          </fieldset>
 
-          <section className="quote-card">
+          <fieldset className="quote-card quote-edit-fields" disabled={busy}>
             <div className="quote-section-header">
               <div>
                 <p className="eyebrow">Equipamentos</p>
                 <h2>Revisão antes de gerar</h2>
               </div>
 
-              <button type="button" className="btn btn-primary" onClick={handleGenerate} disabled={loadingGenerate || !items.length}>
+              <button type="button" className="btn btn-primary" onClick={handleGenerate} disabled={busy || !items.length}>
                 {loadingGenerate ? "A gerar PDF..." : "Gerar dossier PDF"}
               </button>
             </div>
@@ -336,12 +340,15 @@ export default function OrcamentosDossiers() {
                   </div>
 
                   <div className="quote-item-layout">
-                    <div className="quote-image-uploader">
+                    <div className="quote-image-uploader" onPaste={event => handleImagePaste(index, event)}>
+                      <div className="quote-image-paste" role="group" tabIndex={busy ? -1 : 0} aria-label={`Fotografia do equipamento ${index + 1}. Foca esta área e cola com Ctrl+V ou Command+V.`}>
                       {item.imageDataUrl ? (
                         <img src={item.imageDataUrl} alt={item.reference || item.rawDescription} />
                       ) : (
                         <div className="quote-image-placeholder">Sem fotografia</div>
                       )}
+                      <span className="quote-image-paste-hint" role="status">{imageLoading[index] ? "A preparar fotografia…" : "Clica aqui e cola a fotografia · Ctrl+V / ⌘V"}</span>
+                      </div>
 
                       <label className="btn btn-secondary">
                         Carregar foto
@@ -394,7 +401,7 @@ export default function OrcamentosDossiers() {
             </div>
 
             <div className="quote-actions-bottom">
-              <button type="button" className="btn btn-primary" onClick={handleGenerate} disabled={loadingGenerate || !items.length}>
+              <button type="button" className="btn btn-primary" onClick={handleGenerate} disabled={busy || !items.length}>
                 {loadingGenerate ? "A gerar PDF..." : "Gerar dossier PDF"}
               </button>
 
@@ -404,7 +411,7 @@ export default function OrcamentosDossiers() {
                 </button>
               )}
             </div>
-          </section>
+          </fieldset>
         </>
       )}
     </main>

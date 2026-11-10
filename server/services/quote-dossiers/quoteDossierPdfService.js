@@ -1,465 +1,242 @@
 import PDFDocument from "pdfkit";
+import { fileURLToPath } from "node:url";
+import { normalizeDossierText as text, dossierFeatureRows, descriptionSource } from "./quoteDossierText.js";
 
-const PAGE_MARGIN = 42;
-const BRAND_COLOR = "#24465f";
-const ACCENT_COLOR = "#f97316";
-const LIGHT_BORDER = "#d9dee6";
-const SOFT_BG = "#f6f8fb";
-const TEXT_COLOR = "#17202a";
-const MUTED = "#657386";
+const MARGIN = 42;
+const TOP = 90;
+const INK = "#172b3a";
+const MUTED = "#536575";
+const ORANGE = "#ec6707";
+const BORDER = "#dce4e9";
+const SOFT = "#f3f6f8";
+const REGULAR = "Dossier-Regular";
+const BOLD = "Dossier-Bold";
+const regularPath = fileURLToPath(new URL("../../assets/fonts/DejaVuSans.ttf", import.meta.url));
+const boldPath = fileURLToPath(new URL("../../assets/fonts/DejaVuSans-Bold.ttf", import.meta.url));
 
-function text(value = "") {
-  return String(value || "").trim();
+function title(item = {}) {
+  return text(item.title || item.description || item.rawDescription || [item.brand, item.reference].filter(Boolean).join(" ") || "Equipamento").replace(/\s+/g, " ");
 }
-
-function euro(value = "") {
+function euro(value) {
   const clean = text(value);
-
-  if (!clean) return "—";
-  if (clean.includes("€")) return clean;
-
-  return `${clean} €`;
+  return !clean ? "Não indicado" : clean.includes("€") ? clean : `${clean} €`;
 }
-
-function quantity(value = "") {
+function quantity(value) {
   const clean = text(value);
-  if (!clean) return "—";
-  if (/un\.?$/i.test(clean)) return clean.replace(/1,00/i, "1");
-  return `${clean.replace(/,00$/, "")} un.`;
+  return !clean ? "Não indicada" : /un\.?$/i.test(clean) ? clean : `${clean.replace(/,00$/, "")} un.`;
+}
+function style(doc, { bold = false, size = 10, color = INK } = {}) {
+  return doc.font(bold ? BOLD : REGULAR).fontSize(size).fillColor(color);
+}
+function height(doc, value, width, options = {}) {
+  style(doc, options);
+  return value ? doc.heightOfString(value, { width, lineGap: 2, paragraphGap: 0 }) : 0;
+}
+function write(doc, value, x, y, width, options = {}) {
+  const h = height(doc, value, width, options);
+  doc.text(value, x, y, { width, height: h + 0.1, lineGap: 2, paragraphGap: 0, ...options });
+  return h;
 }
 
-function safeTitle(value = "") {
-  return text(value).replace(/\s+/g, " ");
+// Split without ellipsis or losing characters. Measurements use the same
+// embedded font and spacing as the final output, including long unbroken codes.
+function fittingText(doc, value, width, available, options) {
+  if (!value) return ["", ""];
+  if (height(doc, value, width, options) <= available) return [value, ""];
+  const characters = Array.from(value);
+  let low = 0, high = characters.length;
+  while (low < high) {
+    const mid = Math.ceil((low + high) / 2);
+    if (height(doc, characters.slice(0, mid).join(""), width, options) <= available) low = mid;
+    else high = mid - 1;
+  }
+  if (!low) throw new Error("Não foi possível paginar o texto do dossier.");
+  const prefix = characters.slice(0, low).join("");
+  const boundary = Math.max(prefix.lastIndexOf(" "), prefix.lastIndexOf("\n"));
+  if (boundary > prefix.length / 2) low = Array.from(prefix.slice(0, boundary)).length;
+  return [characters.slice(0, low).join("").trimEnd(), characters.slice(low).join("").trimStart()];
 }
 
-function cleanFeature(value = "") {
-  return text(value).replace(/^[-•]\s*/, "");
-}
-
-function parseImageDataUrl(dataUrl = "") {
-  const match = String(dataUrl || "").match(/^data:image\/(png|jpeg|jpg|webp|avif);base64,(.+)$/i);
-
-  if (!match) return null;
-
-  return Buffer.from(match[2], "base64");
-}
-
-function itemDisplayName(item = {}) {
-  return safeTitle(item.title || item.description || item.rawDescription || [item.brand, item.reference].filter(Boolean).join(" ") || "Equipamento");
-}
-
-function noteLines(notes = "") {
-  return String(notes || "")
-    .split(/\n+/)
-    .map((line) => text(line).replace(/^[-•]\s*/, ""))
-    .filter(Boolean)
-    .filter((line) => !/pronto\s+pagamento|condi[çc][aã]o\s+de\s+pagamento/i.test(line));
-}
-
-function drawHeader(doc, dossier = {}, pageTitle = "") {
-  const top = 24;
-
-  doc.save();
-
-  doc
-    .rect(PAGE_MARGIN, top, 86, 28)
-    .fill(ACCENT_COLOR);
-
-  doc
-    .fillColor("#ffffff")
-    .font("Helvetica-Bold")
-    .fontSize(15)
-    .text("expert", PAGE_MARGIN, top + 7, {
-      width: 86,
-      align: "center",
-      lineBreak: false,
-    });
-
-  doc
-    .fillColor(MUTED)
-    .font("Helvetica")
-    .fontSize(8.5)
-    .text(
-      [dossier.budgetNumber, pageTitle].filter(Boolean).join(" - "),
-      PAGE_MARGIN + 110,
-      top + 9,
-      {
-        width: doc.page.width - PAGE_MARGIN * 2 - 110,
-        align: "right",
-        lineBreak: false,
-      },
-    );
-
-  doc
-    .moveTo(PAGE_MARGIN, top + 42)
-    .lineTo(doc.page.width - PAGE_MARGIN, top + 42)
-    .strokeColor("#e2e8f0")
-    .lineWidth(0.8)
-    .stroke();
-
-  doc.restore();
-  doc.fillColor(TEXT_COLOR);
-}
-
-function drawFooter(doc, pageNumber) {
-  // Fica dentro da área imprimível do PDFKit. Se for desenhado muito abaixo,
-  // o PDFKit cria páginas automáticas quase vazias.
-  const y = doc.page.height - PAGE_MARGIN - 13;
-
-  doc.save();
-
-  doc
-    .moveTo(PAGE_MARGIN, y - 9)
-    .lineTo(doc.page.width - PAGE_MARGIN, y - 9)
-    .strokeColor("#e2e8f0")
-    .lineWidth(0.8)
-    .stroke();
-
-  doc
-    .fillColor("#7a8797")
-    .font("Helvetica")
-    .fontSize(8);
-
-  doc.text("Documento de características dos equipamentos", PAGE_MARGIN, y, {
-    width: 280,
-    align: "left",
-    lineBreak: false,
-  });
-
-  doc.text(`Página ${pageNumber}`, doc.page.width - PAGE_MARGIN - 90, y, {
-    width: 90,
-    align: "right",
-    lineBreak: false,
-  });
-
-  doc.restore();
-  doc.fillColor(TEXT_COLOR);
-}
-
-function startPage(doc, dossier, pageTitle) {
-  doc.addPage();
-  drawHeader(doc, dossier, pageTitle);
-
-  return 86;
-}
-
-function drawSectionTitle(doc, title, x, y) {
-  doc
-    .fillColor(BRAND_COLOR)
-    .font("Helvetica-Bold")
-    .fontSize(15)
-    .text(title, x, y);
-
-  doc.fillColor(TEXT_COLOR);
-  return y + 25;
-}
-
-function drawInfoTable(doc, rows = [], x, y, width, { labelWidth = 135, rowHeight = 24 } = {}) {
-  let currentY = y;
-
-  rows.forEach(([label, value]) => {
-    const valueText = text(value) || "—";
-    const estimatedHeight = Math.max(rowHeight, doc.heightOfString(valueText, { width: width - labelWidth - 14 }) + 12);
-
-    doc
-      .rect(x, currentY, labelWidth, estimatedHeight)
-      .fillAndStroke(SOFT_BG, LIGHT_BORDER)
-      .rect(x + labelWidth, currentY, width - labelWidth, estimatedHeight)
-      .fillAndStroke("#ffffff", LIGHT_BORDER);
-
-    doc
-      .fillColor("#2d3748")
-      .font("Helvetica-Bold")
-      .fontSize(9)
-      .text(label, x + 7, currentY + 8, { width: labelWidth - 14 });
-
-    doc
-      .fillColor(TEXT_COLOR)
-      .font("Helvetica")
-      .fontSize(9.5)
-      .text(valueText, x + labelWidth + 8, currentY + 7, { width: width - labelWidth - 16 });
-
-    currentY += estimatedHeight;
-  });
-
-  doc.fillColor(TEXT_COLOR);
-  return currentY;
-}
-
-function drawParagraph(doc, value, x, y, width, options = {}) {
-  const fontSize = options.fontSize || 10.2;
-  const lineGap = options.lineGap ?? 2;
-  const maxHeight = options.maxHeight || 90;
-  const content = text(value);
-  if (!content) return y;
-
-  doc
-    .font("Helvetica")
-    .fontSize(fontSize)
-    .fillColor(TEXT_COLOR);
-
-  const height = Math.min(doc.heightOfString(content, { width, lineGap }), maxHeight);
-
-  doc.text(content, x, y, {
-    width,
-    lineGap,
-    height,
-    ellipsis: true,
-  });
-
-  return y + height + 8;
-}
-
-function uniqueFeatures(features = []) {
-  const seen = new Set();
-
-  return (Array.isArray(features) ? features : String(features || "").split("\n"))
-    .map((feature) => text(feature))
-    .filter(Boolean)
-    .filter((feature) => {
-      const key = feature.toLowerCase();
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-}
-
-function drawBullets(doc, features = [], x, y, width, { maxItems = 10 } = {}) {
-  let currentY = y;
-
-  uniqueFeatures(features)
-    .slice(0, maxItems)
-    .forEach((feature) => {
-      const bullet = cleanFeature(feature);
-      if (!bullet) return;
-
-      const height = Math.min(doc.heightOfString(bullet, { width: width - 16, lineGap: 1 }), 28);
-
-      doc
-        .font("Helvetica")
-        .fontSize(9.5)
-        .fillColor(TEXT_COLOR)
-        .text("•", x, currentY, { width: 10 })
-        .text(bullet, x + 14, currentY, {
-          width: width - 16,
-          lineGap: 1,
-          height,
-          ellipsis: true,
-        });
-
-      currentY += height + 5;
-    });
-
-  return currentY;
-}
-
-function drawImageBox(doc, item, x, y, width, height) {
-  doc
-    .rect(x, y, width, height)
-    .fillAndStroke("#ffffff", LIGHT_BORDER);
-
-  const imageBuffer = parseImageDataUrl(item.imageDataUrl);
-
-  if (imageBuffer) {
-    try {
-      doc.image(imageBuffer, x + 12, y + 12, {
-        fit: [width - 24, height - 24],
-        align: "center",
-        valign: "center",
-      });
-      return;
-    } catch (error) {
-      console.warn("[quote-dossiers] failed to render image:", error?.message || error);
+class Layout {
+  constructor(doc, dossier) {
+    this.doc = doc;
+    this.dossier = dossier;
+    this.width = doc.page?.width || 595.28;
+    this.width -= MARGIN * 2;
+    this.y = TOP;
+    this.pageNumber = 0;
+    this.pageTitle = "Resumo do dossier";
+  }
+  get bottom() { return this.doc.page.height - 82; }
+  newPage(pageTitle = this.pageTitle) {
+    if (this.pageNumber) this.footer();
+    this.doc.addPage();
+    this.pageNumber++;
+    this.pageTitle = pageTitle;
+    const doc = this.doc;
+    doc.rect(MARGIN, 26, 82, 28).fill(ORANGE);
+    write(doc, "expert", MARGIN, 29, 82, { bold: true, size: 15, color: "#ffffff", align: "center" });
+    write(doc, "DOSSIER DE EQUIPAMENTOS", MARGIN + 98, 26, this.width - 98, { bold: true, size: 8, color: MUTED, align: "right" });
+    // Header identifiers can be long; full values are retained in the body.
+    const header = fittingText(doc, text(this.dossier.budgetNumber), this.width - 98, 14, { size: 9 })[0];
+    write(doc, header, MARGIN + 98, 40, this.width - 98, { size: 9, color: MUTED, align: "right" });
+    doc.moveTo(MARGIN, 67).lineTo(MARGIN + this.width, 67).lineWidth(0.7).strokeColor(BORDER).stroke();
+    this.y = TOP;
+    if (this.pageNumber > 1 && /continuação$/.test(pageTitle)) {
+      this.y += write(doc, pageTitle, MARGIN, this.y, this.width, { size: 9, color: MUTED }) + 14;
     }
   }
-
-  doc
-    .fillColor("#8b95a5")
-    .font("Helvetica")
-    .fontSize(9)
-    .text("Fotografia a inserir pelo utilizador", x, y + height / 2 - 5, {
-      width,
-      align: "center",
-    });
-
-  doc.fillColor(TEXT_COLOR);
-}
-
-function drawSummaryPage(doc, dossier = {}, pageNumber) {
-  let y = startPage(doc, dossier, "Características dos equipamentos");
-  const x = PAGE_MARGIN;
-  const width = doc.page.width - PAGE_MARGIN * 2;
-
-  y += 28;
-
-  doc
-    .fillColor(BRAND_COLOR)
-    .font("Helvetica-Bold")
-    .fontSize(23)
-    .text("Características dos Equipamentos", x + 50, y, { width: width - 100, align: "center" });
-
-  y += 28;
-
-  doc
-    .fillColor("#6b7280")
-    .font("Helvetica")
-    .fontSize(10)
-    .text(
-      [dossier.budgetNumber, dossier.customerName ? `Cliente: ${dossier.customerName}` : "", dossier.date ? `Data: ${dossier.date}` : ""]
-        .filter(Boolean)
-        .join(" | "),
-      x,
-      y,
-      { width, align: "center" },
-    );
-
-  y += 30;
-
-  const rows = [
-    ["Orçamento", dossier.budgetNumber],
-    ["Cliente", dossier.customerName],
-    ["Data do orçamento", dossier.date],
-    ["Total do orçamento", euro(dossier.total)],
-    ["N.º de equipamentos/elementos", `${(dossier.items || []).length} equipamento(s)`],
-  ];
-
-  y = drawInfoTable(doc, rows, x + 8, y, width - 16, { labelWidth: 160, rowHeight: 23 }) + 28;
-
-  y = drawSectionTitle(doc, "Enquadramento", x, y);
-  y = drawParagraph(
-    doc,
-    "O presente documento reúne, de forma separada e organizada, a identificação e as características dos equipamentos constantes do orçamento. A informação encontra-se estruturada de modo claro e objetivo, permitindo a consulta individual de cada elemento incluído.",
-    x,
-    y,
-    width,
-    { maxHeight: 70 },
-  );
-
-  const notes = noteLines(dossier.notes);
-  if (notes.length) {
-    y = drawSectionTitle(doc, "Observações do orçamento", x, y + 6);
-    y = drawBullets(doc, notes, x, y, width, { maxItems: 8 }) + 8;
+  continuation() {
+    const label = this.pageTitle.replace(/ - continuação$/, "");
+    this.newPage(`${label} - continuação`);
   }
-
-  y = drawSectionTitle(doc, "Equipamentos incluídos", x, y);
-
-  (dossier.items || []).slice(0, 18).forEach((item, index) => {
-    doc
-      .font("Helvetica")
-      .fontSize(10)
-      .fillColor(TEXT_COLOR)
-      .text(`${index + 1}. ${itemDisplayName(item)}`, x, y, { width });
-    y += 19;
-  });
-
-  drawFooter(doc, pageNumber);
+  ensure(space) { if (this.y + space > this.bottom) this.continuation(); }
+  footer() {
+    const doc = this.doc, y = doc.page.height - 47;
+    doc.moveTo(MARGIN, y - 12).lineTo(MARGIN + this.width, y - 12).lineWidth(0.7).strokeColor(BORDER).stroke();
+    write(doc, "Características dos equipamentos", MARGIN, y, this.width - 92, { size: 8, color: MUTED });
+    write(doc, `Página ${this.pageNumber}`, MARGIN + this.width - 92, y, 92, { size: 8, color: MUTED, align: "right" });
+  }
+  paragraph(value, options = {}) {
+    let remaining = text(value);
+    while (remaining) {
+      this.ensure(height(this.doc, "Ag", this.width, options) + 2);
+      const [part, rest] = fittingText(this.doc, remaining, this.width, this.bottom - this.y, options);
+      this.y += write(this.doc, part, MARGIN, this.y, this.width, options) + 10;
+      remaining = rest;
+      if (remaining) this.continuation();
+    }
+  }
+  section(value) {
+    this.ensure(58);
+    this.y += write(this.doc, value, MARGIN, this.y, this.width, { bold: true, size: 12 }) + 12;
+  }
+  table(rows, { x = MARGIN, width = this.width, labelWidth = 170 } = {}) {
+    for (const [labelValue, fieldValue] of rows) {
+      let label = text(labelValue), value = text(fieldValue) || "Não indicado";
+      const hasLabel = Boolean(label), lw = hasLabel ? labelWidth : 0;
+      const labelOptions = { size: 9.5, bold: true }, valueOptions = { size: 10 };
+      const lh = () => height(this.doc, label, lw - 18, labelOptions);
+      const vh = () => height(this.doc, value, width - lw - 18, valueOptions);
+      const wholeHeight = Math.max(hasLabel ? lh() : 0, vh()) + 18;
+      // Keep normal rows together; an exceptionally long row can continue.
+      if (wholeHeight <= this.bottom - TOP - 38) this.ensure(wholeHeight);
+      while (label || value) {
+        this.ensure(Math.min(wholeHeight, 44));
+        const available = this.bottom - this.y - 18;
+        const [labelPart, labelRest] = hasLabel ? fittingText(this.doc, label, lw - 18, available, labelOptions) : ["", ""];
+        const [valuePart, valueRest] = fittingText(this.doc, value, width - lw - 18, available, valueOptions);
+        const rowHeight = Math.max(hasLabel ? height(this.doc, labelPart, lw - 18, labelOptions) : 0, height(this.doc, valuePart, width - lw - 18, valueOptions)) + 18;
+        this.doc.rect(x, this.y, width, rowHeight).fillAndStroke("#ffffff", BORDER);
+        if (hasLabel) {
+          this.doc.rect(x, this.y, lw, rowHeight).fillAndStroke(SOFT, BORDER);
+          write(this.doc, labelPart, x + 9, this.y + 9, lw - 18, labelOptions);
+        }
+        write(this.doc, valuePart, x + lw + 9, this.y + 9, width - lw - 18, valueOptions);
+        this.y += rowHeight;
+        label = labelRest; value = valueRest;
+        if (label || value) this.continuation();
+      }
+    }
+  }
 }
 
-function drawProductPage(doc, dossier = {}, item = {}, index = 0, pageNumber = 1) {
-  let y = startPage(doc, dossier, "Características dos equipamentos");
-  const x = PAGE_MARGIN;
-  const width = doc.page.width - PAGE_MARGIN * 2;
+function imageBuffer(value) {
+  const match = String(value || "").match(/^data:image\/(?:png|jpe?g);base64,([a-z\d+/=\s]+)$/i);
+  return match ? Buffer.from(match[1], "base64") : null;
+}
+function imageBox(doc, buffer, x, y, width, boxHeight) {
+  doc.rect(x, y, width, boxHeight).fillAndStroke("#ffffff", BORDER);
+  try {
+    doc.image(buffer, x + 10, y + 10, { fit: [width - 20, boxHeight - 20], align: "center", valign: "center" });
+  } catch {
+    write(doc, "Fotografia indisponível", x + 10, y + boxHeight / 2 - 8, width - 20, { size: 9, color: MUTED, align: "center" });
+  }
+}
 
-  y += 34;
+function summary(layout, dossier) {
+  layout.newPage("Resumo do dossier");
+  layout.paragraph("Características dos equipamentos", { bold: true, size: 23 });
+  layout.paragraph("Identificação e informação técnica dos equipamentos incluídos no orçamento.", { size: 10.5, color: MUTED });
+  layout.y += 8;
+  layout.table([
+    ["Orçamento", dossier.budgetNumber], ["Cliente", dossier.customerName],
+    ["Data do orçamento", dossier.date], ["Total do orçamento", euro(dossier.total)],
+    ["Equipamentos / elementos", String(dossier.items.length)],
+  ]);
+  layout.y += 24;
+  const notes = text(dossier.notes).split(/\n+/).filter(line => !/pronto\s+pagamento|condi[çc][aã]o\s+de\s+pagamento/i.test(line));
+  if (notes.some(Boolean)) {
+    layout.section("Observações do orçamento");
+    layout.paragraph(notes.join("\n"));
+    layout.y += 12;
+  }
+  layout.section("Equipamentos incluídos");
+  dossier.items.forEach((item, index) => layout.paragraph(`${index + 1}. ${title(item)}`, { size: 10.5 }));
+  if (!dossier.items.length) layout.paragraph("Não foram adicionados equipamentos.", { color: MUTED });
+}
 
-  const title = `${index + 1}. ${itemDisplayName(item)}`;
-
-  doc
-    .fillColor(BRAND_COLOR)
-    .font("Helvetica-Bold")
-    .fontSize(18)
-    .text(title, x, y, { width });
-
-  y += 32;
-
-  y = drawInfoTable(
-    doc,
-    [
-      ["Categoria", item.category],
-      ["Referência", item.reference],
-      ["EAN", item.ean],
-      ["Quantidade", quantity(item.quantity)],
-      ["Valor no orçamento", euro(item.total || item.unitPrice)],
-    ],
-    x,
-    y,
-    width,
-    { labelWidth: 118, rowHeight: 23 },
-  ) + 10;
-
-  doc
-    .fillColor("#2d3748")
-    .font("Helvetica-Bold")
-    .fontSize(9.5)
-    .text("Fotografia do equipamento", x, y);
-
-  y += 14;
-
-  drawImageBox(doc, item, x, y, width, 125);
-  y += 142;
-
-  doc
-    .fillColor("#2d3748")
-    .font("Helvetica-Bold")
-    .fontSize(9.8)
-    .text("Descrição geral", x, y);
-
-  y += 16;
-
-  y = drawParagraph(
-    doc,
-    item.technicalDescription || "Descrição a inserir pelo utilizador.",
-    x,
-    y,
-    width,
-    { fontSize: 9.7, maxHeight: 74 },
-  );
-
-  doc
-    .fillColor("#2d3748")
-    .font("Helvetica-Bold")
-    .fontSize(9.8)
-    .text("Principais características", x, y + 4);
-
-  y += 22;
-  drawBullets(doc, item.features?.length ? item.features : ["Características a inserir pelo utilizador."], x + 8, y, width - 8, { maxItems: 8 });
-
-  drawFooter(doc, pageNumber);
+function product(layout, item, index) {
+  layout.newPage(`Equipamento ${index + 1}`);
+  layout.paragraph(`${index + 1}. ${title(item)}`, { bold: true, size: 17 });
+  layout.y += 6;
+  const rows = [
+    ["Categoria", item.category], ["Referência", item.reference], ["EAN", item.ean],
+    ["Quantidade", quantity(item.quantity)], ["Valor no orçamento", euro(item.total || item.unitPrice)],
+  ];
+  const photo = imageBuffer(item.imageDataUrl);
+  const photoWidth = 172, photoHeight = 174;
+  const infoWidth = layout.width - photoWidth - 16;
+  const infoHeight = rows.reduce((sum, [label, value]) => sum + Math.max(
+    height(layout.doc, text(label), 92 - 18, { size: 9.5, bold: true }),
+    height(layout.doc, text(value) || "Não indicado", infoWidth - 92 - 18, { size: 10 }),
+  ) + 18, 0);
+  if (photo && infoHeight <= 240) {
+    layout.ensure(Math.max(infoHeight, photoHeight));
+    const top = layout.y;
+    layout.table(rows, { width: infoWidth, labelWidth: 92 });
+    imageBox(layout.doc, photo, MARGIN + layout.width - photoWidth, top, photoWidth, photoHeight);
+    layout.y = Math.max(layout.y, top + photoHeight) + 22;
+  } else {
+    layout.table(rows); layout.y += 22;
+    if (photo) {
+      layout.ensure(photoHeight);
+      imageBox(layout.doc, photo, MARGIN, layout.y, layout.width, photoHeight);
+      layout.y += photoHeight + 22;
+    }
+  }
+  const description = text(item.technicalDescription), source = descriptionSource(description);
+  if (source) {
+    layout.section("Fonte de informação");
+    layout.paragraph(`Consultar ficha do produto - ${source.label}`, { size: 9.5, color: MUTED, link: source.url, underline: true });
+  } else if (description) {
+    layout.section("Descrição geral"); layout.paragraph(description);
+  }
+  layout.y += 8;
+  layout.section("Características técnicas");
+  const features = dossierFeatureRows(item.features);
+  if (features.length) layout.table(features);
+  else layout.paragraph("Não foram adicionadas características técnicas.", { color: MUTED });
 }
 
 export async function generateQuoteDossierPdf({ dossier = {}, items = [] } = {}) {
   return new Promise((resolve, reject) => {
-    const finalDossier = {
-      ...dossier,
-      items: Array.isArray(items) ? items : [],
-    };
-
-    const doc = new PDFDocument({
-      size: "A4",
-      margin: PAGE_MARGIN,
-      autoFirstPage: false,
-      bufferPages: false,
-      info: {
-        Title: `${finalDossier.budgetNumber || "Orçamento"} - Características dos equipamentos`,
-        Author: "PromoPilot",
-        Subject: "Dossier técnico manual",
-      },
-    });
-
+    const finalDossier = { ...dossier, items: Array.isArray(items) ? items : [] };
+    const doc = new PDFDocument({ size: "A4", margin: MARGIN, autoFirstPage: false, info: {
+      Title: `${text(dossier.budgetNumber) || "Orçamento"} - Características dos equipamentos`,
+      Author: "PromoPilot", Subject: "Dossier técnico manual",
+    } });
     const chunks = [];
-
-    doc.on("data", (chunk) => chunks.push(chunk));
-    doc.on("error", reject);
+    doc.on("data", chunk => chunks.push(chunk)); doc.on("error", reject);
     doc.on("end", () => resolve(Buffer.concat(chunks)));
-
-    let pageNumber = 1;
-    drawSummaryPage(doc, finalDossier, pageNumber);
-
-    finalDossier.items.forEach((item, index) => {
-      pageNumber += 1;
-      drawProductPage(doc, finalDossier, item, index, pageNumber);
-    });
-
-    doc.end();
+    try {
+      // Bundled and subset-embedded: independent of fonts installed on Render or
+      // the customer's PDF reader. Preserve accents and technical Unicode units.
+      doc.registerFont(REGULAR, regularPath); doc.registerFont(BOLD, boldPath);
+      const layout = new Layout(doc, finalDossier);
+      summary(layout, finalDossier);
+      finalDossier.items.forEach((item, index) => product(layout, item, index));
+      layout.footer(); doc.end();
+    } catch (error) { doc.destroy(); reject(error); }
   });
 }

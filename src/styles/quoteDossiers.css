@@ -226,3 +226,14 @@
     grid-template-columns: 1fr;
   }
 }
+
+.quote-edit-fields { min-width: 0; }
+.quote-image-paste { border-radius: 14px; outline: 2px dashed #b9c8d4; outline-offset: 4px; cursor: text; }
+.quote-image-paste:focus { outline: 3px solid #e85f06; }
+.quote-image-paste-hint { display: block; padding: 8px 4px; color: #536575; font-size: .8rem; text-align: center; }
+.quote-draft-status { display: flex; gap: 16px; justify-content: space-between; align-items: center; margin-top: 16px; }
+.quote-draft-status p { margin: 0; color: #475569; font-size: .9rem; }
+.quote-confirm { margin-top: 16px; padding: 16px; border: 1px solid #f5c997; border-radius: 12px; background: #fff9f0; }
+.quote-confirm p { margin: 0 0 12px; }
+.quote-confirm-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+@media (max-width: 650px) { .quote-draft-status { flex-direction: column; align-items: stretch; } }

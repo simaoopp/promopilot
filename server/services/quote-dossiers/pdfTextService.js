@@ -164,7 +164,8 @@ async function extractTextWithBundledPdfJs(buffer) {
 function looksLikePrimaveraQuoteText(text = "") {
   return /\bORC\.[A-Z0-9./-]+/i.test(text) && (
     /\bEAN\s*:?\s*\d{8,14}/i.test(text) ||
-    /\b\d{2}\.\d{3}\.\d{3}\.\d{5}\b/.test(text)
+    /\b\d{2}\.\d{3}\.\d{3}\.\d{5}\b/.test(text) ||
+    /^\S+\s+[^\n]+\s+\d+(?:,\d+)?\s+UN\s+[\d .]+,\d{2,4}\b/im.test(text)
   );
 }
 

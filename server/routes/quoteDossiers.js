@@ -6,7 +6,7 @@ import {
   normalizeCustomerName,
 } from "../services/quote-dossiers/quoteDossierCustomerService.js";
 
-export const QUOTE_DOSSIER_RUNTIME_VERSION = "quote-dossier-manual-runtime-v9";
+export const QUOTE_DOSSIER_RUNTIME_VERSION = "quote-dossier-manual-runtime-v10";
 
 function requireString(value, field, { min = 1, max = 500 } = {}) {
   const text = String(value || "").trim();
