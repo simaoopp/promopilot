@@ -1,3 +1,5 @@
+import { normalizeTechnicalPdf } from "./dossierTechnicalPdf";
+
 const DB_NAME = "promopilot-dossier-drafts";
 const TABLE = "drafts";
 const MAX_AGE = 24 * 60 * 60 * 1000;
@@ -22,6 +24,7 @@ export function normalizeDossierDraft(value) {
     const features = Array.isArray(item.features) ? item.features : String(item.features || "").split("\n");
     if (features.some(feature => typeof feature !== "string")) throw new Error("Características inválidas no dossier.");
     result.features = [...features];
+    result.technicalSheet = normalizeTechnicalPdf(item.technicalSheet);
     if (!/^data:image\/(?:png|jpe?g|webp);base64,/i.test(result.imageDataUrl)) result.imageDataUrl = "";
     return result;
   });

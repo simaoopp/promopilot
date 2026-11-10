@@ -46,3 +46,19 @@ test("only editor data is stored, never auth data or raw PDF text", async () => 
   expect(() => normalizeDossierDraft({ dossier: {}, items: [null] })).toThrow();
   expect(dossierDraftScope("a", null, "s")).toBe("");
 });
+test("technical PDF Blobs survive recovery only for their account and organization", async () => {
+  const disk = storage(), blob = new Blob(["%PDF-1.7\n%%EOF"], { type: "application/pdf" });
+  const value = draft("QA"); value.items[0].technicalSheet = { name: "ficha.pdf", blob };
+  await createDossierDraftStore(disk, "tab-a").save(scope, value);
+  const restored = await createDossierDraftStore(disk, "tab-a").load(scope);
+  expect(restored.draft.items[0].technicalSheet.blob).toBe(blob);
+  expect(restored.draft.items[0].technicalSheet.name).toBe("ficha.pdf");
+  expect((await createDossierDraftStore(disk, "tab-a").load(dossierDraftScope("user-b", "org-a", "store-a"))).draft.dossier).toBeNull();
+  expect((await createDossierDraftStore(disk, "tab-a").load(dossierDraftScope("user-a", "org-b", "store-a"))).draft.dossier).toBeNull();
+});
+test("old drafts and a damaged optional PDF keep the rest of the dossier", () => {
+  const value = draft("Preserved"); value.items[0].technicalSheet = { name: "Broken.pdf", blob: "not a blob" };
+  expect(normalizeDossierDraft(value).dossier.customerName).toBe("Preserved");
+  expect(normalizeDossierDraft(value).items[0].technicalSheet).toBeNull();
+  expect(normalizeDossierDraft(draft("Old version")).items[0].technicalSheet).toBeNull();
+});

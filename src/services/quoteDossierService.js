@@ -49,4 +49,13 @@ async function dossierRequest(path, body, { signal, pdf = false } = {}) {
   }
 }
 export const extractQuoteDossier = ({ filename, pdfBase64 }, options) => dossierRequest("extract", { filename, pdfBase64 }, options);
-export const generateQuoteDossierPdf = ({ dossier, items }, options) => dossierRequest("generate", { dossier, items }, { ...options, pdf: true });
+export const generateQuoteDossierPdf = ({ dossier, items }, options) => {
+  // Technical sheets belong to the local draft. They are not uploaded as part
+  // of PDF generation or turned into unusable blob: links in the final dossier.
+  const printableItems = (Array.isArray(items) ? items : []).map(item => {
+    const printable = { ...item };
+    delete printable.technicalSheet;
+    return printable;
+  });
+  return dossierRequest("generate", { dossier, items: printableItems }, { ...options, pdf: true });
+};

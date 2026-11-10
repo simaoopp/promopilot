@@ -228,6 +228,23 @@
 }
 
 .quote-edit-fields { min-width: 0; }
+.quote-equipment-media { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.quote-technical-pdf { padding: 14px; border: 1px solid #d4dfe8; border-radius: 12px; background: #fff; }
+.quote-technical-pdf-heading { display: flex; align-items: baseline; flex-wrap: wrap; justify-content: space-between; gap: 8px; color: #203d57; font-size: .9rem; }
+.quote-technical-pdf-heading span { font-size: .75rem; color: #64748b; }
+.quote-technical-pdf-input { display: none; }
+.quote-technical-pdf-name { display: flex; flex-direction: column; gap: 4px; margin: 12px 0; }
+.quote-technical-pdf-name strong { overflow-wrap: anywhere; font-size: .85rem; }
+.quote-technical-pdf-name span, .quote-technical-pdf-empty { font-size: .8rem; color: #64748b; }
+.quote-technical-pdf-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.quote-technical-pdf-actions .btn { padding: 8px 10px; font-size: .8rem; text-decoration: none; }
+.quote-technical-pdf-link { padding: 3px 0; border: 0; background: none; color: #365b78; font: inherit; font-size: .8rem; text-decoration: underline; cursor: pointer; }
+.quote-technical-pdf-link:disabled { opacity: .5; cursor: default; }
+.quote-technical-pdf-note { margin: 12px 0 0; font-size: .75rem; line-height: 1.4; color: #64748b; }
+.quote-technical-pdf-confirm, .quote-technical-pdf-error { font-size: .8rem; margin: 12px 0 0; }
+.quote-technical-pdf-confirm .btn { margin: 4px 6px 0 0; font-size: .8rem; }
+.quote-technical-pdf-error { color: #a51c24; }
+.quote-technical-pdf a:focus-visible, .quote-technical-pdf button:focus-visible { outline: 3px solid #e85f06; outline-offset: 3px; }
 .quote-image-paste { border-radius: 14px; outline: 2px dashed #b9c8d4; outline-offset: 4px; cursor: text; }
 .quote-image-paste:focus { outline: 3px solid #e85f06; }
 .quote-image-paste-hint { display: block; padding: 8px 4px; color: #536575; font-size: .8rem; text-align: center; }

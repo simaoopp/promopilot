@@ -9,10 +9,12 @@ import { loadAccess } from "../services/platformService";
 import { extractQuoteDossier, generateQuoteDossierPdf } from "../services/quoteDossierService";
 import { createDossierDraftStore, getDossierDraftStore } from "../features/quote-dossiers/dossierDraftStore";
 import { resizeDossierImage } from "../features/quote-dossiers/dossierImage";
+import { prepareTechnicalPdf } from "../features/quote-dossiers/dossierTechnicalPdf";
 import { authIssue } from "../utils/authErrors";
 jest.mock("../context/AuthContext", () => ({ useAuth: jest.fn() }));
 jest.mock("../services/platformService", () => ({ loadAccess: jest.fn(), setPermissionSnapshot: jest.fn(), selectAccess: jest.fn() }));
 jest.mock("../services/quoteDossierService", () => ({ extractQuoteDossier: jest.fn(), generateQuoteDossierPdf: jest.fn() }));
+jest.mock("../features/quote-dossiers/dossierTechnicalPdf", () => ({ ...jest.requireActual("../features/quote-dossiers/dossierTechnicalPdf"), prepareTechnicalPdf: jest.fn() }));
 jest.mock("../features/quote-dossiers/dossierImage", () => ({ resizeDossierImage: jest.fn() }));
 jest.mock("../features/quote-dossiers/dossierDraftStore", () => ({ ...jest.requireActual("../features/quote-dossiers/dossierDraftStore"), getDossierDraftStore: jest.fn() }));
 let root, host, permission, disk, records, auth;
@@ -28,6 +30,8 @@ beforeEach(() => {
   getDossierDraftStore.mockReturnValue(createDossierDraftStore(disk, "tab-a"));
   extractQuoteDossier.mockResolvedValue({ dossier: { budgetNumber: "QA/1", customerName: "Demonstração", items: [{ articleCode: "ORÇ000QA", brand: "QA", reference: "MODEL 001", total: "4299,99", features: [] }] } });
   resizeDossierImage.mockResolvedValue("data:image/jpeg;base64,cGhvdG8=");
+  let pdfUrl = 0; URL.createObjectURL = jest.fn(() => `blob:sheet-${++pdfUrl}`); URL.revokeObjectURL = jest.fn();
+  prepareTechnicalPdf.mockResolvedValue({ name: "ficha-qa.pdf", blob: new Blob(["%PDF-1.7\n%%EOF"], { type: "application/pdf" }) });
   host = document.createElement("div"); document.body.append(host); root = createRoot(host);
 });
 afterEach(async () => { await act(async () => root.unmount()); host.remove(); jest.useRealTimers(); jest.restoreAllMocks(); });
@@ -124,4 +128,30 @@ test("paste applies to the focused equipment and waits for conversion before PDF
   expect(button("Gerar dossier PDF").disabled).toBe(false);
   const targets = host.querySelectorAll(".quote-image-paste");
   expect(targets[0].querySelector("img")).toBeNull(); expect(targets[1].querySelector("img")).not.toBeNull();
+});
+
+async function attachPdf(index = 0) {
+  const input = host.querySelectorAll('input[accept="application/pdf,.pdf"]')[index];
+  Object.defineProperty(input, "files", { configurable: true, value: [new File(["%PDF-1.7\n%%EOF"], "ficha-qa.pdf", { type: "application/pdf" })] });
+  await act(async () => input.dispatchEvent(new Event("change", { bubbles: true })));
+}
+test("technical PDF stays with its equipment after access retry and page reload", async () => {
+  extractQuoteDossier.mockResolvedValue({ dossier: { budgetNumber: "QA/2", items: [{ articleCode: "QA001" }, { articleCode: "QA002" }] } });
+  await mount(); await extract(); await attachPdf(1);
+  let sections = host.querySelectorAll(".quote-technical-pdf");
+  expect(sections[0].querySelector("a")).toBeNull(); expect(sections[1].textContent).toContain("ficha-qa.pdf");
+  loadAccess.mockRejectedValueOnce(authIssue("NETWORK_ERROR", 503)); await act(async () => permission.refresh());
+  await act(async () => button("Tentar novamente").click()); expect(host.querySelectorAll(".quote-technical-pdf")[1].querySelector("a").textContent).toBe("Abrir PDF");
+  await act(async () => root.unmount()); getDossierDraftStore.mockReturnValue(createDossierDraftStore(disk, "tab-a")); root = createRoot(host);
+  await mount(); sections = host.querySelectorAll(".quote-technical-pdf");
+  expect(sections[0].querySelector("a")).toBeNull(); expect(sections[1].querySelector("a").getAttribute("href")).toMatch(/^blob:sheet-/);
+  expect(sections[1].textContent).toContain("ficha-qa.pdf");
+});
+test("a pending technical PDF cannot be lost by generating or replacing the dossier mid-read", async () => {
+  let finish; prepareTechnicalPdf.mockReturnValue(new Promise(resolve => { finish = resolve; }));
+  await mount(); await extract(); await attachPdf();
+  expect(button("Gerar dossier PDF").disabled).toBe(true); expect(button("Novo dossier").disabled).toBe(true);
+  await act(async () => finish({ name: "ficha.pdf", blob: new Blob(["%PDF-1.7\n%%EOF"], { type: "application/pdf" }) }));
+  expect(button("Gerar dossier PDF").disabled).toBe(false); expect(button("Novo dossier").disabled).toBe(false);
+  expect(host.querySelector(".quote-technical-pdf a").textContent).toBe("Abrir PDF");
 });

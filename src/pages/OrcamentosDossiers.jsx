@@ -7,6 +7,7 @@ import { dossierDraftScope, normalizeDossierDraft } from "../features/quote-doss
 import useDossierDraft from "../features/quote-dossiers/useDossierDraft";
 import DossierErrorBoundary from "../features/quote-dossiers/DossierErrorBoundary";
 import { resizeDossierImage } from "../features/quote-dossiers/dossierImage";
+import TechnicalPdfAttachment from "../features/quote-dossiers/TechnicalPdfAttachment";
 
 function arrayBufferToBase64(buffer) {
   const bytes = new Uint8Array(buffer);
@@ -83,6 +84,7 @@ function DossierEditor({ scope }) {
   const [loadingExtract, setLoadingExtract] = useState(false);
   const [loadingGenerate, setLoadingGenerate] = useState(false);
   const [imageLoading, setImageLoading] = useState({});
+  const [sheetLoading, setSheetLoading] = useState({});
   const [confirmAction, setConfirmAction] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -217,7 +219,7 @@ function DossierEditor({ scope }) {
 
   if (draftStatus === "loading") return <main className="quote-dossiers-page"><p role="status">A recuperar o rascunho…</p></main>;
 
-  const busy = loadingExtract || loadingGenerate || Object.values(imageLoading).some(Boolean);
+  const busy = loadingExtract || loadingGenerate || Object.values(imageLoading).some(Boolean) || Object.values(sheetLoading).some(Boolean);
   return (
     <main className="quote-dossiers-page">
       <section className="quote-hero">
@@ -340,6 +342,7 @@ function DossierEditor({ scope }) {
                   </div>
 
                   <div className="quote-item-layout">
+                    <div className="quote-equipment-media">
                     <div className="quote-image-uploader" onPaste={event => handleImagePaste(index, event)}>
                       <div className="quote-image-paste" role="group" tabIndex={busy ? -1 : 0} aria-label={`Fotografia do equipamento ${index + 1}. Foca esta área e cola com Ctrl+V ou Command+V.`}>
                       {item.imageDataUrl ? (
@@ -358,6 +361,8 @@ function DossierEditor({ scope }) {
                           onChange={(event) => handleImageChange(index, event.target.files?.[0])}
                         />
                       </label>
+                    </div>
+                    <TechnicalPdfAttachment value={item.technicalSheet} equipmentNumber={index + 1} disabled={busy} onChange={value => updateItem(index, "technicalSheet", value)} onReadingChange={reading => { if (alive.current) setSheetLoading(current => ({ ...current, [index]: reading })); }} />
                     </div>
 
                     <div className="quote-item-fields">

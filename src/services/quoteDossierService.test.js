@@ -47,3 +47,13 @@ test("cancelled pages abort their pending operation", async () => {
   const operation = extractQuoteDossier({}, { signal: controller.signal }); const assertion = expect(operation).rejects.toMatchObject({ name: "AbortError" });
   await Promise.resolve(); controller.abort(); await assertion;
 });
+test("local technical sheets are never sent in the dossier generation request", async () => {
+  const attachment = { name: "private-manufacturer-sheet.pdf", blob: new Blob(["private bytes"], { type: "application/pdf" }) };
+  const item = Object.freeze({ articleCode: "QA001", total: "99,99", technicalSheet: attachment });
+  fetch.mockResolvedValue({ ...ok(), headers: { get: () => "application/pdf" }, blob: async () => new Blob(["%PDF-1.7"]) });
+  await generateQuoteDossierPdf({ dossier: { budgetNumber: "QA/1" }, items: [item] });
+  const body = JSON.parse(fetch.mock.calls[0][1].body);
+  expect(body.items).toEqual([{ articleCode: "QA001", total: "99,99" }]);
+  expect(fetch.mock.calls[0][1].body).not.toMatch(/technicalSheet|private-manufacturer|private bytes/);
+  expect(item.technicalSheet).toBe(attachment);
+});
