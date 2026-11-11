@@ -26,7 +26,7 @@ beforeEach(() => {
   jest.spyOn(console, "warn").mockImplementation(() => {});
   auth = { user: { id: "user-a" }, authStatus: "authenticated", loadingProfile: false, profileError: "", updateAccessContext: jest.fn() };
   useAuth.mockImplementation(() => auth); loadAccess.mockResolvedValue(access());
-  records = new Map(); disk = { read: async key => records.get(key), write: async record => records.set(record.key, record), remove: async key => records.delete(key) };
+  records = new Map(); disk = { read: async key => records.get(key), list: async () => [...records.values()], write: async (record, expected) => { if ((records.get(record.key)?.revision || null) !== expected) return false; records.set(record.key, record); return true; }, remove: async (key, expected) => { if ((records.get(key)?.revision || null) === expected) records.delete(key); } };
   getDossierDraftStore.mockReturnValue(createDossierDraftStore(disk, "tab-a"));
   extractQuoteDossier.mockResolvedValue({ dossier: { budgetNumber: "QA/1", customerName: "Demonstração", items: [{ articleCode: "ORÇ000QA", brand: "QA", reference: "MODEL 001", total: "4299,99", features: [] }] } });
   resizeDossierImage.mockResolvedValue("data:image/jpeg;base64,cGhvdG8=");
@@ -72,6 +72,17 @@ test("a page reload recovers the persisted draft with a fresh in-memory store", 
   await act(async () => root.unmount()); getDossierDraftStore.mockReturnValue(createDossierDraftStore(disk, "tab-a")); root = createRoot(host);
   await mount(); expect(field("Observações").value).toBe("Preservar após F5"); expect(host.textContent).toContain("Rascunho recuperado");
 });
+test("reopening in a different tab recovers the dossier and shows its expiry", async () => {
+  await mount(); await extract(); await edit("Observações", "Retomar amanhã");
+  await act(async () => root.unmount()); getDossierDraftStore.mockReturnValue(createDossierDraftStore(disk, "new-tab")); root = createRoot(host);
+  await mount(); expect(field("Observações").value).toBe("Retomar amanhã");
+  expect(host.textContent).toContain("Disponível para editar até");
+});
+test("24 hours without edits removes the draft even while the editor stays open", async () => {
+  await mount(); await extract();
+  await act(async () => jest.advanceTimersByTime(24 * 3600000));
+  expect(field("Cliente")).toBeUndefined(); expect(host.textContent).toContain("O rascunho expirou"); expect(records.size).toBe(0);
+});
 test("another organization never displays the previous draft", async () => {
   await mount(); await extract(); await edit("Cliente", "Organização A");
   loadAccess.mockResolvedValue(access("org-b")); await act(async () => permission.refresh());
@@ -109,14 +120,14 @@ test("clearing needs an explicit confirmation and removes only this draft", asyn
   await act(async () => button("Cancelar").click()); expect(field("Cliente")).toBeDefined();
   await act(async () => button("Novo dossier").click());
   await act(async () => button("Eliminar rascunho").click());
-  expect(field("Cliente")).toBeUndefined(); expect(records.size).toBe(0);
+  expect(field("Cliente")).toBeUndefined(); expect([...records.values()].every(record => record.draft === null)).toBe(true);
 });
 test("a storage deletion failure is visible instead of claiming the saved draft was removed", async () => {
-  await mount(); await extract(); disk.remove = async () => { throw new Error("Storage unavailable"); };
+  await mount(); await extract(); const write = disk.write; disk.write = async () => { throw new Error("Storage unavailable"); };
   await act(async () => button("Novo dossier").click()); await act(async () => button("Eliminar rascunho").click());
   expect(host.textContent).toContain("Não foi possível eliminar a cópia guardada");
-  disk.remove = async key => records.delete(key); await act(async () => button("Repetir eliminação").click());
-  expect(host.textContent).not.toContain("Não foi possível eliminar"); expect(records.size).toBe(0);
+  disk.write = write; await act(async () => button("Repetir eliminação").click());
+  expect(host.textContent).not.toContain("Não foi possível eliminar"); expect([...records.values()].every(record => record.draft === null)).toBe(true);
 });
 
 test("paste applies to the focused equipment and waits for conversion before PDF generation", async () => {

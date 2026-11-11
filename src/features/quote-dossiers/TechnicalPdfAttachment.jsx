@@ -45,7 +45,7 @@ export default function TechnicalPdfAttachment({ value, equipmentNumber, disable
       </>}
       {sheet && <button type="button" className="quote-technical-pdf-link" onClick={() => setConfirmRemove(true)} disabled={unavailable}>Remover</button>}
     </div>
-    {sheet && <p className="quote-technical-pdf-note">Guardada no rascunho como ficheiro separado do dossier gerado.</p>}
+    {sheet && <p className="quote-technical-pdf-note">Incluída no PDF final como anexo deste equipamento.</p>}
     {confirmRemove && <div className="quote-technical-pdf-confirm" role="alert">
       <p>Remover esta ficha técnica do equipamento?</p>
       <button type="button" className="btn btn-secondary" onClick={() => setConfirmRemove(false)}>Cancelar</button>

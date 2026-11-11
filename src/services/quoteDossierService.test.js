@@ -1,12 +1,16 @@
 import { extractQuoteDossier, generateQuoteDossierPdf } from "./quoteDossierService";
 import { requireSession } from "./authSessionService";
 import { getAccessCacheScope, tenantHeaders } from "./platformService";
+import { appendTechnicalSheets } from "../features/quote-dossiers/appendTechnicalSheets";
+jest.mock("../features/quote-dossiers/createDossierPdfWorker", () => ({ __esModule: true, default: jest.fn() }));
+jest.mock("../features/quote-dossiers/appendTechnicalSheets", () => ({ ...jest.requireActual("../features/quote-dossiers/appendTechnicalSheets"), appendTechnicalSheets: jest.fn() }));
 jest.mock("./authSessionService", () => ({ requireSession: jest.fn() }));
 jest.mock("./platformService", () => ({ getAccessCacheScope: jest.fn(), tenantHeaders: jest.fn() }));
 const ok = () => ({ ok: true, status: 200, json: async () => ({ dossier: { items: [] } }) });
 beforeEach(() => {
   jest.useFakeTimers(); jest.clearAllMocks(); jest.spyOn(console, "warn").mockImplementation(() => {});
   global.fetch = jest.fn(async () => ok());
+  appendTechnicalSheets.mockImplementation(async base => base);
   requireSession.mockResolvedValue({ user: { id: "user-a" }, access_token: "synthetic-token" });
   getAccessCacheScope.mockReturnValue("user-a:org-a:store-a");
   tenantHeaders.mockReturnValue({ "X-Organization-Id": "org-a", "X-Store-Id": "store-a" });
@@ -56,4 +60,13 @@ test("local technical sheets are never sent in the dossier generation request", 
   expect(body.items).toEqual([{ articleCode: "QA001", total: "99,99" }]);
   expect(fetch.mock.calls[0][1].body).not.toMatch(/technicalSheet|private-manufacturer|private bytes/);
   expect(item.technicalSheet).toBe(attachment);
+  expect(appendTechnicalSheets).toHaveBeenCalledWith(expect.any(Blob), [expect.objectContaining({ equipmentNumber: 1, blob: attachment.blob })], undefined);
+});
+test("only the merged PDF is returned and scope changes while merging reject it", async () => {
+  const final = new Blob(["merged"], { type: "application/pdf" });
+  fetch.mockResolvedValue({ ...ok(), headers: { get: () => "application/pdf" }, blob: async () => new Blob(["base"]) });
+  appendTechnicalSheets.mockResolvedValueOnce(final);
+  expect(await generateQuoteDossierPdf({ dossier: {}, items: [] })).toBe(final);
+  appendTechnicalSheets.mockImplementationOnce(async () => { getAccessCacheScope.mockReturnValue("user-a:org-b:store-a"); return final; });
+  await expect(generateQuoteDossierPdf({ dossier: {}, items: [] })).rejects.toMatchObject({ code: "SESSION_CHANGED" });
 });

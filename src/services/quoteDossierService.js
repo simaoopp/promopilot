@@ -2,6 +2,7 @@ import { tenantHeaders, getAccessCacheScope } from "./platformService";
 import { requireSession } from "./authSessionService";
 import { normalizeApiBaseUrl } from "../shared/apiBaseUrl.mjs";
 import { authIssue, withAuthDeadline } from "../utils/authErrors";
+import { appendTechnicalSheets, collectTechnicalSheets } from "../features/quote-dossiers/appendTechnicalSheets";
 
 async function dossierRequest(path, body, { signal, pdf = false } = {}) {
   const scope = getAccessCacheScope();
@@ -49,13 +50,19 @@ async function dossierRequest(path, body, { signal, pdf = false } = {}) {
   }
 }
 export const extractQuoteDossier = ({ filename, pdfBase64 }, options) => dossierRequest("extract", { filename, pdfBase64 }, options);
-export const generateQuoteDossierPdf = ({ dossier, items }, options) => {
-  // Technical sheets belong to the local draft. They are not uploaded as part
-  // of PDF generation or turned into unusable blob: links in the final dossier.
-  const printableItems = (Array.isArray(items) ? items : []).map(item => {
+export const generateQuoteDossierPdf = async ({ dossier, items }, options) => {
+  const scope = getAccessCacheScope();
+  const allItems = Array.isArray(items) ? items : [];
+  const sheets = collectTechnicalSheets(allItems);
+  // Generate the editable dossier through the authenticated API, then append
+  // the actual PDF pages locally. Never upload blobs or send temporary URLs.
+  const printableItems = allItems.map(item => {
     const printable = { ...item };
     delete printable.technicalSheet;
     return printable;
   });
-  return dossierRequest("generate", { dossier, items: printableItems }, { ...options, pdf: true });
+  const base = await dossierRequest("generate", { dossier, items: printableItems }, { ...options, pdf: true });
+  const result = await appendTechnicalSheets(base, sheets, options);
+  if (scope !== getAccessCacheScope()) throw authIssue("SESSION_CHANGED");
+  return result;
 };

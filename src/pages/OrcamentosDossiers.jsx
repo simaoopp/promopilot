@@ -79,7 +79,7 @@ export default function OrcamentosDossiers() {
 
 function DossierEditor({ scope }) {
   const [file, setFile] = useState(null);
-  const { draft, status: draftStatus, restored, update: updateDraft, clear: clearDraft } = useDossierDraft(scope);
+  const { draft, status: draftStatus, expiresAt, restored, update: updateDraft, clear: clearDraft, reload: reloadDraft } = useDossierDraft(scope);
   const { dossier, items } = draft;
   const [loadingExtract, setLoadingExtract] = useState(false);
   const [loadingGenerate, setLoadingGenerate] = useState(false);
@@ -97,6 +97,12 @@ function DossierEditor({ scope }) {
     alive.current = true;
     return () => { alive.current = false; request.current?.abort(); };
   }, []);
+  useEffect(() => {
+    if (!dossier) {
+      epoch.current++; request.current?.abort(); imageRequests.current.clear();
+      setLoadingExtract(false); setLoadingGenerate(false); setImageLoading({}); setSheetLoading({}); setGeneratedPdf(null);
+    }
+  }, [dossier]);
   function changed(updater) { setGeneratedPdf(null); updateDraft(updater); }
   function newDossier() {
     setConfirmAction("");
@@ -262,18 +268,23 @@ function DossierEditor({ scope }) {
         </div>
 
         {dossier && <div className="quote-draft-status">
-          <p role="status">{draftStatus === "memory" ? "Não foi possível guardar neste navegador. O rascunho está em memória; evita fechar ou atualizar esta página." : draftStatus === "saving" ? "A guardar rascunho…" : restored ? "Rascunho recuperado. Podes continuar de onde paraste." : "Rascunho guardado neste separador durante 24 h."}</p>
+          <div>
+            <p role="status">{draftStatus === "memory" ? "Não foi possível guardar neste navegador. O rascunho está em memória; evita fechar ou atualizar esta página." : draftStatus === "conflict" ? "Outro separador guardou alterações. Esta versão continua aberta, mas não foi guardada. Descarrega o PDF antes de reabrir o rascunho guardado." : draftStatus === "saving" ? "A guardar rascunho…" : restored ? "Rascunho recuperado. Podes continuar de onde paraste." : "Rascunho guardado neste navegador. Podes fechar e voltar mais tarde."}</p>
+            {expiresAt && <small>Disponível para editar até {new Date(expiresAt).toLocaleString("pt-PT", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}. Cada alteração renova as 24 horas.</small>}
+            {draftStatus === "conflict" && <button type="button" className="btn btn-secondary" onClick={() => setConfirmAction("reload")} disabled={busy}>Reabrir rascunho guardado</button>}
+          </div>
           <button type="button" className="btn btn-secondary" onClick={() => setConfirmAction("clear")} disabled={busy}>Novo dossier</button>
         </div>}
+        {draftStatus === "expired" && <p role="status">O rascunho expirou após 24 horas sem alterações e foi eliminado deste navegador.</p>}
         {draftStatus === "clear_error" && <div className="quote-alert quote-alert-error" role="alert">
           <p>Não foi possível eliminar a cópia guardada. Ao atualizar a página, o rascunho anterior poderá reaparecer.</p>
           <button type="button" className="btn btn-secondary" onClick={clearDraft}>Repetir eliminação</button>
         </div>}
         {confirmAction && <div className="quote-confirm" role="alert">
-          <p>{confirmAction === "clear" ? "Eliminar este rascunho e começar um novo dossier?" : "Substituir este rascunho pelos dados do PDF selecionado?"} As edições atuais serão removidas.</p>
+          <p>{confirmAction === "reload" ? "Reabrir a versão guardada pelo outro separador?" : confirmAction === "clear" ? "Eliminar este rascunho e começar um novo dossier?" : "Substituir este rascunho pelos dados do PDF selecionado?"} As edições atuais serão removidas.</p>
           <div className="quote-confirm-actions">
             <button type="button" className="btn btn-secondary" onClick={() => setConfirmAction("")}>Cancelar</button>
-            <button type="button" className="btn btn-primary" onClick={() => confirmAction === "clear" ? newDossier() : handleExtract(true)}>{confirmAction === "clear" ? "Eliminar rascunho" : "Substituir rascunho"}</button>
+            <button type="button" className="btn btn-primary" disabled={busy} onClick={() => confirmAction === "reload" ? (setConfirmAction(""), reloadDraft()) : confirmAction === "clear" ? newDossier() : handleExtract(true)}>{confirmAction === "reload" ? "Confirmar reabertura" : confirmAction === "clear" ? "Eliminar rascunho" : "Substituir rascunho"}</button>
           </div>
         </div>}
         {error && <div role="alert" className="quote-alert quote-alert-error">{error}</div>}

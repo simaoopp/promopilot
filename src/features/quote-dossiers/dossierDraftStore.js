@@ -1,8 +1,7 @@
 import { normalizeTechnicalPdf } from "./dossierTechnicalPdf";
+import { browserDraftStorage, DOSSIER_DRAFT_MAX_AGE } from "./dossierDraftPersistence";
 
-const DB_NAME = "promopilot-dossier-drafts";
-const TABLE = "drafts";
-const MAX_AGE = 24 * 60 * 60 * 1000;
+const MAX_AGE = DOSSIER_DRAFT_MAX_AGE;
 export const emptyDossierDraft = () => ({ dossier: null, items: [], filename: "" });
 const dossierFields = ["budgetNumber", "customerName", "date", "total", "notes"];
 const itemFields = ["articleCode", "rawDescription", "description", "title", "brand", "category", "reference", "ean", "quantity", "unitPrice", "total", "technicalDescription", "imageDataUrl"];
@@ -41,89 +40,79 @@ function tabIdentity() {
     return id;
   } catch { return null; }
 }
-function databaseOperation(mode, action) {
-  return new Promise((resolve, reject) => {
-    let db, transaction, result, finished = false;
-    const finish = (error, value) => {
-      if (finished) return;
-      finished = true; clearTimeout(timer); db?.close();
-      if (error) reject(new Error("Armazenamento do rascunho indisponível.")); else resolve(value);
-    };
-    const timer = setTimeout(() => { try { transaction?.abort(); } catch {} finish(true); }, 5000);
-    try {
-      const request = window.indexedDB.open(DB_NAME, 1);
-      request.onupgradeneeded = () => request.result.createObjectStore(TABLE, { keyPath: "key" });
-      request.onerror = request.onblocked = () => finish(true);
-      request.onsuccess = () => {
-        db = request.result;
-        if (finished) { db.close(); return; }
-        try {
-          transaction = db.transaction(TABLE, mode);
-          transaction.oncomplete = () => finish(null, result);
-          transaction.onerror = transaction.onabort = () => finish(true);
-          const store = transaction.objectStore(TABLE);
-          const operation = action(store);
-          operation.onsuccess = () => { result = operation.result; };
-          if (mode === "readwrite") {
-            const cursor = store.openCursor();
-            cursor.onsuccess = () => {
-              const entry = cursor.result;
-              if (!entry) return;
-              if (Date.now() - Number(entry.value.updatedAt || 0) > MAX_AGE) entry.delete();
-              entry.continue();
-            };
-          }
-        } catch { finish(true); }
-      };
-    } catch { finish(true); }
-  });
-}
-const browserStorage = {
-  read: key => databaseOperation("readonly", store => store.get(key)),
-  write: record => databaseOperation("readwrite", store => store.put(record)),
-  remove: key => databaseOperation("readwrite", store => store.delete(key)),
-};
-
-export function createDossierDraftStore(storage, tabId, now = Date.now) {
-  const memory = new Map(), writes = new Map();
-  const keyFor = scope => `v1:${tabId}:${scope}`;
+export function createDossierDraftStore(storage, legacyTabId, now = Date.now) {
+  const memory = new Map(), writes = new Map(), revisions = new Map();
+  const keyFor = scope => `v2:${scope}`;
+  const fresh = record => Number.isFinite(record?.updatedAt) && now() - record.updatedAt < MAX_AGE;
+  const empty = status => ({ draft: emptyDossierDraft(), status, expiresAt: null });
+  const cached = scope => {
+    const value = memory.get(scope);
+    if (value?.expiresAt && now() >= value.expiresAt) { memory.delete(scope); return undefined; }
+    return value;
+  };
   const enqueue = (scope, action) => {
-    const operation = (writes.get(scope) || Promise.resolve()).then(action).then(() => "saved", () => "memory");
+    const operation = (writes.get(scope) || Promise.resolve()).then(action).then(result => result === false ? "conflict" : "saved", () => "memory");
     writes.set(scope, operation);
     operation.then(() => { if (writes.get(scope) === operation) writes.delete(scope); });
     return operation;
   };
+  async function write(scope, state, draft) {
+    const revision = `${now()}:${Math.random().toString(36).slice(2)}`;
+    const result = await storage.write({ key: keyFor(scope), scope, version: 2, revision, updatedAt: state.updatedAt, draft }, revisions.get(scope) || null);
+    if (result !== false) revisions.set(scope, revision);
+    return result;
+  }
   return {
-    peek: scope => memory.get(scope),
-    async load(scope) {
-      if (!scope) return { draft: emptyDossierDraft(), status: "memory" };
-      if (memory.has(scope)) return memory.get(scope);
+    peek: cached,
+    async load(scope, { fresh: force = false } = {}) {
+      if (!scope) return empty("memory");
+      const previous = memory.get(scope);
+      if (!force && cached(scope)) return cached(scope);
+      if (force) memory.delete(scope);
       try {
-        const record = await storage.read(keyFor(scope));
-        // A newer edit/reset must win over an older disk read.
-        if (memory.has(scope)) return memory.get(scope);
-        if (!record || record.key !== keyFor(scope) || record.version !== 1 || now() - record.updatedAt > MAX_AGE || !Number.isFinite(record.updatedAt)) return { draft: emptyDossierDraft(), status: "empty" };
-        const loaded = { draft: normalizeDossierDraft(record.draft), status: "saved" };
+        let record = await storage.read(keyFor(scope));
+        if (cached(scope)) return cached(scope); // A newer local edit wins.
+        if (record && !fresh(record)) {
+          await storage.remove?.(record.key, record.revision || null);
+          revisions.delete(scope);
+          return empty("expired");
+        }
+        revisions.set(scope, record?.revision || null);
+        if (record && (record.key !== keyFor(scope) || record.scope !== scope || record.version !== 2)) return empty("memory");
+        if (record && !record.draft) { const state = empty("empty"); memory.set(scope, state); return state; }
+        if (!record && storage.list) {
+          const legacy = (await storage.list()).filter(value => value.version === 1 && value.key.startsWith("v1:") && value.key.endsWith(`:${scope}`) && fresh(value));
+          record = legacy.find(value => value.key === `v1:${legacyTabId}:${scope}`) || legacy.sort((a, b) => b.updatedAt - a.updatedAt)[0];
+          if (cached(scope)) return cached(scope);
+        }
+        if (!record) return empty("empty");
+        const loaded = { draft: normalizeDossierDraft(record.draft), status: "saved", updatedAt: record.updatedAt, expiresAt: record.updatedAt + MAX_AGE };
         memory.set(scope, loaded); return loaded;
-      } catch { return { draft: emptyDossierDraft(), status: "memory" }; }
+      } catch {
+        // A temporary IndexedDB failure must not erase an already-open editor.
+        if (previous?.draft.dossier) {
+          const retained = { ...previous, status: "memory" }; memory.set(scope, retained); return retained;
+        }
+        return empty("memory");
+      }
     },
     save(scope, value) {
       if (!scope) return Promise.resolve("memory");
-      const draft = normalizeDossierDraft(value);
-      const state = { draft, status: "saving" };
+      const draft = normalizeDossierDraft(value), updatedAt = now();
+      const state = { draft, status: "saving", updatedAt, expiresAt: updatedAt + MAX_AGE };
       memory.set(scope, state);
       return enqueue(scope, () => {
-        if (memory.get(scope) !== state) return; // Coalesce edits still waiting for disk.
-        return storage.write({ key: keyFor(scope), version: 1, updatedAt: now(), draft });
-      }).then(status => {
-        state.status = status; return status;
-      });
+        if (memory.get(scope) !== state) return;
+        return write(scope, state, draft);
+      }).then(status => { state.status = status; return status; });
     },
     clear(scope) {
       if (!scope) return Promise.resolve("memory");
-      // A tombstone also prevents a pending read from restoring a cleared draft.
-      memory.set(scope, { draft: emptyDossierDraft(), status: "empty" });
-      return enqueue(scope, () => storage.remove(keyFor(scope)));
+      const state = { ...empty("empty"), updatedAt: now() };
+      memory.set(scope, state);
+      // A small tombstone prevents a deleted dossier from resurfacing through
+      // a legacy tab copy. It contains no dossier content and expires in 24h.
+      return enqueue(scope, () => write(scope, state, null));
     },
   };
 }
@@ -131,8 +120,7 @@ let browserStore;
 export function getDossierDraftStore() {
   if (!browserStore) {
     const id = tabIdentity();
-    const unavailable = () => Promise.reject(new Error("Armazenamento indisponível."));
-    browserStore = createDossierDraftStore(id ? browserStorage : { read: unavailable, write: unavailable, remove: unavailable }, id || "memory");
+    browserStore = createDossierDraftStore(browserDraftStorage, id || "memory");
   }
   return browserStore;
 }
